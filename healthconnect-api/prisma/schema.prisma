@@ -1,0 +1,1411 @@
+// ============================================================
+// prisma/schema.prisma
+// HealthConnect India — Complete Database Schema
+// Tables: 45 (43 original + 2 new: DoctorBookmark, enhanced DoctorReview)
+// Migration: npx prisma migrate dev --name doctor_profile_v2
+// Changes: DoctorProfile +30 fields, DoctorReview enhanced,
+//          DoctorBookmark new, VerificationStatus/ReviewStatus enums added
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  PATIENT
+  DOCTOR
+  HOSPITAL
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  UNKNOWN
+}
+
+enum RhFactor {
+  POSITIVE
+  NEGATIVE
+  UNKNOWN
+}
+
+enum ConditionStatus {
+  ACTIVE
+  CHRONIC
+  RESOLVED
+  IN_REMISSION
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+  LIFE_THREATENING
+}
+
+enum AllergyCategory {
+  FOOD
+  DRUG
+  ENVIRONMENTAL
+  INSECT
+  LATEX
+  OTHER
+}
+
+enum MedicationFrequency {
+  ONCE_DAILY
+  TWICE_DAILY
+  THREE_TIMES_DAILY
+  FOUR_TIMES_DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  AS_NEEDED
+  CUSTOM
+}
+
+enum MedicationStatus {
+  ACTIVE
+  DISCONTINUED
+  COMPLETED
+  ON_HOLD
+}
+
+enum MedicationLogStatus {
+  taken
+  missed
+  skipped
+}
+
+enum AppointmentType {
+  IN_PERSON
+  TELECONSULT
+  HOME_VISIT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum ReportType {
+  LAB
+  SCAN
+  PRESCRIPTION
+  DISCHARGE
+  VACCINATION
+  INSURANCE
+  OTHER
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+  TRIALING
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+  LIFETIME
+}
+
+enum CommunityVisibility {
+  PUBLIC
+  PRIVATE
+  RESTRICTED
+}
+
+enum PostStatus {
+  PUBLISHED
+  PENDING_REVIEW
+  REJECTED
+  REMOVED
+}
+
+enum ReactionType {
+  LIKE
+  SUPPORT
+  HELPFUL
+}
+
+enum ArticleType {
+  ARTICLE
+  VIDEO
+  RESEARCH
+  PATIENT_STORY
+  DOCTOR_INSIGHT
+}
+
+enum ArticleDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum NotificationType {
+  APPOINTMENT_REMINDER
+  MEDICATION_REMINDER
+  COMMUNITY_ACTIVITY
+  HEALTH_ALERT
+  REPORT_SHARED
+  SYSTEM
+  REFILL_ALERT
+}
+
+enum VitalType {
+  bp
+  heart_rate
+  blood_sugar
+  hba1c
+  weight
+  temperature
+  spo2
+  cholesterol
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// NEW ENUMS — community extension
+enum EventFormat {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum RsvpStatus {
+  GOING
+  NOT_GOING
+  MAYBE
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportReason {
+  MISINFORMATION
+  HARASSMENT
+  SPAM
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ModerationAction {
+  DISMISS
+  DELETE_CONTENT
+  WARN_USER
+  BAN_USER
+  PIN_POST
+  UNPIN_POST
+  APPROVE_POST
+  ROLE_CHANGE
+}
+
+// NEW — doctor verification lifecycle
+// isVerified Boolean is kept on DoctorProfile for backward compat.
+// Admin sets BOTH isVerified=true AND verificationStatus=VERIFIED
+enum VerificationStatus {
+  PENDING       // Registered, awaiting doc submission
+  SUBMITTED     // Docs submitted, awaiting admin review
+  UNDER_REVIEW  // Admin actively reviewing
+  VERIFIED      // Approved — hcDoctorId assigned, isVerified also set true
+  REJECTED      // Rejected with notes
+  SUSPENDED     // Previously verified, now suspended
+}
+
+// NEW — for enhanced DoctorReview
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  FLAGGED
+  PENDING_MODERATION
+}
+
+// ============================================================
+// TABLE 1: users
+// ============================================================
+model User {
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  passwordHash         String
+  role                 Role
+  registrationId       String    @unique
+  isEmailVerified      Boolean   @default(false)
+  isActive             Boolean   @default(true)
+  refreshToken         String?
+  passwordResetToken   String?
+  passwordResetExpiry  DateTime?
+  lastLoginAt          DateTime?
+  deletionRequestedAt  DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  patientProfile              PatientProfile?
+  doctorProfile               DoctorProfile?
+  hospitalProfile             HospitalProfile?
+  subscriptions               UserSubscription[]
+  notifications               Notification[]
+  communityMemberships        CommunityMember[]
+  articleBookmarks            ArticleBookmark[]
+  settings                    UserSettings?
+  auditLogs                   AuditLog[]
+  communityEventsCreated      CommunityEvent[]         @relation("EventCreatedBy")
+  communityEventRsvps         CommunityEventRsvp[]
+  communityReportsFiledBy     CommunityReport[]        @relation("ReportFiledBy")
+  communityReportsResolvedBy  CommunityReport[]        @relation("ReportResolvedBy")
+  communityModerationLogs     CommunityModerationLog[] @relation("ModeratorActions")
+
+  @@index([email])
+  @@index([role])
+  @@index([registrationId])
+  @@map("users")
+}
+
+// ============================================================
+// TABLE 2: patient_profiles
+// ============================================================
+model PatientProfile {
+  id                     String     @id @default(uuid())
+  userId                 String     @unique
+  firstName              String
+  lastName               String
+  phone                  String?
+  dateOfBirth            DateTime?
+  gender                 Gender?
+  bloodGroup             BloodGroup @default(UNKNOWN)
+  rhFactor               RhFactor   @default(UNKNOWN)
+  profilePhotoUrl        String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  state                  String?
+  pinCode                String?
+  country                String     @default("India")
+  languagePreference     String     @default("en")
+  insuranceProvider      String?
+  insurancePolicyNumber  String?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  user                   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conditions             Condition[]
+  allergies              Allergy[]
+  surgeries              Surgery[]
+  vaccinations           Vaccination[]
+  familyHistory          FamilyHistory[]
+  symptoms               SymptomLog[]
+  medications            Medication[]
+  vitals                 Vital[]
+  reports                MedicalReport[]
+  appointments           Appointment[]
+  emergencyContacts      EmergencyContact[]
+  consentsGiven          PatientConsent[]
+  healthScores           HealthScore?
+  hospitalizationHistory HospitalizationHistory[]
+
+  @@index([userId])
+  @@map("patient_profiles")
+}
+
+// ============================================================
+// TABLE 3: doctor_profiles
+// ============================================================
+model DoctorProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  firstName            String
+  lastName             String
+  phone                String?
+  profilePhotoUrl      String?
+  specialization       String?
+  subSpecializations   String[] @default([])
+  qualification        String[] @default([])
+  experienceYears      Int?
+  medicalLicenseNumber String?
+  licenseState         String?
+  consultationFee      Float?
+  teleconsultFee       Float?
+  languagesSpoken      String[] @default(["Hindi", "English"])
+  clinicName           String?
+  clinicAddress        String?
+  city                 String?
+  state                String?
+  pinCode              String?
+  bio                  String?
+  isVerified           Boolean  @default(false)
+  verifiedAt           DateTime?
+  isAvailableOnline    Boolean  @default(true)
+  averageRating        Float    @default(0)
+  totalReviews         Int      @default(0)
+  totalPatients        Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // ── NEW: HC ID & Verification workflow ──────────────────────────────
+  // hcDoctorId auto-assigned on verification: HCD-{YEAR}-{SPEC}-{SEQ}
+  // e.g. HCD-2025-CARD-0042
+  // isVerified is kept above for backward compat — both are kept in sync
+  hcDoctorId             String?            @unique
+  verificationStatus     VerificationStatus @default(PENDING)
+  verificationNotes      String?
+  verifiedByAdminId      String?
+
+  // ── NEW: Enhanced Credentials ────────────────────────────────────────
+  medicalCouncil         String?
+  registrationYear       Int?
+
+  // ── NEW: Career & Narrative ───────────────────────────────────────────
+  careerJourney          String?
+  trainingHospitals      String[] @default([])
+  hospitalAffiliations   String[] @default([])
+  awards                 String[] @default([])
+  publications           Int?
+
+  // ── NEW: Consultation Modes & Fees ────────────────────────────────────
+  videoConsultFee        Float?
+  audioConsultFee        Float?
+  offersInPerson         Boolean  @default(true)
+  offersVideoConsult     Boolean  @default(false)
+  offersAudioConsult     Boolean  @default(false)
+  offersChatConsult      Boolean  @default(false)
+  videoPlatform          String?
+  videoRoomBaseUrl       String?
+
+  // ── NEW: Availability ─────────────────────────────────────────────────
+  isAcceptingNewPatients Boolean  @default(true)
+  availabilitySchedule   Json?
+  nextAvailableSlot      DateTime?
+
+  // ── NEW: Social Proof & Profile Completion ────────────────────────────
+  profileViews           Int      @default(0)
+  avgResponseTimeMin     Int?
+  featuredReview         String?
+  featuredPatientName    String?
+  profileScore           Int      @default(0)
+  isProfileComplete      Boolean  @default(false)
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hospitalMemberships  DoctorHospital[]
+  appointments         Appointment[]
+  availability         DoctorAvailability[]
+  reviews              DoctorReview[]
+  consentsReceived     PatientConsent[]
+  reportShares         ReportShare[]
+  bookmarkedBy         DoctorBookmark[]
+
+  @@index([userId])
+  @@index([specialization])
+  @@index([city])
+  @@map("doctor_profiles")
+}
+
+// ============================================================
+// TABLE 4: hospital_profiles
+// ============================================================
+model HospitalProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  name               String
+  phone              String?
+  email              String?
+  website            String?
+  logoUrl            String?
+  addressLine1       String?
+  city               String?
+  state              String?
+  pinCode            String?
+  latitude           Float?
+  longitude          Float?
+  totalBeds          Int?
+  icuBeds            Int?
+  emergencyAvailable Boolean  @default(false)
+  opdTimings         String?
+  specialties        String[] @default([])
+  accreditations     String[] @default([])
+  isVerified         Boolean  @default(false)
+  verifiedAt         DateTime?
+  isActive           Boolean  @default(true)
+  isPremium          Boolean  @default(false)
+  registrationNumber String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctors            DoctorHospital[]
+  appointments       Appointment[]
+  departments        Department[]
+
+  @@index([userId])
+  @@index([city])
+  @@map("hospital_profiles")
+}
+
+// ============================================================
+// TABLE 5: doctor_hospitals
+// ============================================================
+model DoctorHospital {
+  id         String   @id @default(uuid())
+  doctorId   String
+  hospitalId String
+  department String?
+  isPrimary  Boolean  @default(false)
+  joinedAt   DateTime @default(now())
+
+  doctor     DoctorProfile   @relation(fields: [doctorId],   references: [id], onDelete: Cascade)
+  hospital   HospitalProfile @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, hospitalId])
+  @@map("doctor_hospitals")
+}
+
+// ============================================================
+// TABLE 6: departments
+// ============================================================
+model Department {
+  id         String   @id @default(uuid())
+  hospitalId String
+  name       String
+  headName   String?
+  phone      String?
+  createdAt  DateTime @default(now())
+
+  hospital   HospitalProfile @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@map("departments")
+}
+
+// ============================================================
+// TABLE 7: conditions
+// ============================================================
+model Condition {
+  id             String          @id @default(uuid())
+  patientId      String
+  name           String
+  icdCode        String?
+  status         ConditionStatus @default(ACTIVE)
+  diagnosedDate  DateTime?
+  resolvedDate   DateTime?
+  diagnosedBy    String?
+  managingDoctor String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  patient        PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("conditions")
+}
+
+// ============================================================
+// TABLE 8: allergies
+// ============================================================
+model Allergy {
+  id            String          @id @default(uuid())
+  patientId     String
+  allergen      String
+  category      AllergyCategory @default(OTHER)
+  severity      AllergySeverity @default(MILD)
+  reaction      String?
+  diagnosedDate DateTime?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  patient       PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("allergies")
+}
+
+// ============================================================
+// TABLE 9: surgeries
+// ============================================================
+model Surgery {
+  id            String         @id @default(uuid())
+  patientId     String
+  procedureName String
+  surgeryDate   DateTime
+  hospital      String?
+  surgeon       String?
+  outcome       String?
+  complications String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("surgeries")
+}
+
+// ============================================================
+// TABLE 10: vaccinations
+// ============================================================
+model Vaccination {
+  id               String         @id @default(uuid())
+  patientId        String
+  vaccineName      String
+  dateAdministered DateTime
+  doseNumber       Int?
+  totalDoses       Int?
+  nextDueDate      DateTime?
+  administrator    String?
+  batchNumber      String?
+  sideEffects      String?
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  patient          PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("vaccinations")
+}
+
+// ============================================================
+// TABLE 11: family_history
+// ============================================================
+model FamilyHistory {
+  id            String         @id @default(uuid())
+  patientId     String
+  relation      String
+  conditionName String
+  ageOfOnset    Int?
+  status        String?
+  causeOfDeath  String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("family_history")
+}
+
+// ============================================================
+// TABLE 12: hospitalization_history
+// ============================================================
+model HospitalizationHistory {
+  id             String         @id @default(uuid())
+  patientId      String
+  hospitalName   String
+  admissionDate  DateTime
+  dischargeDate  DateTime?
+  reason         String?
+  diagnosis      String?
+  treatingDoctor String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+
+  patient        PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("hospitalization_history")
+}
+
+// ============================================================
+// TABLE 13: symptom_logs
+// ============================================================
+model SymptomLog {
+  id         String         @id @default(uuid())
+  patientId  String
+  name       String
+  severity   Int
+  loggedAt   DateTime       @default(now())
+  resolvedAt DateTime?
+  triggers   String[]       @default([])
+  notes      String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([loggedAt])
+  @@map("symptom_logs")
+}
+
+// ============================================================
+// TABLE 14: medications
+// ============================================================
+model Medication {
+  id              String              @id @default(uuid())
+  patientId       String
+  name            String
+  genericName     String?
+  dosage          String
+  dosageUnit      String?
+  frequency       MedicationFrequency @default(ONCE_DAILY)
+  customFrequency String?
+  timesOfDay      String[]            @default([])
+  prescribedBy    String?
+  prescribedFor   String?
+  startDate       DateTime
+  endDate         DateTime?
+  status          MedicationStatus    @default(ACTIVE)
+  currentStock    Int?
+  refillThreshold Int?                @default(7)
+  instructions    String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  patient         PatientProfile      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  logs            MedicationLog[]
+
+  @@index([patientId])
+  @@map("medications")
+}
+
+// ============================================================
+// TABLE 15: medication_logs
+// ============================================================
+model MedicationLog {
+  id            String              @id @default(uuid())
+  medicationId  String
+  scheduledTime DateTime
+  takenAt       DateTime?
+  status        MedicationLogStatus @default(missed)
+  notes         String?
+  createdAt     DateTime            @default(now())
+
+  medication    Medication          @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  @@index([medicationId])
+  @@index([scheduledTime])
+  @@map("medication_logs")
+}
+
+// ============================================================
+// TABLE 16: vitals
+// ============================================================
+model Vital {
+  id         String         @id @default(uuid())
+  patientId  String
+  type       VitalType
+  value      String
+  unit       String
+  systolic   Int?
+  diastolic  Int?
+  measuredAt DateTime
+  context    String?
+  notes      String?
+  source     String?
+  createdAt  DateTime       @default(now())
+
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, type])
+  @@index([measuredAt])
+  @@map("vitals")
+}
+
+// ============================================================
+// TABLE 17: health_scores
+// ============================================================
+model HealthScore {
+  id                    String         @id @default(uuid())
+  patientId             String         @unique
+  score                 Int
+  medicationAdherence   Int            @default(0)
+  symptomFrequency      Int            @default(0)
+  appointmentRegularity Int            @default(0)
+  lifestyleFactors      Int            @default(0)
+  calculatedAt          DateTime       @default(now())
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  patient               PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("health_scores")
+}
+
+// ============================================================
+// TABLE 18: medical_reports
+// ============================================================
+model MedicalReport {
+  id          String         @id @default(uuid())
+  patientId   String
+  name        String
+  type        ReportType     @default(OTHER)
+  fileUrl     String
+  fileSize    Int            @default(0)
+  mimeType    String?
+  uploadedBy  String?
+  description String?
+  reportDate  DateTime?
+  isEncrypted Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  shares      ReportShare[]
+
+  @@index([patientId])
+  @@map("medical_reports")
+}
+
+// ============================================================
+// TABLE 19: report_shares
+// ============================================================
+model ReportShare {
+  id         String        @id @default(uuid())
+  reportId   String
+  doctorId   String
+  expiresAt  DateTime?
+  accessedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  report     MedicalReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  doctor     DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, doctorId])
+  @@index([doctorId])
+  @@map("report_shares")
+}
+
+// ============================================================
+// TABLE 20: emergency_contacts
+// ============================================================
+model EmergencyContact {
+  id           String         @id @default(uuid())
+  patientId    String
+  name         String
+  relationship String
+  phone        String
+  email        String?
+  isPrimary    Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("emergency_contacts")
+}
+
+// ============================================================
+// TABLE 21: patient_consents
+// ============================================================
+model PatientConsent {
+  id          String         @id @default(uuid())
+  patientId   String
+  doctorId    String
+  accessScope String[]
+  status      ConsentStatus  @default(ACTIVE)
+  grantReason String?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      DoctorProfile  @relation(fields: [doctorId],  references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@map("patient_consents")
+}
+
+// ============================================================
+// TABLE 22: appointments
+// ============================================================
+model Appointment {
+  id                 String            @id @default(uuid())
+  patientId          String
+  doctorId           String
+  hospitalId         String?
+  scheduledAt        DateTime
+  durationMinutes    Int               @default(30)
+  type               AppointmentType   @default(IN_PERSON)
+  status             AppointmentStatus @default(PENDING)
+  reasonForVisit     String?
+  symptoms           String[]          @default([])
+  doctorNotes        String?
+  prescription       String?
+  followUpDate       DateTime?
+  cancelledBy        String?
+  cancellationReason String?
+  meetingLink        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  patient            PatientProfile   @relation(fields: [patientId],  references: [id], onDelete: Cascade)
+  doctor             DoctorProfile    @relation(fields: [doctorId],   references: [id], onDelete: Cascade)
+  hospital           HospitalProfile? @relation(fields: [hospitalId], references: [id])
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("appointments")
+}
+
+// ============================================================
+// TABLE 23: doctor_availability
+// ============================================================
+model DoctorAvailability {
+  id           String        @id @default(uuid())
+  doctorId     String
+  dayOfWeek    Int
+  startTime    String
+  endTime      String
+  slotDuration Int           @default(30)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+
+  doctor       DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+  @@map("doctor_availability")
+}
+
+// ============================================================
+// TABLE 24: doctor_reviews  — ENHANCED
+// Added: title, body, userId, appointmentId, isVerified, helpfulCount, status
+// Original fields kept: doctorId, patientId, rating, isAnonymous, createdAt
+// @@unique removed to allow multiple verified reviews per patient (one per appt)
+// ============================================================
+model DoctorReview {
+  id            String       @id @default(uuid())
+  doctorId      String
+  patientId     String
+  userId        String?
+  appointmentId String?
+  rating        Int
+  title         String?
+  comment       String?      // kept for backward compat
+  body          String?      // new alias for review text
+  isAnonymous   Boolean      @default(false)
+  isVerified    Boolean      @default(false)
+  helpfulCount  Int          @default(0)
+  status        ReviewStatus @default(PUBLISHED)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @default(now()) @updatedAt
+
+  doctor        DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+  @@index([patientId])
+  @@map("doctor_reviews")
+}
+
+// ============================================================
+// TABLE 44: doctor_bookmarks  — NEW
+// Patients bookmark/save doctors for quick access
+// ============================================================
+model DoctorBookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  doctorId  String
+  createdAt DateTime @default(now())
+
+  doctor    DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, doctorId])
+  @@index([userId])
+  @@index([doctorId])
+  @@map("doctor_bookmarks")
+}
+
+// ============================================================
+// TABLE 25: subscription_plans
+// ============================================================
+model SubscriptionPlan {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  displayName  String
+  description  String?
+  targetRole   Role
+  monthlyPrice Float    @default(0)
+  annualPrice  Float    @default(0)
+  features     Json
+  maxReports   Int?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions UserSubscription[]
+
+  @@map("subscription_plans")
+}
+
+// ============================================================
+// TABLE 26: user_subscriptions
+// ============================================================
+model UserSubscription {
+  id              String             @id @default(uuid())
+  userId          String
+  planId          String
+  status          SubscriptionStatus @default(ACTIVE)
+  billingCycle    BillingCycle       @default(MONTHLY)
+  startDate       DateTime
+  endDate         DateTime
+  razorpaySubId   String?
+  razorpayOrderId String?
+  autoRenew       Boolean            @default(true)
+  cancelledAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments        Payment[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("user_subscriptions")
+}
+
+// ============================================================
+// TABLE 27: payments
+// ============================================================
+model Payment {
+  id                String   @id @default(uuid())
+  subscriptionId    String
+  amount            Float
+  currency          String   @default("INR")
+  status            String
+  razorpayPaymentId String?
+  razorpayOrderId   String?
+  razorpaySignature String?
+  paidAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  subscription      UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("payments")
+}
+
+// ============================================================
+// TABLE 28: communities
+// ============================================================
+model Community {
+  id              String              @id @default(uuid())
+  slug            String              @unique
+  name            String
+  description     String?
+  emoji           String?
+  category        String?
+  visibility      CommunityVisibility @default(PUBLIC)
+  language        String              @default("en")
+  isFeatured      Boolean             @default(false)
+  isActive        Boolean             @default(true)
+  allowAnonymous  Boolean             @default(true)
+  requireApproval Boolean             @default(false)
+  rules           String?
+  coverImageUrl   String?
+  createdBy       String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  members         CommunityMember[]
+  posts           Post[]
+  events          CommunityEvent[]
+  reports         CommunityReport[]
+  moderationLogs  CommunityModerationLog[]
+
+  @@index([slug])
+  @@index([category])
+  @@map("communities")
+}
+
+// ============================================================
+// TABLE 29: community_members
+// ============================================================
+model CommunityMember {
+  id          String    @id @default(uuid())
+  communityId String
+  userId      String
+  role        String    @default("MEMBER")
+  isApproved  Boolean   @default(true)
+  joinedAt    DateTime  @default(now())
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId],      references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([userId])
+  @@map("community_members")
+}
+
+// ============================================================
+// TABLE 30: posts
+// ============================================================
+model Post {
+  id             String     @id @default(uuid())
+  communityId    String
+  authorId       String
+  title          String?
+  body           String
+  tags           String[]   @default([])
+  isAnonymous    Boolean    @default(false)
+  anonymousAlias String?
+  status         PostStatus @default(PUBLISHED)
+  isPinned       Boolean    @default(false)
+  viewCount      Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  community      Community    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  comments       Comment[]
+  reactions      PostReaction[]
+
+  @@index([communityId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+// ============================================================
+// TABLE 31: comments
+// ============================================================
+model Comment {
+  id          String    @id @default(uuid())
+  postId      String
+  authorId    String
+  body        String
+  parentId    String?
+  isAnonymous Boolean   @default(false)
+  isRemoved   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([parentId])
+  @@map("comments")
+}
+
+// ============================================================
+// TABLE 32: post_reactions
+// ============================================================
+model PostReaction {
+  id           String       @id @default(uuid())
+  postId       String
+  userId       String
+  reactionType ReactionType
+  createdAt    DateTime     @default(now())
+
+  post         Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, reactionType])
+  @@index([postId])
+  @@map("post_reactions")
+}
+
+// ============================================================
+// TABLE 33: articles
+// ============================================================
+model Article {
+  id               String            @id @default(uuid())
+  slug             String            @unique
+  title            String
+  body             String
+  excerpt          String?
+  coverImage       String?
+  type             ArticleType       @default(ARTICLE)
+  difficulty       ArticleDifficulty @default(BEGINNER)
+  readTimeMin      Int               @default(5)
+  authorId         String?
+  authorName       String?
+  isVerifiedAuthor Boolean           @default(false)
+  tags             String[]          @default([])
+  category         String?
+  isFeatured       Boolean           @default(false)
+  isTrending       Boolean           @default(false)
+  isPublished      Boolean           @default(false)
+  publishedAt      DateTime?
+  viewCount        Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  bookmarks        ArticleBookmark[]
+
+  @@index([slug])
+  @@index([isTrending])
+  @@index([isFeatured])
+  @@map("articles")
+}
+
+// ============================================================
+// TABLE 34: article_bookmarks
+// ============================================================
+model ArticleBookmark {
+  id        String   @id @default(uuid())
+  articleId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId],    references: [id], onDelete: Cascade)
+
+  @@unique([articleId, userId])
+  @@map("article_bookmarks")
+}
+
+// ============================================================
+// TABLE 35: notifications
+// ============================================================
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// TABLE 36: user_settings
+// ============================================================
+model UserSettings {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  allowDoctorAccess     Boolean  @default(true)
+  allowAnonymousPosting Boolean  @default(true)
+  contributeToResearch  Boolean  @default(false)
+  emailNotifications    Boolean  @default(true)
+  smsNotifications      Boolean  @default(true)
+  pushNotifications     Boolean  @default(true)
+  appointmentReminders  Boolean  @default(true)
+  medicationReminders   Boolean  @default(true)
+  communityActivity     Boolean  @default(true)
+  weeklyHealthSummary   Boolean  @default(true)
+  language              String   @default("en")
+  timezone              String   @default("Asia/Kolkata")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+// ============================================================
+// TABLE 37: newsletter_subscriptions
+// ============================================================
+model NewsletterSubscription {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("newsletter_subscriptions")
+}
+
+// ============================================================
+// TABLE 38: audit_logs
+// ============================================================
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// TABLE 39: therapies
+// ============================================================
+model Therapy {
+  id           String   @id @default(uuid())
+  patientId    String
+  type         String
+  plan         String
+  targetValue  String?
+  currentValue String?
+  adherence    Float?
+  startDate    DateTime
+  endDate      DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([patientId])
+  @@map("therapies")
+}
+
+// ============================================================
+// TABLE 40: community_events  — NEW
+// ============================================================
+model CommunityEvent {
+  id          String      @id @default(uuid())
+  communityId String
+  createdBy   String
+  title       String
+  description String?
+  eventDate   DateTime
+  format      EventFormat @default(ONLINE)
+  location    String?
+  meetLink    String?
+  isCancelled Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  community   Community   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  creator     User        @relation("EventCreatedBy", fields: [createdBy], references: [id])
+  rsvps       CommunityEventRsvp[]
+
+  @@index([communityId])
+  @@index([eventDate])
+  @@map("community_events")
+}
+
+// ============================================================
+// TABLE 41: community_event_rsvps  — NEW
+// ============================================================
+model CommunityEventRsvp {
+  id        String     @id @default(uuid())
+  eventId   String
+  userId    String
+  status    RsvpStatus @default(GOING)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("community_event_rsvps")
+}
+
+// ============================================================
+// TABLE 42: community_reports  — NEW
+// ============================================================
+model CommunityReport {
+  id          String       @id @default(uuid())
+  communityId String
+  reporterId  String
+  targetType  String
+  targetId    String
+  reason      ReportReason @default(OTHER)
+  details     String?
+  status      ReportStatus @default(PENDING)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  resolution  String?
+  createdAt   DateTime     @default(now())
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  reporter    User      @relation("ReportFiledBy",    fields: [reporterId], references: [id])
+  resolver    User?     @relation("ReportResolvedBy", fields: [resolvedBy], references: [id])
+
+  @@unique([communityId, reporterId, targetId])
+  @@index([communityId, status])
+  @@index([reporterId])
+  @@map("community_reports")
+}
+
+// ============================================================
+// TABLE 43: community_moderation_logs  — NEW
+// ============================================================
+model CommunityModerationLog {
+  id          String           @id @default(uuid())
+  communityId String
+  moderatorId String
+  action      ModerationAction
+  targetType  String
+  targetId    String
+  reason      String?
+  details     Json?
+  createdAt   DateTime         @default(now())
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  moderator   User      @relation("ModeratorActions", fields: [moderatorId], references: [id])
+
+  @@index([communityId])
+  @@index([moderatorId])
+  @@index([createdAt])
+  @@map("community_moderation_logs")
+}
+model Testimonial {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  role        String
+  location    String?
+  condition   String?
+  emoji       String   @default("👤")
+  quote       String
+  stars       Int      @default(5)
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
