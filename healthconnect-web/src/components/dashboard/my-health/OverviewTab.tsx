@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 
 // ── HEALTH SCORE WEIGHTS (must sum to 100) ────────────────────────────────────
@@ -131,9 +132,109 @@ function merge(apiData: any) {
   };
 }
 
+// ── Score Info Modal ──────────────────────────────────────────────────────────
+function ScoreInfoModal({ breakdown, score, onClose }: { breakdown: any[]; score: number; onClose: () => void }) {
+  const getStatus = (val: number) => val >= 80 ? { label:'Good', color:'#16A34A' } : val >= 60 ? { label:'Fair', color:'#D97706' } : val >= 1 ? { label:'Needs work', color:'#DC2626' } : { label:'No data', color:'#94A3B8' };
+  const getImprovement = (key: string, val: number): string => {
+    if (val >= 80) return '✓ On track';
+    const tips: Record<string, string> = {
+      vitalsScore:           'Log BP, blood sugar & heart rate readings regularly',
+      medicationAdherence:   'Set reminders to take medications on time',
+      symptomBurden:         'Track and manage your symptoms consistently',
+      appointmentRegularity: 'Book and attend scheduled doctor appointments',
+      conditionControl:      'Work with your doctor to move conditions to Managed',
+      lifestyleFactors:      'Track sleep, exercise and diet habits daily',
+      engagementScore:       'Log vitals and symptoms at least once a week',
+    };
+    return tips[key] ?? 'Keep improving';
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:580, maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 60px rgba(0,0,0,0.2)' }}>
+        {/* Header */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, paddingBottom:16, borderBottom:'1px solid #E2EEF0' }}>
+          <div>
+            <div style={{ fontSize:17, fontWeight:800, color:'#0F2D2A', marginBottom:3 }}>How Your Health Score is Calculated</div>
+            <div style={{ fontSize:12, color:'#64748B' }}>7 weighted parameters — updated after every data change</div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#94A3B8', lineHeight:1 }}>✕</button>
+        </div>
+
+        {/* Overall score */}
+        <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:20, padding:'14px 18px', background:'#F0FDF9', borderRadius:14, border:'1px solid rgba(13,148,136,0.2)' }}>
+          <div style={{ fontSize:42, fontWeight:900, color: score>=80?'#16A34A':score>=60?'#0D9488':'#D97706', lineHeight:1 }}>{score}</div>
+          <div>
+            <div style={{ fontWeight:700, fontSize:15, color:'#0F2D2A' }}>Overall Health Score</div>
+            <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>= Σ (parameter_score × weight%) across all 7 parameters</div>
+          </div>
+        </div>
+
+        {/* Formula */}
+        <div style={{ background:'#F8FFFE', border:'1px solid #E2EEF0', borderRadius:12, padding:'12px 16px', marginBottom:20, fontFamily:'JetBrains Mono, monospace', fontSize:11, color:'#4B6E6A', lineHeight:1.8 }}>
+          <div style={{ fontWeight:700, color:'#0F2D2A', marginBottom:6, fontFamily:'inherit' }}>Score Formula:</div>
+          {breakdown.map(p => (
+            <div key={p.key} style={{ display:'flex', gap:8 }}>
+              <span style={{ color:'#0D9488', minWidth:22 }}>{p.value}</span>
+              <span style={{ color:'#94A3B8' }}>×</span>
+              <span style={{ color:'#7C3AED', minWidth:32 }}>{p.weight}%</span>
+              <span style={{ color:'#64748B' }}>= {Math.round(p.value * p.weight / 100)}</span>
+              <span style={{ color:'#CBD5E1' }}>({p.label})</span>
+            </div>
+          ))}
+          <div style={{ borderTop:'1px solid #E2EEF0', paddingTop:8, marginTop:8, fontWeight:700, color:'#0F2D2A' }}>
+            Total = {score} / 100
+          </div>
+        </div>
+
+        {/* Parameter breakdown */}
+        <div style={{ fontSize:13, fontWeight:700, color:'#0F2D2A', marginBottom:12 }}>Parameter Breakdown</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {breakdown.map(p => {
+            const status = getStatus(p.value);
+            const tip    = getImprovement(p.key, p.value);
+            return (
+              <div key={p.key} style={{ background:'#F8FFFE', border:'1px solid #E2EEF0', borderRadius:12, padding:'12px 14px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                  <span style={{ fontSize:18 }}>{p.icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontWeight:700, fontSize:13, color:'#0F2D2A' }}>{p.label}</span>
+                      <span style={{ fontSize:10, padding:'1px 7px', borderRadius:100, fontWeight:700, color:status.color, background:`${status.color}15`, border:`1px solid ${status.color}30` }}>{status.label}</span>
+                      <span style={{ marginLeft:'auto', fontSize:11, color:'#94A3B8', fontFamily:'JetBrains Mono,monospace' }}>weight: {p.weight}%</span>
+                    </div>
+                    <div style={{ fontSize:11, color:'#64748B', marginTop:2 }}>{p.desc}</div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontSize:22, fontWeight:800, color: p.value>=80?'#16A34A':p.value>=60?'#D97706':p.value>0?'#DC2626':'#94A3B8', lineHeight:1 }}>{p.value}</div>
+                    <div style={{ fontSize:10, color:'#94A3B8' }}>/100</div>
+                  </div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ flex:1, height:5, background:'#E2EEF0', borderRadius:3, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${p.value}%`, background:p.color, borderRadius:3, transition:'width 0.8s ease' }} />
+                  </div>
+                  <div style={{ fontSize:11, color: p.value>=80?'#16A34A':'#64748B', fontWeight:600, whiteSpace:'nowrap', minWidth:120, textAlign:'right' }}>{tip}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer note */}
+        <div style={{ marginTop:18, padding:'10px 14px', background:'rgba(124,58,237,0.06)', border:'1px solid rgba(124,58,237,0.15)', borderRadius:10, fontSize:12, color:'#6D28D9', lineHeight:1.6 }}>
+          💡 <strong>Note:</strong> Vitals (25%) and Medication Adherence (22%) have the highest clinical weight. Logging vitals regularly is the fastest way to improve your score.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function OverviewTab({ data, loading }: { data: any; loading: boolean }) {
   const { setActiveTab, setActivePage } = useUIStore();
+  const [showScoreInfo, setShowScoreInfo] = useState(false);
   const d = merge(data);
 
   // SVG ring: r=38, circumference=2π×38≈238.76
@@ -152,14 +253,14 @@ export default function OverviewTab({ data, loading }: { data: any; loading: boo
         @media(max-width:1200px) { .ov-grid4 { grid-template-columns: repeat(3,1fr); } }
         @media(max-width:800px)  { .ov-grid4 { grid-template-columns: 1fr 1fr; } }
         @media(max-width:720px)  { .ov-grid4, .ov-grid2 { grid-template-columns: 1fr; } }
-        .ov-hs { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:24px; display:flex; align-items:center; gap:24px; margin-bottom:20px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
+        .ov-hs { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:16px 20px; display:flex; align-items:center; gap:20px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
         .ov-hs-ring { position:relative; flex-shrink:0; }
         .ov-hs-ring svg { transform:rotate(-90deg); }
         .ov-hs-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .ov-hs-num   { font-family:'Syne',sans-serif; font-size:26px; font-weight:800; line-height:1; }
+        .ov-hs-num   { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; line-height:1; }
         .ov-hs-label { font-size:9px; color:#64748B; text-transform:uppercase; }
-        .ov-hs-title { font-family:'Syne',sans-serif; font-weight:800; font-size:17px; color:#0F2D2A; margin-bottom:4px; }
-        .ov-hs-sub   { font-size:12px; color:#64748B; margin-bottom:16px; }
+        .ov-hs-title { font-family:'Syne',sans-serif; font-weight:800; font-size:15px; color:#0F2D2A; margin-bottom:4px; }
+        .ov-hs-sub   { font-size:12px; color:#64748B; margin-bottom:12px; }
         .ov-bar-row  { display:flex; flex-direction:column; gap:10px; flex:1; }
         .ov-bar-item { display:flex; align-items:center; gap:10px; }
         .ov-bar-lbl  { font-size:12px; color:#4B6E6A; width:190px; flex-shrink:0; font-weight:500; display:flex; align-items:center; gap:0; }
@@ -175,7 +276,7 @@ export default function OverviewTab({ data, loading }: { data: any; loading: boo
         .ov-qa-btn:hover { border-color:#0D9488; color:#0D9488; background:#F0FDF9; }
         .ov-qa-btn.primary { background:linear-gradient(135deg,#0D9488,#14B8A6); border-color:transparent; color:#fff; box-shadow:0 2px 10px rgba(13,148,136,0.3); }
         .ov-qa-btn.primary:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(20,184,166,0.4); }
-        .ov-kpi { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:18px; position:relative; overflow:hidden; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
+        .ov-kpi { min-height:0; background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:14px; position:relative; overflow:hidden; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
         .ov-kpi:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
         .ov-kpi::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; }
         .ov-kpi.teal::after  { background:linear-gradient(90deg,#0D9488,#14B8A6); }
@@ -192,7 +293,7 @@ export default function OverviewTab({ data, loading }: { data: any; loading: boo
         .ov-kpi-trend.down { color:#DC2626; font-weight:600; }
         .ov-card { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:20px; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
         .ov-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
-        .ov-card-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+        .ov-card-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
         .ov-card-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; color:#0F2D2A; }
         .ov-appt { display:flex; gap:16px; align-items:flex-start; }
         .ov-appt-date { background:#F0FDF9; border:1.5px solid #99F6E4; border-radius:10px; padding:10px 14px; text-align:center; flex-shrink:0; min-width:58px; }
@@ -263,6 +364,13 @@ export default function OverviewTab({ data, loading }: { data: any; loading: boo
                     {d.weekDelta > 0 ? `↑ +${d.weekDelta}` : `↓ ${d.weekDelta}`} this week
                   </span>
                 )}
+                {/* ℹ️ Info button */}
+                <button onClick={() => setShowScoreInfo(true)}
+                  title="How is this score calculated?"
+                  style={{ width:22, height:22, borderRadius:'50%', border:'1.5px solid #CBD5E1', background:'#F8FAFC', color:'#64748B', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.2s', lineHeight:1 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor='#0D9488'; (e.currentTarget as HTMLElement).style.color='#0D9488'; (e.currentTarget as HTMLElement).style.background='#F0FDF9'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#CBD5E1'; (e.currentTarget as HTMLElement).style.color='#64748B'; (e.currentTarget as HTMLElement).style.background='#F8FAFC'; }}
+                >i</button>
               </div>
               <div className="ov-hs-sub">Weighted across 7 health parameters</div>
 
@@ -442,6 +550,15 @@ export default function OverviewTab({ data, loading }: { data: any; loading: boo
             </div>
           )}
         </>
+      )}
+
+      {/* Health Score Info Modal */}
+      {showScoreInfo && (
+        <ScoreInfoModal
+          breakdown={d.scoreBreakdown}
+          score={scoreNum}
+          onClose={() => setShowScoreInfo(false)}
+        />
       )}
     </>
   );

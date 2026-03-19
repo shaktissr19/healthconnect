@@ -166,15 +166,35 @@ export default function Sidebar() {
     Promise.allSettled([
       (patientAPI as any).dashboard(),
       (patientAPI as any).getProfile(),
-    ]).then(([dashRes, profRes]) => {
+      patientAPI.getMedicalHistory(),
+    ]).then(([dashRes, profRes, histRes]) => {
       if (cancelled) return;
       if (dashRes.status === 'fulfilled') {
         const d = (dashRes.value as any)?.data?.data ?? (dashRes.value as any)?.data ?? {};
-        setKpis(d.kpis ?? d);
+        const k = d.kpis ?? d;
+        const nextAppt = d.upcomingAppointments?.[0] ?? null;
+        setKpis({
+          ...k,
+          healthScore: d.healthScore?.score ?? (typeof d.healthScore === 'number' ? d.healthScore : null),
+          nextAppointmentDate:   nextAppt?.scheduledAt ?? null,
+          nextAppointmentDoctor: nextAppt ? `Dr. ${nextAppt.doctor?.lastName ?? ''}`.trim() : null,
+        });
       }
       if (profRes.status === 'fulfilled') {
         const p = (profRes.value as any)?.data?.data ?? (profRes.value as any)?.data ?? {};
         setProfile(p);
+      }
+      if (histRes.status === 'fulfilled') {
+        const h = (histRes.value as any)?.data?.data ?? (histRes.value as any)?.data ?? {};
+        const lifeThreateningAllergy = (h.allergies ?? []).find((a: any) => a.severity === 'LIFE_THREATENING');
+        const conditionNames = (h.conditions ?? [])
+          .filter((c: any) => c.status === 'ACTIVE' || c.status === 'CHRONIC')
+          .map((c: any) => c.name);
+        setKpis((prev: any) => ({
+          ...prev,
+          lifeThreateningAllergy: lifeThreateningAllergy?.allergen ?? null,
+          conditionNames,
+        }));
       }
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -188,7 +208,8 @@ export default function Sidebar() {
   }, [router]);
 
   const handleNav = useCallback((id: string) => {
-    if (id === 'reports') { setActivePage('my-health'); setActiveTab('vault'); }
+    if (id === 'reports')      { setActivePage('my-health'); setActiveTab('vault'); }
+
     else { setActivePage(id); }
   }, [setActivePage, setActiveTab]);
 
@@ -210,10 +231,10 @@ export default function Sidebar() {
     {
       key: 'main', label: 'MAIN MENU',
       items: [
-        { id: 'home',        label: 'Home' },
-        { id: 'my-health',   label: 'My Health' },
-        // Communities: no special purple styling, no USP badge — treated like every other nav item
-        { id: 'communities', label: 'Communities', badge: commBadge, badgeVariant: 'rose' },
+        { id: 'home',         label: 'Home' },
+        { id: 'my-health',    label: 'My Health' },
+        { id: 'communities',  label: 'Communities', badge: commBadge, badgeVariant: 'rose' },
+        { id: 'find-doctors', label: 'Find Doctors' },
       ],
     },
     {
@@ -230,7 +251,6 @@ export default function Sidebar() {
       key: 'care', label: 'CARE',
       items: [
         { id: 'appointments', label: 'Appointments', badge: aptBadge, badgeVariant: 'green' },
-        { id: 'find-doctors', label: 'Find Doctors' },
         { id: 'consents',     label: 'Data Consents' },
       ],
     },
@@ -256,79 +276,81 @@ export default function Sidebar() {
       <style>{`
         .hc-sb {
           width: ${W}px; height: 100vh;
-          background: linear-gradient(175deg, #0F2D2A 0%, #0A1F1D 100%);
-          border-right: 1px solid rgba(20,184,166,0.15);
+          background: linear-gradient(175deg, #1B3B6F 0%, #142D56 100%);
+          border-right: none;
           display: flex; flex-direction: column;
           position: fixed; top: 0; left: 0; z-index: 200;
           overflow-y: auto; overflow-x: hidden;
-          scrollbar-width: thin; scrollbar-color: rgba(20,184,166,0.2) transparent;
+          scrollbar-width: thin; scrollbar-color: rgba(100,160,255,0.2) transparent;
           transition: width 0.25s cubic-bezier(.4,0,.2,1);
-          box-shadow: 3px 0 24px rgba(0,0,0,0.25);
+          box-shadow: 3px 0 24px rgba(0,0,0,0.3);
         }
         .hc-sb::-webkit-scrollbar { width: 3px; }
-        .hc-sb::-webkit-scrollbar-thumb { background: rgba(20,184,166,0.15); border-radius: 2px; }
+        .hc-sb::-webkit-scrollbar-thumb { background: rgba(100,160,255,0.15); border-radius: 2px; }
 
         /* Logo */
         .hc-sb-logo {
           padding: ${collapsed ? '14px 0' : '16px 18px'};
-          border-bottom: 1px solid rgba(20,184,166,0.12);
+          border-bottom: 1px solid rgba(255,255,255,0.08);
           display: flex; align-items: center; gap: 10px;
           flex-shrink: 0; min-height: 64px;
           justify-content: ${collapsed ? 'center' : 'flex-start'};
         }
         .hc-sb-logo-icon {
           width: 34px; height: 34px; border-radius: 9px;
-          background: linear-gradient(135deg, #0D9488, #14B8A6);
+          background: linear-gradient(135deg, #2E6BE6, #5B9CF6);
           display: flex; align-items: center; justify-content: center;
           font-size: 15px; flex-shrink: 0;
-          box-shadow: 0 0 14px rgba(20,184,166,0.3);
+          box-shadow: 0 0 14px rgba(91,156,246,0.4);
         }
         .hc-sb-logo-name { font-size: 14px; font-weight: 800; color: #FFFFFF; white-space: nowrap; }
-        .hc-sb-logo-sub  { font-size: 9px; color: rgba(20,184,166,0.8); letter-spacing: .07em; white-space: nowrap; }
+        .hc-sb-logo-sub  { font-size: 9px; color: rgba(91,156,246,0.9); letter-spacing: .07em; white-space: nowrap; }
 
-        /* Virtual Health ID */
+        /* Virtual Health ID — darker card to pop out from sidebar */
         .hc-sb-id {
           margin: ${collapsed ? '10px 8px' : '12px'};
-          border-radius: 12px;
-          background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(20,184,166,0.2);
-          padding: ${collapsed ? '12px 0' : '14px'};
+          border-radius: 14px;
+          background: rgba(0,0,0,0.25);
+          border: 1px solid rgba(255,255,255,0.12);
+          padding: ${collapsed ? '12px 0' : '16px'};
           flex-shrink: 0; position: relative; overflow: hidden;
           display: flex; flex-direction: column;
           align-items: ${collapsed ? 'center' : 'flex-start'};
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.2);
         }
         .hc-sb-id::before {
           content: ''; position: absolute; top: -20px; right: -20px;
-          width: 70px; height: 70px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(20,184,166,0.1) 0%, transparent 70%);
+          width: 80px; height: 80px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(91,156,246,0.12) 0%, transparent 70%);
           pointer-events: none;
         }
-        .hc-sb-id-lbl  { font-size: 9px; color: rgba(20,184,166,0.7); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; display: ${collapsed ? 'none' : 'block'}; }
+        .hc-sb-id-lbl  { font-size: 9px; color: rgba(168,200,255,0.6); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 10px; display: ${collapsed ? 'none' : 'block'}; font-weight: 600; }
         .hc-sb-avatar  {
-          width: ${collapsed ? '36px' : '44px'};
-          height: ${collapsed ? '36px' : '44px'};
+          width: ${collapsed ? '36px' : '46px'};
+          height: ${collapsed ? '36px' : '46px'};
           border-radius: 50%;
-          background: linear-gradient(135deg, #0D9488, #7C3AED);
+          background: linear-gradient(135deg, #2E6BE6, #7B4FE0);
           display: flex; align-items: center; justify-content: center;
           font-size: ${collapsed ? '13px' : '17px'};
           font-weight: 700; color: #fff;
-          border: 2px solid rgba(20,184,166,0.4);
+          border: 2.5px solid rgba(91,156,246,0.5);
           flex-shrink: 0;
           margin-bottom: ${collapsed ? '0' : '10px'};
           letter-spacing: 0;
+          box-shadow: 0 0 0 3px rgba(91,156,246,0.15);
         }
-        .hc-sb-id-name { font-size: 14px; font-weight: 700; color: #FFFFFF; margin-bottom: 3px; display: ${collapsed ? 'none' : 'block'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
-        .hc-sb-id-reg  { font-size: 10px; color: rgba(20,184,166,0.7); margin-bottom: 9px; display: ${collapsed ? 'none' : 'block'}; font-family: 'JetBrains Mono', monospace; }
-        .hc-sb-chips   { display: ${collapsed ? 'none' : 'flex'}; gap: 5px; flex-wrap: wrap; }
-        .hc-sb-chip    { padding: 3px 9px; border-radius: 100px; font-size: 10px; background: rgba(20,184,166,0.1); border: 1px solid rgba(20,184,166,0.25); color: #5EEAD4; white-space: nowrap; font-weight: 600; }
-        .hc-sb-chip.gold { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.25); color: #FCD34D; }
+        .hc-sb-id-name { font-size: 14px; font-weight: 800; color: #FFFFFF; margin-bottom: 2px; display: ${collapsed ? 'none' : 'block'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
+        .hc-sb-id-reg  { font-size: 10px; color: rgba(168,200,255,0.6); margin-bottom: 8px; display: ${collapsed ? 'none' : 'block'}; font-family: 'JetBrains Mono', monospace; }
+        .hc-sb-chips   { display: ${collapsed ? 'none' : 'flex'}; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+        .hc-sb-chip    { padding: 3px 9px; border-radius: 100px; font-size: 10px; background: rgba(91,156,246,0.15); border: 1px solid rgba(91,156,246,0.3); color: #A8C8FF; white-space: nowrap; font-weight: 600; }
+        .hc-sb-chip.gold { background: rgba(245,158,11,0.18); border-color: rgba(245,158,11,0.35); color: #FCD34D; }
         .hc-sb-skel    { border-radius: 4px; background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 200% 100%; animation: hcShimmerSb 1.5s infinite; margin-bottom: 6px; }
         @keyframes hcShimmerSb { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
         /* Nav section labels */
         .hc-sb-sec-lbl {
           padding: ${collapsed ? '12px 0 4px' : '12px 18px 4px'};
-          font-size: 10px; color: rgba(255,255,255,0.60);
+          font-size: 10px; color: rgba(255,255,255,0.4);
           text-transform: uppercase; letter-spacing: .1em;
           display: ${collapsed ? 'none' : 'block'}; white-space: nowrap; font-weight: 600;
         }
@@ -342,23 +364,23 @@ export default function Sidebar() {
           padding: ${collapsed ? '10px 0' : '9px 10px'};
           border-radius: 9px;
           font-size: 13.5px; font-weight: 500;
-          color: rgba(255,255,255,0.90); background: none; border: none;
+          color: rgba(255,255,255,0.80); background: none; border: none;
           width: 100%; text-align: left; cursor: pointer;
           transition: all 0.18s; position: relative;
           justify-content: ${collapsed ? 'center' : 'flex-start'};
         }
-        .hc-sb-btn:hover  { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
-        .hc-sb-btn.active { background: rgba(20,184,166,0.15); color: #5EEAD4; border-left: 3px solid #14B8A6; padding-left: ${collapsed ? '0' : '7px'}; }
-        .hc-sb-btn.active svg { stroke: #14B8A6; }
-        .hc-sb-btn-icon  { flex-shrink: 0; display: flex; align-items: center; opacity: .65; }
+        .hc-sb-btn:hover  { background: rgba(255,255,255,0.08); color: #fff; }
+        .hc-sb-btn.active { background: rgba(91,156,246,0.2); color: #A8C8FF; border-left: 3px solid #5B9CF6; padding-left: ${collapsed ? '0' : '7px'}; }
+        .hc-sb-btn.active svg { stroke: #5B9CF6; }
+        .hc-sb-btn-icon  { flex-shrink: 0; display: flex; align-items: center; opacity: .6; }
         .hc-sb-btn.active .hc-sb-btn-icon,
         .hc-sb-btn:hover  .hc-sb-btn-icon { opacity: 1; }
         .hc-sb-btn-lbl   { flex: 1; overflow: hidden; text-overflow: ellipsis; display: ${collapsed ? 'none' : 'block'}; }
         .hc-sb-badge     { margin-left: auto; padding: 1px 7px; border-radius: 100px; font-size: 10px; font-weight: 700; display: ${collapsed ? 'none' : 'inline-flex'}; align-items: center; min-width: 20px; justify-content: center; }
         .hc-sb-dot       { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; display: ${collapsed ? 'block' : 'none'}; }
-        .hc-sb-divider   { height: 1px; background: rgba(255,255,255,0.05); margin: 6px 0; }
+        .hc-sb-divider   { height: 1px; background: rgba(255,255,255,0.06); margin: 6px 0; }
 
-        /* Bottom area — SOS + Logout in sidebar theme */
+        /* Bottom area */
         .hc-sb-bottom {
           margin-top: auto;
           padding: ${collapsed ? '12px 8px' : '12px 10px'};
@@ -379,8 +401,8 @@ export default function Sidebar() {
         .hc-sos-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(220,38,38,0.45); }
         .hc-logout-btn {
           width: 100%; padding: ${collapsed ? '8px 0' : '9px 14px'};
-          border-radius: 10px; border: 1px solid rgba(255,255,255,0.07);
-          background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.4);
+          border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.45);
           font-size: 13px; font-weight: 500; cursor: pointer;
           transition: all 0.2s; font-family: inherit;
           display: flex; align-items: center;
@@ -410,15 +432,57 @@ export default function Sidebar() {
             <>
               <div className="hc-sb-skel" style={{ height: 14, width: '65%' }} />
               <div className="hc-sb-skel" style={{ height: 11, width: '42%' }} />
+              <div className="hc-sb-skel" style={{ height: 11, width: '55%' }} />
             </>
           ) : (
             <>
               <div className="hc-sb-id-name">{displayName ?? 'Patient'}</div>
               <div className="hc-sb-id-reg">{regId}</div>
-              <div className="hc-sb-chips">
-                {bloodDisp && <span className="hc-sb-chip">{bloodDisp} Blood</span>}
-                {isPremium  && <span className="hc-sb-chip gold">⭐ Premium</span>}
-              </div>
+              {!collapsed && (
+                <>
+                  {/* Age + blood type + gender row */}
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:6 }}>
+                    {profile?.dateOfBirth && (() => {
+                      const age = Math.floor((Date.now() - new Date(profile.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000));
+                      return age > 0 ? <span className="hc-sb-chip">{age} yrs</span> : null;
+                    })()}
+                    {(profile?.gender ?? user?.gender) && (
+                      <span className="hc-sb-chip">{(profile?.gender ?? user?.gender)?.charAt(0).toUpperCase() + (profile?.gender ?? user?.gender)?.slice(1).toLowerCase()}</span>
+                    )}
+                    {bloodDisp && <span className="hc-sb-chip">{bloodDisp} Blood</span>}
+                    {isPremium  && <span className="hc-sb-chip gold">⭐ Premium</span>}
+                  </div>
+
+                  {/* Life-threatening allergy alert only — no conditions list */}
+                  {kpis?.lifeThreateningAllergy && (
+                    <div style={{ marginBottom:6, padding:'5px 9px', background:'rgba(220,38,38,0.2)', border:'1px solid rgba(220,38,94,0.4)', borderRadius:8, fontSize:10, fontWeight:700, color:'#FCA5A5', display:'flex', alignItems:'center', gap:5, width:'100%' }}>
+                      <span>⚠️</span> Allergy: {kpis.lifeThreateningAllergy}
+                    </div>
+                  )}
+
+                  {/* Next appointment */}
+                  {kpis?.nextAppointmentDate && (
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', display:'flex', alignItems:'center', gap:4, marginBottom:5, width:'100%' }}>
+                      <span style={{ color:'rgba(253,211,77,0.9)' }}>📅</span>
+                      <span>Next: {new Date(kpis.nextAppointmentDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
+                      {kpis.nextAppointmentDoctor && <span style={{ color:'rgba(255,255,255,0.3)' }}>· {kpis.nextAppointmentDoctor}</span>}
+                    </div>
+                  )}
+
+                  {/* Health score bar */}
+                  {kpis?.healthScore != null && (
+                    <div style={{ width:'100%', marginTop:4 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                        <span style={{ fontSize:9, color:'rgba(168,200,255,0.55)', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:600 }}>Health Score</span>
+                        <span style={{ fontSize:12, fontWeight:800, color: kpis.healthScore>=80?'#4ADE80':kpis.healthScore>=60?'#60A5FA':'#FCD34D' }}>{kpis.healthScore}</span>
+                      </div>
+                      <div style={{ height:5, background:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:`${kpis.healthScore}%`, background: kpis.healthScore>=80?'#4ADE80':kpis.healthScore>=60?'linear-gradient(90deg,#2E6BE6,#5B9CF6)':'#FCD34D', borderRadius:3, transition:'width 0.8s ease' }}/>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>

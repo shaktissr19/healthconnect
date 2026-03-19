@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useUIStore } from '@/store/uiStore';
 
@@ -26,6 +26,13 @@ interface Community {
   is_joined:boolean; rules?:string;
 }
 interface AuthUser { id:string; name:string; role:string; token:string; }
+
+interface Poll {
+  id:string; question:string; options:{ id:string; text:string; votes:number }[];
+  totalVotes:number; userVote:string|null; expiresAt?:string;
+}
+interface HealthScore { score:string; label:string; memberCount:number; avgScore?:number; }
+interface PeerMember { id:string; name:string; condition?:string; similarity?:number; isAnonymous?:boolean; }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.healthconnect.sbs';
 
@@ -73,11 +80,13 @@ const getAuthUser = (): AuthUser|null => {
 const getDashboardRoute = (r:string) => r==='DOCTOR'?'/doctor-dashboard':r==='HOSPITAL'?'/hospital-dashboard':'/dashboard';
 
 // ── Post Card ─────────────────────────────────────────────────────────────────
-const PostCard = ({ post, accent, user, onReact, onCommentClick, onSignIn }: {
+const PostCard = ({ post, accent, user, onReact, onCommentClick, onSignIn, isBookmarked, onBookmark }: {
   post:Post; accent:string; user:AuthUser|null;
   onReact:(id:string,type:string)=>void;
   onCommentClick:(p:Post)=>void;
   onSignIn:()=>void;
+  isBookmarked?:boolean;
+  onBookmark?:(id:string)=>void;
 }) => {
   const [expanded,setExpanded] = useState(false);
   const displayType = POST_TYPES.find(t=>(post.tags||[]).includes(t.toLowerCase().replace(/\s*\/\s*/g,'-').replace(/ /g,'-'))) || 'General';
@@ -138,7 +147,7 @@ const PostCard = ({ post, accent, user, onReact, onCommentClick, onSignIn }: {
         </div>
       )}
 
-      {/* Reactions + Comments */}
+      {/* Reactions + Comments + Bookmark */}
       <div style={{ display:'flex',gap:6,paddingTop:10,borderTop:'1px solid #F1F5F9',flexWrap:'wrap' }}>
         {[{emoji:'❤️',key:'like',count:post.reactions.like},{emoji:'🤝',key:'support',count:post.reactions.support},{emoji:'💡',key:'helpful',count:post.reactions.helpful}].map(r=>(
           <button key={r.key}
@@ -152,6 +161,12 @@ const PostCard = ({ post, accent, user, onReact, onCommentClick, onSignIn }: {
           style={{ marginLeft:'auto',display:'flex',alignItems:'center',gap:5,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:20,padding:'4px 12px',cursor:'pointer',fontSize:11.5,color:'#475569',fontWeight:600 }}>
           💬 {post.comment_count} {post.comment_count===1?'reply':'replies'}
         </button>
+        {onBookmark && (
+          <button onClick={()=>onBookmark(post.id)} title={isBookmarked?'Remove bookmark':'Bookmark'}
+            style={{ display:'flex',alignItems:'center',gap:4,background:isBookmarked?'#FFFBEB':'#F8FAFC',border:`1px solid ${isBookmarked?'#F6E05E':'#E2E8F0'}`,borderRadius:20,padding:'4px 10px',cursor:'pointer',fontSize:13,transition:'all 0.15s' }}>
+            {isBookmarked ? '🔖' : '🏷️'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -201,6 +216,16 @@ export default function CommunityDetailPage() {
   const [commentAnon,setCommentAnon]= useState(false);
   const [submittingCmt,setSubmittingCmt]=useState(false);
 
+  // ── New: polls, health score, people like me, bookmarks ───────────────────
+  const [polls,        setPolls]        = useState<Poll[]>([]);
+  const [healthScore,  setHealthScore]  = useState<HealthScore|null>(null);
+  const [peerMembers,  setPeerMembers]  = useState<PeerMember[]>([]);
+  const [bookmarks,    setBookmarks]    = useState<Set<string>>(new Set());
+  const [votingPoll,   setVotingPoll]   = useState<string|null>(null);
+
+  // Polling ref for auto-refresh
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
+
   const accent = community?.category?(CAT_COLOR[community.category]||'#6366F1'):'#6366F1';
   const bg     = community?.category?(CAT_BG[community.category]||'#F8FAFC'):'#F8FAFC';
 
@@ -247,6 +272,107 @@ export default function CommunityDetailPage() {
 
   useEffect(() => { fetchCommunity(); }, [fetchCommunity]);
   useEffect(() => { if (community?.id) fetchPosts(community.id); }, [community?.id, fetchPosts]);
+
+  // ── Fetch sidebar data once community loads ────────────────────────────────
+  const fetchSidebarData = useCallback(async (communityId: string) => {
+    const headers: Record<string,string> = {};
+    const u = getAuthUser();
+    if (u) headers['Authorization'] = `Bearer ${u.token}`;
+
+    // Polls
+    try {
+      const res = await fetch(`${API}/api/communities/${communityId}/polls`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.data?.polls ?? data.polls ?? data.data ?? [];
+        setPolls(Array.isArray(raw) ? raw.slice(0, 3) : []);
+      }
+    } catch {}
+
+    // Health score
+    try {
+      const res = await fetch(`${API}/api/communities/${communityId}/health-score`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHealthScore(data.data ?? data ?? null);
+      }
+    } catch {}
+
+    // People like me (only if authenticated)
+    if (u) {
+      try {
+        const res = await fetch(`${API}/api/communities/match`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          const raw = data.data?.members ?? data.members ?? data.data ?? [];
+          setPeerMembers(Array.isArray(raw) ? raw.slice(0, 5) : []);
+        }
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (community?.id) fetchSidebarData(community.id);
+  }, [community?.id, fetchSidebarData]);
+
+  // ── Auto-refresh posts every 30 seconds ───────────────────────────────────
+  useEffect(() => {
+    if (!community?.id) return;
+    pollIntervalRef.current = setInterval(() => {
+      fetchPosts(community.id);
+    }, 30_000);
+    return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
+  }, [community?.id, fetchPosts]);
+
+  const handleVotePoll = async (pollId: string, optionId: string) => {
+    if (!user) { handleSignIn(); return; }
+    setVotingPoll(pollId);
+    try {
+      const res = await fetch(`${API}/api/communities/polls/${pollId}/vote`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ optionId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPolls(prev => prev.map(p => {
+          if (p.id !== pollId) return p;
+          const updated = data.data?.poll ?? data.poll;
+          if (updated) return updated;
+          // Optimistic fallback
+          const opts = p.options.map(o => ({
+            ...o, votes: o.id === optionId ? o.votes + 1 : o.votes,
+          }));
+          return { ...p, options: opts, totalVotes: p.totalVotes + 1, userVote: optionId };
+        }));
+      }
+    } catch {}
+    setVotingPoll(null);
+  };
+
+  const handleBookmark = async (postId: string) => {
+    if (!user) { handleSignIn(); return; }
+    const wasBookmarked = bookmarks.has(postId);
+    // Optimistic update
+    setBookmarks(prev => {
+      const next = new Set(prev);
+      wasBookmarked ? next.delete(postId) : next.add(postId);
+      return next;
+    });
+    try {
+      await fetch(`${API}/api/communities/posts/${postId}/bookmark`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' },
+      });
+    } catch {
+      // Revert on failure
+      setBookmarks(prev => {
+        const next = new Set(prev);
+        wasBookmarked ? next.add(postId) : next.delete(postId);
+        return next;
+      });
+    }
+  };
 
   const handleJoin = async () => {
     if (!user) { sessionStorage.setItem('hc_pending_join',community?.id||slugOrId); handleSignIn(); return; }
@@ -521,7 +647,7 @@ export default function CommunityDetailPage() {
                   <div style={{ fontSize:13,color:'#64748B' }}>Be the first to share something!</div>
                 </div>
               ) : (
-                posts.map((p,i)=><PostCard key={p.id||i} post={p} accent={accent} user={user} onReact={handleReact} onCommentClick={openComments} onSignIn={handleSignIn}/>)
+                posts.map((p,i)=><PostCard key={p.id||i} post={p} accent={accent} user={user} onReact={handleReact} onCommentClick={openComments} onSignIn={handleSignIn} isBookmarked={bookmarks.has(p.id)} onBookmark={handleBookmark}/>)
               )}
             </>
           )}
@@ -554,7 +680,76 @@ export default function CommunityDetailPage() {
 
         {/* ── Sidebar ────────────────────────────────────────────────────── */}
         <div>
-          {/* Ask a Doctor CTA — NEW */}
+          {/* Community Health Score */}
+          {healthScore && (
+            <div style={{ background:'#fff',border:'1px solid #E8EEF5',borderRadius:14,padding:'18px',marginBottom:14,boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ fontSize:11,fontWeight:800,color:'#64748B',letterSpacing:'0.1em',marginBottom:12 }}>COMMUNITY HEALTH SCORE</div>
+              <div style={{ display:'flex',alignItems:'center',gap:14 }}>
+                <div style={{ width:56,height:56,borderRadius:'50%',background:accent,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:22,fontWeight:900,flexShrink:0,boxShadow:`0 4px 14px ${accent}44` }}>
+                  {healthScore.score}
+                </div>
+                <div>
+                  <div style={{ fontSize:15,fontWeight:800,color:'#1E293B' }}>{healthScore.label || 'Community Grade'}</div>
+                  <div style={{ fontSize:12,color:'#64748B',marginTop:2 }}>{(healthScore.memberCount||0).toLocaleString()} members tracked</div>
+                  {healthScore.avgScore && <div style={{ fontSize:11,color:accent,fontWeight:700,marginTop:3 }}>Avg score: {healthScore.avgScore}</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Active Polls */}
+          {polls.length > 0 && (
+            <div style={{ background:'#fff',border:'1px solid #E8EEF5',borderRadius:14,padding:'18px',marginBottom:14,boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ fontSize:11,fontWeight:800,color:'#64748B',letterSpacing:'0.1em',marginBottom:12 }}>COMMUNITY POLLS</div>
+              {polls.map(poll => (
+                <div key={poll.id} style={{ marginBottom:16,paddingBottom:16,borderBottom:'1px solid #F1F5F9' }}>
+                  <div style={{ fontSize:13,fontWeight:700,color:'#1E293B',marginBottom:10,lineHeight:1.4 }}>{poll.question}</div>
+                  {poll.options.map(opt => {
+                    const pct = poll.totalVotes > 0 ? Math.round((opt.votes / poll.totalVotes) * 100) : 0;
+                    const voted = poll.userVote === opt.id;
+                    return (
+                      <button key={opt.id} disabled={!!poll.userVote || votingPoll === poll.id}
+                        onClick={() => handleVotePoll(poll.id, opt.id)}
+                        style={{ width:'100%',background:voted?`${accent}18`:'#F8FAFC',border:`1px solid ${voted?accent+'44':'#E2E8F0'}`,borderRadius:8,padding:'8px 12px',marginBottom:6,cursor:poll.userVote?'default':'pointer',textAlign:'left',position:'relative',overflow:'hidden' }}>
+                        {poll.userVote && (
+                          <div style={{ position:'absolute',inset:0,left:0,top:0,height:'100%',width:`${pct}%`,background:`${accent}14`,borderRadius:8,transition:'width 0.4s' }}/>
+                        )}
+                        <div style={{ position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+                          <span style={{ fontSize:12,color:voted?accent:'#334155',fontWeight:voted?700:400 }}>{opt.text}</span>
+                          {poll.userVote && <span style={{ fontSize:11,fontWeight:700,color:accent }}>{pct}%</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <div style={{ fontSize:10,color:'#94A3B8',marginTop:6 }}>{poll.totalVotes} vote{poll.totalVotes!==1?'s':''}{poll.expiresAt?` · ends ${new Date(poll.expiresAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}`:''}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* People Like Me */}
+          {user && peerMembers.length > 0 && (
+            <div style={{ background:'#fff',border:'1px solid #E8EEF5',borderRadius:14,padding:'18px',marginBottom:14,boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ fontSize:11,fontWeight:800,color:'#64748B',letterSpacing:'0.1em',marginBottom:12 }}>PEOPLE LIKE ME</div>
+              <div style={{ fontSize:12,color:'#64748B',marginBottom:10 }}>Members with similar health profiles</div>
+              {peerMembers.map((peer,i) => (
+                <div key={peer.id||i} style={{ display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:i<peerMembers.length-1?'1px solid #F8FAFC':'none' }}>
+                  <div style={{ width:32,height:32,borderRadius:'50%',background:peer.isAnonymous?'#F1F5F9':`linear-gradient(135deg,${accent}CC,${accent}88)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:peer.isAnonymous?14:11,fontWeight:800,color:peer.isAnonymous?'#94A3B8':'#fff',flexShrink:0 }}>
+                    {peer.isAnonymous?'🎭':(peer.name||'?').split(' ').filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:12,fontWeight:600,color:'#1E293B',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{peer.name||'Anonymous Member'}</div>
+                    {peer.condition && <div style={{ fontSize:10,color:'#64748B' }}>{peer.condition}</div>}
+                  </div>
+                  {peer.similarity != null && (
+                    <div style={{ fontSize:10,fontWeight:700,color:accent,background:`${accent}15`,padding:'2px 7px',borderRadius:10,flexShrink:0 }}>{peer.similarity}% match</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Ask a Doctor CTA */}
           <div style={{ background:`linear-gradient(135deg,${accent}15,${accent}08)`,border:`1px solid ${accent}33`,borderRadius:14,padding:'18px',marginBottom:14 }}>
             <div style={{ fontSize:13,fontWeight:800,color:'#1E293B',marginBottom:6 }}>🩺 Ask a Doctor</div>
             <div style={{ fontSize:12,color:'#475569',marginBottom:12,lineHeight:1.5 }}>

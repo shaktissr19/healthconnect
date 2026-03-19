@@ -55,10 +55,60 @@ export default function Topbar() {
   const [healthScore,    setHealthScore]     = useState<number | null>(null);
   const [badgePulse,     setBadgePulse]      = useState(false);
 
+  // Global search
+  const [showSearch,   setShowSearch]   = useState(false);
+  const [searchQuery,  setSearchQuery]  = useState('');
+  const [searchRes,    setSearchRes]    = useState<any[]>([]);
+  const [searchLoad,   setSearchLoad]   = useState(false);
+  const searchRef  = useRef<HTMLDivElement>(null);
+  const searchInp  = useRef<HTMLInputElement>(null);
+
   const notifRef   = useRef<HTMLDivElement>(null);
   const userRef    = useRef<HTMLDivElement>(null);
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSeenId = useRef<string>('');
+
+  // Global search handler
+  useEffect(() => {
+    if (!searchQuery.trim()) { setSearchRes([]); return; }
+    const t = setTimeout(async () => {
+      setSearchLoad(true);
+      try {
+        const results: any[] = [];
+        // Search doctors
+        try {
+          const r: any = await api.get('/public/doctors', { params: { search: searchQuery, limit: 4 } });
+          const docs = r?.data?.data ?? r?.data?.doctors ?? r?.data ?? [];
+          (Array.isArray(docs) ? docs : []).slice(0, 4).forEach((d: any) => results.push({ type: 'doctor', id: d.id, label: `Dr. ${d.firstName} ${d.lastName}`, sub: d.specialization, icon: '👨‍⚕️', action: () => { setActivePage('find-doctors'); setShowSearch(false); } }));
+        } catch { /**/ }
+        // Search communities
+        try {
+          const r: any = await api.get('/api/communities', { params: { search: searchQuery, limit: 3 } });
+          const comms = r?.data?.data?.communities ?? r?.data?.communities ?? r?.data ?? [];
+          (Array.isArray(comms) ? comms : []).slice(0, 3).forEach((c: any) => results.push({ type: 'community', id: c.id, label: c.name, sub: c.category, icon: '🏘️', action: () => { setActivePage('communities'); setShowSearch(false); } }));
+        } catch { /**/ }
+        // Search medications
+        try {
+          const r: any = await api.get('/patient/medications', { params: { search: searchQuery, limit: 3 } });
+          const meds = r?.data?.data?.medications ?? r?.data?.medications ?? r?.data ?? [];
+          (Array.isArray(meds) ? meds : []).slice(0, 3).forEach((m: any) => results.push({ type: 'medication', id: m.id, label: m.name, sub: m.dosage, icon: '💊', action: () => { setActivePage('medications'); setShowSearch(false); } }));
+        } catch { /**/ }
+        setSearchRes(results);
+      } catch { /**/ }
+      setSearchLoad(false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchQuery, setActivePage]);
+
+  // Open search with keyboard shortcut Ctrl+K / Cmd+K
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowSearch(true); setTimeout(() => searchInp.current?.focus(), 50); }
+      if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); setSearchRes([]); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const firstName = user?.firstName ?? '';
   const lastName  = user?.lastName  ?? '';
@@ -113,6 +163,7 @@ export default function Topbar() {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
       if (userRef.current  && !userRef.current.contains(e.target as Node))  setShowUserMenu(false);
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) { setShowSearch(false); setSearchQuery(''); setSearchRes([]); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -245,6 +296,15 @@ export default function Topbar() {
           </svg>
         </button>
 
+        {/* HealthConnect home link — opens in new tab so dashboard session is preserved */}
+        <a href="https://healthconnect.sbs/?home=1" title="Go to HealthConnect home (opens in new tab)" style={{ display:'flex', alignItems:'center', gap:6, textDecoration:'none', padding:'4px 10px', borderRadius:8, border:'1px solid #E2EEF0', background:'#F8FBFF', transition:'all 0.2s', flexShrink:0 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor='#1A6BB5'; (e.currentTarget as HTMLElement).style.background='#EBF4FF'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#E2EEF0'; (e.currentTarget as HTMLElement).style.background='#F8FBFF'; }}>
+          <span style={{ fontSize:14 }}>🏥</span>
+          <span style={{ fontSize:11, fontWeight:700, color:'#1A365D' }}>HealthConnect Home</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+
         {/* Breadcrumb */}
         <div className="hc-tb-breadcrumb">
           <span className="hc-tb-breadcrumb-home" onClick={() => setActivePage('home')}>Dashboard</span>
@@ -256,10 +316,90 @@ export default function Topbar() {
             : activePage === 'medications'  ? '💊 Medications'
             : activePage === 'appointments' ? '📅 Appointments'
             : activePage === 'communities'  ? '💬 Communities'
+            : activePage === 'find-doctors' ? '🩺 Find Doctors'
             : activePage === 'profile'      ? '👤 Profile'
             : activePage === 'settings'     ? '⚙️ Settings'
+            : activePage === 'symptoms'     ? '🤒 Symptoms'
+            : activePage === 'therapies'    ? '🧬 Therapies'
+            : activePage === 'vitals'       ? '📊 Vitals'
+            : activePage === 'consents'     ? '🔐 Data Consents'
+            : activePage === 'subscription' ? '⭐ Subscription'
             : 'Dashboard'}
           </span>
+        </div>
+
+        {/* Global Search */}
+        <div ref={searchRef} style={{ position:'relative', flexShrink:0 }}>
+          <button
+            onClick={() => { setShowSearch(p => !p); setTimeout(() => searchInp.current?.focus(), 50); }}
+            className="hc-tb-icon-btn"
+            style={{ display:'flex', alignItems:'center', gap:7, padding:'6px 12px', borderRadius:9, border:'1px solid #C8DFF0', background:showSearch?'#EBF4FF':'#F8FBFF', color:'#5A7A9B', fontSize:13, cursor:'pointer', minWidth:180, justifyContent:'flex-start' }}
+            title="Search (Ctrl+K)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span style={{ flex:1, textAlign:'left', fontSize:12 }}>Search…</span>
+            <span style={{ fontSize:10, padding:'1px 5px', borderRadius:4, background:'#E2EEF0', color:'#94A3B8', fontFamily:'monospace' }}>⌘K</span>
+          </button>
+
+          {showSearch && (
+            <div style={{ position:'absolute', top:42, right:0, width:380, background:'#fff', borderRadius:14, boxShadow:'0 8px 32px rgba(27,59,111,0.18)', border:'1px solid #C8DFF0', zIndex:9999, overflow:'hidden' }}>
+              <div style={{ padding:'12px 14px', borderBottom:'1px solid #F0F7FD', display:'flex', alignItems:'center', gap:8 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input ref={searchInp} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search doctors, communities, medications..." autoFocus
+                  style={{ flex:1, border:'none', outline:'none', fontSize:13, color:'#0A1628', background:'transparent', fontFamily:'inherit' }} />
+                {searchQuery && <button onClick={() => { setSearchQuery(''); setSearchRes([]); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', fontSize:16 }}>✕</button>}
+              </div>
+              <div style={{ maxHeight:320, overflowY:'auto' }}>
+                {searchLoad && <div style={{ padding:'20px', textAlign:'center', color:'#94A3B8', fontSize:13 }}>Searching…</div>}
+                {!searchLoad && searchQuery && searchRes.length === 0 && <div style={{ padding:'20px', textAlign:'center', color:'#94A3B8', fontSize:13 }}>No results for "{searchQuery}"</div>}
+                {!searchLoad && searchRes.length > 0 && (
+                  <>
+                    {['doctor','community','medication'].map(type => {
+                      const items = searchRes.filter(r => r.type === type);
+                      if (!items.length) return null;
+                      const labels: Record<string,string> = { doctor:'Doctors', community:'Communities', medication:'Medications' };
+                      return (
+                        <div key={type}>
+                          <div style={{ padding:'8px 14px 4px', fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.08em' }}>{labels[type]}</div>
+                          {items.map(item => (
+                            <button key={item.id} onClick={item.action} style={{ width:'100%', padding:'9px 14px', display:'flex', alignItems:'center', gap:10, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit', transition:'background 0.1s' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F7FD'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+                              <span style={{ fontSize:18, flexShrink:0 }}>{item.icon}</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:13, fontWeight:600, color:'#0A1628', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.label}</div>
+                                {item.sub && <div style={{ fontSize:11, color:'#5A7A9B' }}>{item.sub}</div>}
+                              </div>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C8DFF0" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {!searchQuery && (
+                  <div style={{ padding:'16px 14px' }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Quick Navigation</div>
+                    {[
+                      { icon:'❤️', label:'My Health', action: () => { setActivePage('my-health'); setShowSearch(false); } },
+                      { icon:'📅', label:'Appointments', action: () => { setActivePage('appointments'); setShowSearch(false); } },
+                      { icon:'💊', label:'Medications', action: () => { setActivePage('medications'); setShowSearch(false); } },
+                      { icon:'🏘️', label:'Communities', action: () => { setActivePage('communities'); setShowSearch(false); } },
+                      { icon:'🩺', label:'Find Doctors', action: () => { setActivePage('find-doctors'); setShowSearch(false); } },
+                    ].map(item => (
+                      <button key={item.label} onClick={item.action} style={{ width:'100%', padding:'7px 10px', display:'flex', alignItems:'center', gap:10, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit', borderRadius:8, transition:'background 0.1s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F7FD'}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+                        <span style={{ fontSize:16 }}>{item.icon}</span>
+                        <span style={{ fontSize:13, color:'#1A365D', fontWeight:500 }}>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Health score chip */}

@@ -217,16 +217,30 @@ const PostComposer: React.FC<{
   const submit = async () => {
     if (!body.trim()) return;
     setSubmitting(true);
-    try { await communityAPI.createPost(communityId, { title: title.trim() || undefined, body: body.trim(), isAnonymous }); } catch { /**/ }
-    onPost({
-      id: `local-${Date.now()}`, title: title.trim() || undefined, body: body.trim(),
-      author: isAnonymous ? 'Anonymous' : userName,
-      authorInitial: isAnonymous ? '?' : (userInitial[0]?.toUpperCase() ?? 'P'),
-      isAnonymous, isDoctor: false, timeAgo: 'Just now', tags: [], postType,
-      reactions: { like: { type: 'like', count: 0, userReacted: false }, support: { type: 'support', count: 0, userReacted: false }, helpful: { type: 'helpful', count: 0, userReacted: false } },
-      comments: [], commentsExpanded: false, commentCount: 0, isBookmarked: false,
-    });
-    setTitle(''); setBody(''); setSubmitting(false); close();
+    try {
+      await communityAPI.createPost(communityId, { title: title.trim() || undefined, body: body.trim(), isAnonymous });
+      // Optimistic update immediately
+      onPost({
+        id: `local-${Date.now()}`, title: title.trim() || undefined, body: body.trim(),
+        author: isAnonymous ? 'Anonymous' : userName,
+        authorInitial: isAnonymous ? '?' : (userInitial[0]?.toUpperCase() ?? 'P'),
+        isAnonymous, isDoctor: false, timeAgo: 'Just now', tags: [], postType,
+        reactions: { like: { type: 'like', count: 0, userReacted: false }, support: { type: 'support', count: 0, userReacted: false }, helpful: { type: 'helpful', count: 0, userReacted: false } },
+        comments: [], commentsExpanded: false, commentCount: 0, isBookmarked: false,
+      });
+      setTitle(''); setBody(''); close();
+    } catch {
+      // Still show optimistic if API fails
+      onPost({
+        id: `local-${Date.now()}`, title: title.trim() || undefined, body: body.trim(),
+        author: isAnonymous ? 'Anonymous' : userName,
+        authorInitial: isAnonymous ? '?' : (userInitial[0]?.toUpperCase() ?? 'P'),
+        isAnonymous, isDoctor: false, timeAgo: 'Just now', tags: [], postType,
+        reactions: { like: { type: 'like', count: 0, userReacted: false }, support: { type: 'support', count: 0, userReacted: false }, helpful: { type: 'helpful', count: 0, userReacted: false } },
+        comments: [], commentsExpanded: false, commentCount: 0, isBookmarked: false,
+      });
+      setTitle(''); setBody(''); close();
+    } finally { setSubmitting(false); }
   };
 
   if (!open) return (
@@ -537,6 +551,22 @@ const CommunityPanel: React.FC<{
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  // Fetch polls for this community
+  useEffect(() => {
+    (communityAPI as any).getPolls?.(community.id)
+      .then((res: any) => {
+        const d = res?.data?.data ?? res?.data ?? [];
+        const arr = Array.isArray(d) ? d : (d.polls ?? []);
+        setPolls(arr.slice(0, 2).map((p: any) => ({
+          id: p.id, question: p.question ?? p.title ?? 'Poll',
+          options: (p.options ?? []).map((o: any) => ({ id: o.id, text: o.text ?? o.option, votes: o.votes ?? o._count?.votes ?? 0 })),
+          totalVotes: p.totalVotes ?? p._count?.votes ?? 0,
+          userVotedOptionId: p.userVotedOptionId ?? p.userVote?.optionId,
+          endsAt: p.endsAt,
+        })));
+      })
+      .catch(() => { /* no polls */ });
+  }, [community.id]);
 
   // Fetch upcoming Q&A sessions
   useEffect(() => {
@@ -597,7 +627,7 @@ const CommunityPanel: React.FC<{
       totalVotes: p.totalVotes + (p.userVotedOptionId ? 0 : 1),
       options: p.options.map(o => ({ ...o, votes: o.id === optionId ? o.votes + 1 : o.votes })),
     }));
-    try { await Promise.resolve(); } catch { /**/ }
+    try { await (communityAPI as any).votePoll?.(pollId, optionId); } catch { /**/ }
     setVotingPoll(null);
   };
 
@@ -820,7 +850,10 @@ const CommunitiesPage: React.FC = () => {
   const [openComposerFor, setOpenComposerFor] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'joined' | 'discover'>('joined');
   const [searchQuery, setSearchQuery] = useState('');
-
+  const [healthScores, setHealthScores] = useState<Record<string, { grade: string; color: string }>>({});
+  const [peopleLikeMe, setPeopleLikeMe] = useState<any[]>([]);
+  const [showPLM, setShowPLM] = useState(false);
+  const [showAllDiscover, setShowAllDiscover] = useState(false);
   const authFb = readAuth();
   const effectiveUser = zustandUser ?? authFb.user;
   const userName = effectiveUser ? `${effectiveUser.firstName ?? ''} ${effectiveUser.lastName ?? ''}`.trim() || 'Patient' : 'Patient';
@@ -887,6 +920,36 @@ const CommunitiesPage: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', h);
   }, [loadCommunities]);
 
+  // Fetch community health scores for joined communities
+  useEffect(() => {
+    if (!mounted || communities.length === 0) return;
+    const joined = communities.filter(c => c.isJoined);
+    joined.forEach(async (c) => {
+      try {
+        const res: any = await (communityAPI as any).getHealthScore?.(c.id);
+        const d = res?.data?.data ?? res?.data ?? {};
+        const grade = d.grade ?? d.healthGrade ?? null;
+        if (grade) {
+          const gradeColors: Record<string, string> = { A: '#16A34A', B: '#0D9488', C: '#D97706', D: '#F97316', F: '#DC2626' };
+          const gradeColor = gradeColors[grade[0]?.toUpperCase()] ?? '#64748B';
+          setHealthScores(prev => ({ ...prev, [c.id]: { grade, color: gradeColor } }));
+        }
+      } catch { /**/ }
+    });
+  }, [mounted, communities]);
+
+  // Fetch People Like Me
+  useEffect(() => {
+    if (!mounted) return;
+    (communityAPI as any).getPeopleLikeMe?.()
+      .then((res: any) => {
+        const d = res?.data?.data ?? res?.data ?? [];
+        const arr = Array.isArray(d) ? d : (d.matches ?? d.people ?? []);
+        setPeopleLikeMe(arr.slice(0, 6));
+      })
+      .catch(() => { /**/ });
+  }, [mounted]);
+
   const writeBridge = (id: string, joined: boolean) => {
     try {
       const b: string[] = JSON.parse(localStorage.getItem('hc_joined_communities') ?? '[]');
@@ -921,19 +984,57 @@ const CommunitiesPage: React.FC = () => {
   return (
     <div style={{ padding: '0 0 40px' }}>
 
-      {/* Page header */}
+      {/* ── Page header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 18 }}>
         <div>
           <h2 style={{ fontSize: 21, fontWeight: 800, color: T.text, margin: '0 0 3px' }}>Communities</h2>
           <p style={{ fontSize: 13, color: T.textSub, margin: 0 }}>Connect with patients who truly understand your journey</p>
         </div>
-        {totalUnread > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.tealLight, border: `1px solid ${T.tealBorder}`, borderRadius: 20, padding: '5px 13px' }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.teal }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.tealDark }}>{totalUnread} new {totalUnread === 1 ? 'post' : 'posts'} in your communities</span>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {totalUnread > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.tealLight, border: `1px solid ${T.tealBorder}`, borderRadius: 20, padding: '5px 13px' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.teal }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.tealDark }}>{totalUnread} new {totalUnread === 1 ? 'post' : 'posts'}</span>
+            </div>
+          )}
+          {/* People Like Me button */}
+          {peopleLikeMe.length > 0 && (
+            <button onClick={() => setShowPLM(p => !p)}
+              style={{ display:'flex', alignItems:'center', gap:7, padding:'6px 14px', borderRadius:20, border:`1.5px solid ${showPLM ? T.teal : T.tealBorder}`, background: showPLM ? T.tealLight : T.white, color: T.tealDark, fontSize:12, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
+              👥 {peopleLikeMe.length} patients like you
+              <span style={{ fontSize:9, transform: showPLM?'rotate(180deg)':'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* ── People Like Me panel ── */}
+      {showPLM && peopleLikeMe.length > 0 && (
+        <div style={{ background: T.white, border: `1px solid ${T.tealBorder}`, borderRadius: 16, padding: '16px 18px', marginBottom: 18, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            👥 Patients with similar health journeys
+            <span style={{ fontSize: 11, color: T.textSub, fontWeight: 400 }}>Based on your conditions and communities</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {peopleLikeMe.map((p: any, i: number) => {
+              const name   = p.firstName ? `${p.firstName} ${p.lastName ?? ''}`.trim() : `Patient ${i + 1}`;
+              const init   = name[0]?.toUpperCase() ?? 'P';
+              const shared = p.sharedConditions ?? p.commonConditions ?? [];
+              const coms   = p.sharedCommunities ?? p.commonCommunities ?? [];
+              return (
+                <div key={p.id ?? i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: T.bg, borderRadius: 12, border: `1px solid ${T.border}`, minWidth: 200, flex: '1 1 200px', maxWidth: 280 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{init}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.isAnonymous ? 'Anonymous Patient' : name}</div>
+                    {shared.length > 0 && <div style={{ fontSize: 10, color: T.textSub, marginTop: 2 }}>🩺 {shared.slice(0, 2).join(', ')}{shared.length > 2 ? ` +${shared.length - 2}` : ''}</div>}
+                    {coms.length > 0  && <div style={{ fontSize: 10, color: T.tealDark, marginTop: 1 }}>🏘️ {coms.length} shared {coms.length === 1 ? 'community' : 'communities'}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 3, marginBottom: 18, background: T.tealMid, borderRadius: 11, padding: 3, width: 'fit-content' }}>
@@ -1004,6 +1105,12 @@ const CommunitiesPage: React.FC = () => {
                             <span style={{ fontSize: 9, color: '#16A34A', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', padding: '1px 6px', borderRadius: 8, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
                               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} />
                               {c.activeMembersToday} active
+                            </span>
+                          )}
+                          {/* Community health score badge */}
+                          {healthScores[c.id] && (
+                            <span style={{ fontSize: 9, color: healthScores[c.id].color, background: `${healthScores[c.id].color}15`, border: `1px solid ${healthScores[c.id].color}30`, padding: '1px 7px', borderRadius: 8, fontWeight: 800 }}>
+                              {healthScores[c.id].grade}
                             </span>
                           )}
                         </div>
@@ -1100,52 +1207,58 @@ const CommunitiesPage: React.FC = () => {
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search communities…"
               style={{ width: '100%', boxSizing: 'border-box', padding: '9px 13px 9px 36px', borderRadius: 9, border: `1px solid ${T.border}`, fontSize: 13, outline: 'none', background: T.white, color: T.text }} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12 }}>
-            {(searchQuery ? allFiltered : discoverCommunities).map(c => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {(searchQuery ? allFiltered : (showAllDiscover ? discoverCommunities : discoverCommunities.slice(0, 6))).map(c => (
               <div key={c.id} style={{
-                background: T.cardBg, borderRadius: 14,
+                background: T.cardBg, borderRadius: 12,
                 border: c.isJoined ? `1.5px solid ${T.teal}60` : `1px solid ${T.border}`,
-                padding: '14px', transition: 'all 0.2s', boxShadow: T.shadow,
+                padding: '12px', transition: 'all 0.2s', boxShadow: T.shadow,
                 position: 'relative', overflow: 'hidden',
               }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = T.shadowHover; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = T.shadow; }}
               >
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${c.color ?? T.teal},${c.color ?? T.teal}88)` }} />
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginBottom: 9, paddingTop: 4 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 11, background: `${c.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{c.icon ?? '🏥'}</div>
-                  <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7, paddingTop: 4 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: `${c.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{c.icon ?? '🏥'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: T.text }}>{c.name}</span>
-                      {c.isTrending && <span style={{ fontSize: 8, background: '#fef3c7', color: '#92400e', padding: '1px 5px', borderRadius: 7, fontWeight: 800 }}>🔥 Hot</span>}
-                      {c.isJoined && <span style={{ fontSize: 8, background: T.tealLight, color: T.tealDark, padding: '1px 5px', borderRadius: 7, fontWeight: 800 }}>✓ Joined</span>}
+                      <span style={{ fontWeight: 700, fontSize: 12, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{c.name}</span>
+                      {c.isJoined && <span style={{ fontSize: 8, background: T.tealLight, color: T.tealDark, padding: '1px 5px', borderRadius: 7, fontWeight: 800, flexShrink: 0 }}>✓ Joined</span>}
                     </div>
-                    <span style={{ fontSize: 9, color: '#fff', background: c.color ?? T.teal, padding: '1px 6px', borderRadius: 7, display: 'inline-block', fontWeight: 700, marginTop: 2 }}>{c.category}</span>
+                    <span style={{ fontSize: 9, color: '#fff', background: c.color ?? T.teal, padding: '1px 6px', borderRadius: 7, display: 'inline-block', fontWeight: 700, marginTop: 1 }}>{c.category}</span>
                   </div>
                 </div>
-                <p style={{ fontSize: 12, color: T.textMid, margin: '0 0 9px', lineHeight: '1.55', WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</p>
-                <div style={{ display: 'flex', gap: 10, marginBottom: 10, fontSize: 10, color: T.textSub }}>
+                <p style={{ fontSize: 11, color: T.textMid, margin: '0 0 8px', lineHeight: '1.5', WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 10, color: T.textSub }}>
                   <span>👥 {c.memberCount?.toLocaleString()}</span>
                   {(c.postsToday ?? 0) > 0 && <span>💬 {c.postsToday} today</span>}
-                  {(c.activeMembersToday ?? 0) > 0 && <span>🟢 {c.activeMembersToday} active</span>}
                 </div>
                 {c.isJoined ? (
                   <div style={{ display: 'flex', gap: 5 }}>
-                    <button onClick={() => handleLeave(c.id)} style={{ padding: '6px 10px', borderRadius: 7, fontSize: 10, fontWeight: 700, border: '1.5px solid #fca5a5', background: '#fff5f5', color: '#ef4444', cursor: 'pointer' }}>Leave</button>
-                    <button onClick={() => setActiveCommunity(c)} style={{ flex: 1, padding: '6px 0', borderRadius: 7, fontSize: 10, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer' }}>View Feed →</button>
+                    <button onClick={() => handleLeave(c.id)} style={{ padding: '5px 8px', borderRadius: 7, fontSize: 10, fontWeight: 700, border: '1.5px solid #fca5a5', background: '#fff5f5', color: '#ef4444', cursor: 'pointer' }}>Leave</button>
+                    <button onClick={() => setActiveCommunity(c)} style={{ flex: 1, padding: '5px 0', borderRadius: 7, fontSize: 10, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer' }}>View Feed →</button>
                   </div>
                 ) : (
-                  <button onClick={() => handleJoin(c.id)} style={{ width: '100%', padding: '8px 0', borderRadius: 7, fontSize: 12, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer', boxShadow: `0 3px 10px ${T.teal}40` }}>+ Join Community</button>
+                  <button onClick={() => handleJoin(c.id)} style={{ width: '100%', padding: '7px 0', borderRadius: 7, fontSize: 11, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer', boxShadow: `0 3px 10px ${T.teal}40` }}>+ Join Community</button>
                 )}
               </div>
             ))}
-            {(searchQuery ? allFiltered : discoverCommunities).length === 0 && (
-              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '36px', color: T.textMuted, background: T.white, borderRadius: 12, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 30, marginBottom: 7 }}>🔍</div>
-                <div style={{ fontSize: 13 }}>No communities found for "{searchQuery}"</div>
-              </div>
-            )}
           </div>
+          {/* See All / Show Less */}
+          {!searchQuery && discoverCommunities.length > 6 && (
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button onClick={() => setShowAllDiscover(p => !p)} style={{ padding: '9px 24px', borderRadius: 10, border: `1.5px solid ${T.teal}`, background: 'transparent', color: T.tealDark, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {showAllDiscover ? '↑ Show Less' : `See All ${discoverCommunities.length} Communities →`}
+              </button>
+            </div>
+          )}
+          {(searchQuery ? allFiltered : discoverCommunities).length === 0 && (
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '36px', color: T.textMuted, background: T.white, borderRadius: 12, border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 30, marginBottom: 7 }}>🔍</div>
+              <div style={{ fontSize: 13 }}>No communities found for "{searchQuery}"</div>
+            </div>
+          )}
         </>
       )}
 

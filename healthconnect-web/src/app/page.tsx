@@ -10,8 +10,11 @@ import { useAuthStore } from '@/store/authStore';
 import { useUIStore }   from '@/store/uiStore';
 import { authAPI }      from '@/lib/api';
 import Navbar      from '@/components/landing/Navbar';
-import Hero        from '@/components/landing/Hero';
-import Features    from '@/components/landing/Features';
+import Hero               from '@/components/landing/Hero';
+import PlatformNumbers    from '@/components/landing/PlatformNumbers';
+import PlatformTour       from '@/components/landing/PlatformTour';
+import PlatformSpoke      from '@/components/landing/PlatformSpoke';
+import KnowledgeResources from '@/components/landing/KnowledgeResources';
 import Footer      from '@/components/landing/Footer';
 
 // Stub components for sections not yet deployed — renders nothing, no build error
@@ -264,6 +267,8 @@ export default function LandingPage() {
       if (done) return;
       // Wait for Zustand to finish reading localStorage
       if (!s._hasHydrated) return;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('home') === '1') { setAuthChecked(true); done = true; return; }
       done = true;
 
       if (s.isAuthenticated && s.user?.role) {
@@ -297,10 +302,11 @@ export default function LandingPage() {
       <Navbar />
       <main>
         <Hero />
-        <StatsTicker />
-        <Features />
+            <PlatformNumbers />
+            <PlatformTour />
+            <PlatformSpoke />
+            <KnowledgeResources />
         <DoctorDiscovery />
-        <Communities />
         <KnowledgeHub />
         <HospitalMap />
         <Pricing />
