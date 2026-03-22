@@ -21,7 +21,7 @@ const err = (res: Response, msg: string, code = 400) =>
 // Returns completed appointments with notes/prescriptions as "records"
 export async function getDoctorRecords(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -80,7 +80,7 @@ export async function getDoctorRecords(req: Request, res: Response) {
 // id = appointmentId — saves clinical notes
 export async function updateRecord(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -102,7 +102,7 @@ export async function updateRecord(req: Request, res: Response) {
 // ── PUT /doctor/records/:id/review ────────────────────────────────────────
 export async function reviewRecord(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -126,7 +126,7 @@ export async function reviewRecord(req: Request, res: Response) {
 // ── POST /doctor/records/upload ────────────────────────────────────────────
 export async function uploadRecord(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -159,7 +159,7 @@ export async function uploadRecord(req: Request, res: Response) {
 // ── POST /doctor/patients/:id/notes ───────────────────────────────────────
 export async function addPatientNote(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 

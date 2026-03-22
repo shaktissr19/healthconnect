@@ -115,6 +115,7 @@ export const bookAppointment = async (req: Request, res: Response, next: NextFun
         type,
         reasonForVisit:  reasonForVisit ?? 'General consultation',
         symptoms:        Array.isArray(symptoms) ? symptoms : [],
+        meetingLink:     type === 'TELECONSULT' ? `https://meet.jit.si/hc-${Date.now()}` : undefined,
         status:          'PENDING',
       },
       include: {

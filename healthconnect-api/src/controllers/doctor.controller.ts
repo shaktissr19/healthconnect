@@ -21,7 +21,7 @@ const err = (res: Response, msg: string, code = 400) => res.status(code).json({ 
 // =============================================================================
 export async function getDashboard(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -64,7 +64,7 @@ export async function getDashboard(req: Request, res: Response) {
 // =============================================================================
 export async function getAppointments(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -123,7 +123,7 @@ export async function getAppointments(req: Request, res: Response) {
 // =============================================================================
 export async function updateAppointment(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -162,7 +162,7 @@ export async function updateAppointment(req: Request, res: Response) {
 // =============================================================================
 export async function getMyPatients(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -227,7 +227,7 @@ export async function getMyPatients(req: Request, res: Response) {
 // =============================================================================
 export async function getPatientDetail(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -256,7 +256,7 @@ export async function getPatientDetail(req: Request, res: Response) {
 // =============================================================================
 export async function getPrescriptions(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -296,7 +296,7 @@ export async function getPrescriptions(req: Request, res: Response) {
 
 export async function createPrescription(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -358,7 +358,7 @@ export async function createPrescription(req: Request, res: Response) {
 // =============================================================================
 export async function getEarnings(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 
@@ -411,7 +411,7 @@ export async function getEarnings(req: Request, res: Response) {
 // =============================================================================
 export async function getDoctorProfile(req: Request, res: Response) {
   try {
-    const userId  = (req as any).user?.id;
+    const userId  = (req as any).user?.userId ?? (req as any).user?.id;
     const profile = await prisma.doctorProfile.findUnique({
       where: { userId },
       include: { reviews: { orderBy: { createdAt: 'desc' }, take: 5 } },
@@ -423,7 +423,7 @@ export async function getDoctorProfile(req: Request, res: Response) {
 
 export async function updateDoctorProfile(req: Request, res: Response) {
   try {
-    const userId  = (req as any).user?.id;
+    const userId  = (req as any).user?.userId ?? (req as any).user?.id;
     const allowed = ['firstName','lastName','phone','specialization','subSpecializations','qualification',
       'experienceYears','consultationFee','teleconsultFee','languagesSpoken','clinicName','clinicAddress',
       'city','state','pinCode','bio','isAvailableOnline','medicalLicenseNumber'];
@@ -446,7 +446,7 @@ export async function updateDoctorProfile(req: Request, res: Response) {
 // =============================================================================
 export async function getAvailability(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
     const slots = await prisma.doctorAvailability.findMany({ where: { doctorId }, orderBy: { dayOfWeek: 'asc' } });
@@ -456,7 +456,7 @@ export async function getAvailability(req: Request, res: Response) {
 
 export async function updateAvailability(req: Request, res: Response) {
   try {
-    const userId   = (req as any).user?.id;
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
     const doctorId = await getDoctorId(userId);
     if (!doctorId) return err(res, 'Doctor profile not found', 404);
 

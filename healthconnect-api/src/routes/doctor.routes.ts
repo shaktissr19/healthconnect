@@ -80,7 +80,7 @@ function computeProfileScore(d: any): number {
 
 // Select fields for public doctor listing (no sensitive info)
 const PUBLIC_DOCTOR_SELECT = {
-  id: true, firstName: true, lastName: true, gender: true,
+  id: true, firstName: true, lastName: true,
   profilePhotoUrl: true, hcDoctorId: true, verificationStatus: true,
   specialization: true, subSpecializations: true, qualification: true,
   experienceYears: true, bio: true, careerJourney: true,
@@ -210,7 +210,7 @@ router.get('/public/doctors', async (req, res) => {
         skip,
         take: limitNum,
         select: {
-          id: true, firstName: true, lastName: true, gender: true,
+          id: true, firstName: true, lastName: true,
           profilePhotoUrl: true, hcDoctorId: true, verificationStatus: true,
           specialization: true, subSpecializations: true, qualification: true,
           experienceYears: true, bio: true, trainingHospitals: true,
@@ -294,7 +294,6 @@ router.get('/public/doctors/:id', async (req, res) => {
         id: true, rating: true, title: true, body: true,
         isAnonymous: true, isVerified: true, helpfulCount: true,
         createdAt: true,
-        patient: { select: { firstName: true, city: true } },
       },
     });
 
@@ -302,7 +301,7 @@ router.get('/public/doctors/:id', async (req, res) => {
       ...r,
       authorName: r.isAnonymous
         ? 'Anonymous Patient'
-        : `${r.patient?.firstName ?? 'Patient'}${r.patient?.city ? `, ${r.patient.city}` : ''}`,
+        : 'Anonymous Patient',
       patient: undefined,
     }));
 
@@ -350,7 +349,6 @@ router.get('/public/doctors/:id/reviews', async (req, res) => {
         select: {
           id: true, rating: true, title: true, body: true,
           isAnonymous: true, isVerified: true, helpfulCount: true, createdAt: true,
-          patient: { select: { firstName: true, city: true } },
         },
       }),
       prisma.doctorReview.count({ where: { doctorId: doctor.id, status: 'PUBLISHED' } }),
@@ -359,9 +357,7 @@ router.get('/public/doctors/:id/reviews', async (req, res) => {
     const normalized = reviews.map(r => ({
       id: r.id, rating: r.rating, title: r.title, body: r.body,
       isVerified: r.isVerified, helpfulCount: r.helpfulCount, createdAt: r.createdAt,
-      authorName: r.isAnonymous
-        ? 'Anonymous Patient'
-        : `${r.patient?.firstName ?? 'Patient'}${r.patient?.city ? `, ${r.patient.city}` : ''}`,
+      authorName: r.isAnonymous ? 'Anonymous Patient' : 'Verified Patient',
     }));
 
     return res.json({
@@ -695,7 +691,7 @@ router.post('/patient/bookmarks/:doctorId', authenticate, requireRole('PATIENT')
 
     await prisma.doctorBookmark.upsert({
       where: { userId_doctorId: { userId: req.user.id, doctorId: doctor.id } },
-      create: { userId: req.user.id, patientId: patientProfile.id, doctorId: doctor.id },
+      create: { userId: req.user.id, doctorId: doctor.id },
       update: {},
     });
 
@@ -803,7 +799,7 @@ router.put('/admin/doctors/:id/verify', authenticate, requireRole('ADMIN'), asyn
     // Generate HC ID if not already assigned
     let hcDoctorId = doctor.hcDoctorId;
     if (!hcDoctorId) {
-      hcDoctorId = await generateHcDoctorId(doctor.specialization);
+      hcDoctorId = await generateHcDoctorId(doctor.specialization ?? 'General Physician');
     }
 
     const updated = await prisma.doctorProfile.update({
