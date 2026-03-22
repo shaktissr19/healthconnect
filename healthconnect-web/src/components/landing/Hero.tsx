@@ -1,237 +1,522 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 
-const PHRASES = [
-  'organised & private.',
-  'doctors you trust.',
-  'communities that care.',
-  'records that travel.',
-  'built for Bharat.',
+// PHRASES and RIGHT_ITEMS are index-paired — same length, same order.
+// When left says "doctors you trust." right shows the Doctors panel. etc.
+const CAROUSEL_ITEMS: {
+  phrase: string;
+  type: string; label: string; name: string;
+  icon: string; color: string;
+  bullets?: string[];
+  story?: string;
+}[] = [
+  {
+    phrase: 'organised & private.',
+    type:'feature', label:'For Patients', name:'Track your health, your way',
+    icon:'❤️', color:'#5B9CF6',
+    bullets:[
+      'Personal health score across 7 parameters',
+      'Complete medical history for you & your family',
+      'Book verified doctors in under 2 minutes',
+      'Medication reminders — never miss a dose',
+    ],
+  },
+  {
+    phrase: 'doctors you trust.',
+    type:'feature', label:'Book Doctors', name:'Verified doctors, real availability',
+    icon:'🩺', color:'#A78BFA',
+    bullets:[
+      'Every doctor NMC/MCI verified with HCD identity',
+      'Real-time slots — no phone calls, no waiting',
+      'In-person, video consultation, or home visit',
+      'Average booking time: 1 minute 42 seconds',
+    ],
+  },
+  {
+    phrase: 'records that travel.',
+    type:'story', label:'Patient · New Delhi', name:'Priya Sharma',
+    icon:'PS', color:'#5B9CF6', bullets:[],
+    story:'"I uploaded 3 years of reports in one go. My cardiologist saw everything before I sat down. First time I didn\'t have to repeat my entire history."',
+  },
+  {
+    phrase: 'communities that care.',
+    type:'feature', label:'Health Communities', name:'Find people who understand you',
+    icon:'🤝', color:'#34D399',
+    bullets:[
+      'Find & join people dealing with your condition',
+      'Discuss symptoms, treatments — 100% anonymously',
+      'Get answers from verified specialist doctors',
+      'Diabetes, cardiac, PCOD, mental health & more',
+    ],
+  },
+  {
+    phrase: 'a doctor in 2 minutes.',
+    type:'feature', label:'For Doctors', name:'Grow your practice across India',
+    icon:'👨‍⚕️', color:'#38BDF8',
+    bullets:[
+      'HCD-verified digital identity nationwide',
+      'Patient health timelines before every visit',
+      'Appointment queue & reminder management',
+      'Build reviews, expand patient reach',
+    ],
+  },
+  {
+    phrase: 'hospitals when you need.',
+    type:'feature', label:'Hospitals & Emergency', name:'Right hospital, right now',
+    icon:'🏥', color:'#FBB040',
+    bullets:[
+      '340+ hospitals — search by location or specialty',
+      'Live bed availability — instant visibility',
+      'Ayushman Bharat PM-JAY cashless treatment',
+      'Emergency SOS to nearest available hospital',
+    ],
+  },
+  {
+    phrase: 'care that remembers you.',
+    type:'story', label:'Cardiologist · Mumbai', name:'Dr. Arvind Mehta',
+    icon:'AM', color:'#C4B5FD', bullets:[],
+    story:'"12 appointment requests in my first week. Patient timelines save me 10 minutes per consultation. I see more patients and give better care."',
+  },
+  {
+    phrase: 'built for Bharat.',
+    type:'feature', label:'Knowledge Hub', name:'Health knowledge you can trust',
+    icon:'📚', color:'#F87171',
+    bullets:[
+      'Doctor-reviewed articles on Indian conditions',
+      'Drug information, dosage guides — verified',
+      'ICMR guidelines, seasonal disease alerts',
+      'Zero ads, zero sponsored content — free',
+    ],
+  },
 ];
 
+const HERO_PHOTO = '/images/hero-photo.png';
+
+const QUESTIONS = [
+  { q:'What is your age group?', opts:['Under 18','18–30','31–45','46–60','60+'] },
+  { q:'Do you have any chronic condition?', opts:['None','Diabetes','High BP','Heart condition','Other'] },
+  { q:'How often do you exercise?', opts:['Daily','3–5x/week','1–2x/week','Rarely','Never'] },
+  { q:'How many hours do you sleep?', opts:['8+ hours','7–8 hours','6–7 hours','5–6 hours','Under 5'] },
+  { q:'Do you take medications regularly?', opts:['No medications','Yes, always on time','Sometimes miss doses','Often miss doses'] },
+  { q:'How would you rate your stress level?', opts:['Very low','Low','Moderate','High','Very high'] },
+  { q:'When was your last health checkup?', opts:['Last 3 months','3–6 months ago','6–12 months ago','Over a year ago','Never'] },
+];
+
+function scoreFromAnswers(ans: number[]): number {
+  if (ans.length < QUESTIONS.length) return 0;
+  const weights = [
+    [85,82,78,72,65],[90,65,60,55,70],[95,88,75,55,40],
+    [92,88,78,60,40],[88,92,72,50],[92,85,75,55,40],[90,82,70,55,40],
+  ];
+  let total = 0;
+  ans.forEach((a,i) => { total += (weights[i]?.[a] ?? 70); });
+  return Math.round(Math.min(98, Math.max(30, total / QUESTIONS.length)));
+}
+
+function HealthScoreModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<number[]>([]);
+  const [score, setScore] = useState<number|null>(null);
+  const pick = (optIdx: number) => {
+    const newAns = [...answers, optIdx];
+    setAnswers(newAns);
+    if (step < QUESTIONS.length - 1) setStep(step + 1);
+    else setScore(scoreFromAnswers(newAns));
+  };
+  const scoreColor = score ? (score >= 80 ? '#059669' : score >= 60 ? '#D97706' : '#E11D48') : '#1A6BB5';
+  const scoreLabel = score ? (score >= 80 ? 'Good' : score >= 60 ? 'Fair' : 'Needs Attention') : '';
+  return (
+    <div style={{ position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(6,14,30,0.75)',backdropFilter:'blur(6px)' }} onClick={onClose}>
+      <div style={{ background:'#fff',borderRadius:20,padding:'36px 32px',maxWidth:480,width:'90%',position:'relative',boxShadow:'0 24px 80px rgba(0,0,0,0.35)' }} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{ position:'absolute',top:16,right:16,background:'#F3F4F6',border:'none',borderRadius:'50%',width:32,height:32,cursor:'pointer',fontSize:16 }}>✕</button>
+        {score === null ? (
+          <>
+            <div style={{ marginBottom:24 }}>
+              <div style={{ display:'flex',justifyContent:'space-between',marginBottom:8 }}>
+                <span style={{ fontSize:11,fontWeight:700,color:'#1A6BB5',letterSpacing:'0.1em',textTransform:'uppercase',fontFamily:"'DM Sans',sans-serif" }}>Health Score Check</span>
+                <span style={{ fontSize:11,color:'#94A3B8',fontFamily:"'DM Sans',sans-serif" }}>{step+1} / {QUESTIONS.length}</span>
+              </div>
+              <div style={{ height:4,background:'#E8F0F8',borderRadius:2 }}>
+                <div style={{ height:'100%',borderRadius:2,background:'linear-gradient(90deg,#1A6BB5,#5B9CF6)',width:`${((step+1)/QUESTIONS.length)*100}%`,transition:'width 0.3s ease' }}/>
+              </div>
+            </div>
+            <h3 style={{ fontFamily:"'Sora',sans-serif",fontSize:20,fontWeight:800,color:'#0A1628',marginBottom:20,lineHeight:1.35 }}>{QUESTIONS[step].q}</h3>
+            <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+              {QUESTIONS[step].opts.map((opt,i)=>(
+                <button key={i} onClick={()=>pick(i)} style={{ padding:'12px 16px',borderRadius:10,border:'1.5px solid #E8F0F8',background:'#F8FBFF',textAlign:'left',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:14,fontWeight:500,color:'#2C4A6A',transition:'all 0.15s' }}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor='#1A6BB5';(e.currentTarget as HTMLElement).style.background='#EBF4FF';}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor='#E8F0F8';(e.currentTarget as HTMLElement).style.background='#F8FBFF';}}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign:'center',padding:'8px 0 24px' }}>
+            <div style={{ fontSize:11,fontWeight:700,color:'#6B87A8',letterSpacing:'0.12em',textTransform:'uppercase',fontFamily:"'DM Sans',sans-serif",marginBottom:16 }}>Your Sample Health Score</div>
+            <div style={{ width:120,height:120,borderRadius:'50%',border:`6px solid ${scoreColor}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',background:`${scoreColor}08` }}>
+              <div style={{ fontSize:38,fontWeight:900,color:scoreColor,fontFamily:"'Sora',sans-serif",lineHeight:1 }}>{score}</div>
+              <div style={{ fontSize:11,fontWeight:700,color:scoreColor,fontFamily:"'DM Sans',sans-serif" }}>/100</div>
+            </div>
+            <div style={{ fontSize:18,fontWeight:800,color:'#0A1628',fontFamily:"'Sora',sans-serif",marginBottom:8 }}>{scoreLabel}</div>
+            <p style={{ fontSize:13,color:'#4A6B8A',fontFamily:"'DM Sans',sans-serif",lineHeight:1.65,marginBottom:24,maxWidth:320,margin:'0 auto 24px' }}>Sign up free to track your real health score with detailed insights.</p>
+            <Link href="/?home=1#signup" onClick={onClose} style={{ display:'block',padding:'14px',background:'#1A6BB5',color:'#fff',borderRadius:10,fontFamily:"'Sora',sans-serif",fontSize:14,fontWeight:700,textDecoration:'none',textTransform:'uppercase',letterSpacing:'0.05em' }}>Track My Real Score — Free →</Link>
+            <button onClick={()=>{setStep(0);setAnswers([]);setScore(null);}} style={{ marginTop:12,background:'none',border:'none',color:'#94A3B8',fontSize:12,cursor:'pointer',fontFamily:"'DM Sans',sans-serif" }}>Retake quiz</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Avatar({ icon, color }: { icon:string; color:string }) {
+  const isEmoji = /\p{Emoji}/u.test(icon);
+  return (
+    <div style={{ width:36,height:36,borderRadius:'50%',flexShrink:0,background:isEmoji?`${color}22`:`linear-gradient(135deg,${color},${color}99)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:isEmoji?18:12,fontWeight:800,color:isEmoji?color:'#fff',fontFamily:"'Sora',sans-serif" }}>{icon}</div>
+  );
+}
+
+// Plain text — NO card, NO background, NO border, NO backdrop. Pure text over hero.
+function RightPanel({ ri, rightIdx, rightShow }: { ri:typeof CAROUSEL_ITEMS[0]; rightIdx:number; rightShow:boolean }) {
+  const isStory = ri.type === 'story';
+  return (
+    <div className={`hh-rp ${rightShow?'on':'off'}`}>
+      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:16 }}>
+        <div style={{ width:2,height:18,background:ri.color,borderRadius:2,flexShrink:0 }}/>
+        <span style={{ fontSize:11.5,fontWeight:700,color:ri.color,letterSpacing:'0.18em',textTransform:'uppercase',fontFamily:"'DM Sans',sans-serif" }}>
+          {isStory ? 'User Story' : ri.label}
+        </span>
+      </div>
+      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:18 }}>
+        <Avatar icon={ri.icon} color={ri.color}/>
+        <div style={{ fontSize:19.5,fontWeight:800,color:'#fff',fontFamily:"'Sora',sans-serif",lineHeight:1.2,textShadow:'0 1px 8px rgba(6,14,30,0.6)' }}>{ri.name}</div>
+      </div>
+      {isStory && (ri as any).story && (
+        <>
+          <p style={{ fontSize:16,lineHeight:1.8,color:'rgba(240,248,255,0.95)',fontFamily:"'DM Sans',sans-serif",fontStyle:'italic',fontWeight:500,margin:'0 0 14px',paddingLeft:12,borderLeft:`2px solid ${ri.color}80`,textShadow:'0 1px 6px rgba(6,14,30,0.5)' }}>
+            {(ri as any).story}
+          </p>
+          <div style={{ display:'flex',gap:2,paddingLeft:12 }}>
+            {[1,2,3,4,5].map(n=><span key={n} style={{ color:'#F59E0B',fontSize:13 }}>★</span>)}
+          </div>
+        </>
+      )}
+      {!isStory && (ri.bullets?.length ?? 0) > 0 && (
+        <div style={{ display:'flex',flexDirection:'column',gap:11 }}>
+          {(ri.bullets ?? []).map((b,i)=>(
+            <div key={i} style={{ display:'flex',alignItems:'flex-start',gap:10 }}>
+              <div style={{ width:5,height:5,borderRadius:'50%',background:ri.color,flexShrink:0,marginTop:6 }}/>
+              <span style={{ fontSize:15,lineHeight:1.65,color:'rgba(230,242,255,0.92)',fontFamily:"'DM Sans',sans-serif",fontWeight:500,textShadow:'0 1px 6px rgba(6,14,30,0.45)' }}>{b}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display:'flex',gap:5,marginTop:24,alignItems:'center' }}>
+        {CAROUSEL_ITEMS.map((_,i)=>(
+          <div key={i} style={{ width:i===rightIdx?18:4,height:3,borderRadius:999,background:i===rightIdx?ri.color:'rgba(255,255,255,0.2)',transition:'all 0.35s' }}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const INTRO_PHOTO    = '/images/hero-intro.png';
+const INTRO_DURATION = 9000;   // intro splash stays 9 seconds
+const INTRO_FADE_MS  = 700;
+
 export default function Hero() {
-  const [idx,  setIdx]  = useState(0);
-  const [show, setShow] = useState(true);
-  const [in_,  setIn]   = useState(false);
+  const [showIntro,   setShowIntro]   = useState(true);
+  const [introFading, setIntroFading] = useState(false);
+  const [phase,      setPhase]      = useState<'photo'|'rotating'>('photo');
+  const [photoShow,  setPhotoShow]  = useState(true);
+  const [carouselIdx, setCarouselIdx] = useState(0);   // single index drives BOTH left phrase + right panel
+  const [carouselShow,setCarouselShow]= useState(false);
+  const [mounted,    setMounted]    = useState(false);
+  const [showModal,  setShowModal]  = useState(false);
+  const [counts,     setCounts]     = useState({ patients:'—', doctors:'37+', communities:'18+', hospitals:'340+' });
+  const rotRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
-  useEffect(() => { setTimeout(() => setIn(true), 120); }, []);
-
+  // Single sequential chain:
+  // 0s        → intro shows
+  // 9s        → intro starts fading
+  // 9.7s      → intro fully gone, hero photo appears
+  // 9.7+5s    → hero photo fades, carousel starts
+  // every 5s  → carousel advances (left + right in sync)
   useEffect(() => {
-    const t = setInterval(() => {
-      setShow(false);
-      setTimeout(() => { setIdx(p => (p + 1) % PHRASES.length); setShow(true); }, 400);
-    }, 3200);
-    return () => clearInterval(t);
+    const TOTAL_INTRO = INTRO_DURATION + INTRO_FADE_MS; // 9700ms
+
+    // Step 1: start fading intro at 9s
+    const t1 = setTimeout(() => setIntroFading(true), INTRO_DURATION);
+
+    // Step 2: unmount intro at 9.7s, hero photo is now visible
+    const t2 = setTimeout(() => {
+      setShowIntro(false);
+      setMounted(true); // trigger hero left-content fade-in at same moment
+    }, TOTAL_INTRO);
+
+    // Step 3: after 5s of hero photo, fade it out and start carousel
+    const phaseTimer = setTimeout(() => {
+      setPhotoShow(false);
+      setTimeout(() => {
+        setPhase('rotating');
+        setCarouselIdx(0); setCarouselShow(true);
+        let ci = 0;
+        rotRef.current = setInterval(() => {
+          setCarouselShow(false);
+          setTimeout(() => {
+            ci = (ci + 1) % CAROUSEL_ITEMS.length;
+            setCarouselIdx(ci);
+            setCarouselShow(true);
+          }, 400);
+        }, 5000); // each slide stays 5s
+      }, 500);
+    }, TOTAL_INTRO + 5000); // starts 5s after intro fully gone
+
+    // API calls — fire immediately on mount
+    const tryPatients = async () => {
+      for (const ep of ['/api/admin/stats','/api/users?role=PATIENT&limit=1','/api/patients?limit=1']) {
+        try {
+          const r = await fetch(ep); const d = await r.json();
+          const t = d?.data?.totalPatients??d?.data?.total??d?.totalPatients??d?.total??d?.count??null;
+          if (t && t > 0) { setCounts(p=>({...p,patients:`${t}+`})); break; }
+        } catch {}
+      }
+    };
+    tryPatients();
+    fetch('/public/doctors?limit=500').then(r=>r.json()).then(d=>{
+      const t=d?.data?.total??d?.total??(Array.isArray(d?.data)?d.data.length:null);
+      if(t>0) setCounts(p=>({...p,doctors:`${t}+`}));
+    }).catch(()=>{});
+    fetch('/api/communities').then(r=>r.json()).then(d=>{
+      const arr=d?.data?.communities??d?.communities??d?.data??[];
+      const t=d?.data?.total??d?.total??(Array.isArray(arr)?arr.length:null);
+      if(t>0) setCounts(p=>({...p,communities:`${t}+`}));
+    }).catch(()=>{});
+
+    return () => {
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(phaseTimer);
+      if(rotRef.current) clearInterval(rotRef.current);
+    };
   }, []);
 
+  const ci = CAROUSEL_ITEMS[carouselIdx];
+
   return (
-    <section style={{
-      width: '100%',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #060E1E 0%, #0A1628 40%, #0D2140 70%, #091830 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
+    <>
+      {showModal && <HealthScoreModal onClose={()=>setShowModal(false)}/>}
 
-        /* Diagonal line pattern like HealthEdge */
-        .hc-hero-lines {
-          position: absolute; inset: 0; pointer-events: none; overflow: hidden;
-        }
-        .hc-hero-lines svg { position: absolute; right: 0; top: 0; width: 55%; height: 100%; opacity: 0.18; }
-
-        /* Radial glow */
-        .hc-hero-glow {
-          position: absolute; width: 700px; height: 700px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(26,107,181,0.18) 0%, transparent 65%);
-          top: -100px; left: -100px; pointer-events: none;
-        }
-        .hc-hero-glow2 {
-          position: absolute; width: 500px; height: 500px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(91,156,246,0.12) 0%, transparent 65%);
-          bottom: -80px; right: 30%; pointer-events: none;
-        }
-
-        /* Fade-up entrance */
-        .hc-fu { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
-        .hc-fu.in { opacity: 1; transform: translateY(0); }
-
-        /* Rotating phrase */
-        .hc-phrase { transition: opacity 0.38s ease, transform 0.38s ease; display: inline; }
-        .hc-phrase.show { opacity: 1; transform: translateY(0); }
-        .hc-phrase.hide { opacity: 0; transform: translateY(10px); }
-
-        /* CTA buttons */
-        .hc-btn-w {
-          display: inline-flex; align-items: center; gap: 8px;
-          padding: 15px 34px; border-radius: 3px; border: none;
-          background: #1A6BB5; color: #fff;
-          font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 700;
-          cursor: pointer; text-decoration: none; letter-spacing: 0.02em;
-          transition: all 0.2s; text-transform: uppercase;
-        }
-        .hc-btn-w:hover { background: #2E86D4; transform: translateY(-1px); }
-
-        .hc-btn-o {
-          display: inline-flex; align-items: center; gap: 8px;
-          padding: 14px 32px; border-radius: 3px;
-          border: 1px solid rgba(255,255,255,0.3);
-          background: transparent; color: rgba(255,255,255,0.85);
-          font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 600;
-          cursor: pointer; text-decoration: none; letter-spacing: 0.02em;
-          transition: all 0.2s; text-transform: uppercase;
-        }
-        .hc-btn-o:hover { border-color: #5B9CF6; color: #fff; background: rgba(26,107,181,0.15); }
-
-        /* Trust card (HealthEdge-style floating card) */
-        .hc-trust-card {
-          background: #fff;
-          border-radius: 4px;
-          padding: 24px 28px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-          border-top: 3px solid #1A6BB5;
-          max-width: 300px;
-        }
-
-        /* Scrolling indicator */
-        @keyframes hcScrollBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
-        .hc-scroll { animation: hcScrollBounce 2s ease infinite; }
-      `}</style>
-
-      {/* Background diagonal lines (HealthEdge signature) */}
-      <div className="hc-hero-lines">
-        <svg viewBox="0 0 600 900" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-          <line x1="600" y1="0" x2="200" y2="900" stroke="#5B9CF6" strokeWidth="1"/>
-          <line x1="550" y1="0" x2="150" y2="900" stroke="#5B9CF6" strokeWidth="0.7"/>
-          <line x1="500" y1="0" x2="100" y2="900" stroke="#5B9CF6" strokeWidth="0.5"/>
-          <line x1="450" y1="0" x2="50"  y2="900" stroke="#5B9CF6" strokeWidth="0.4"/>
-          <line x1="400" y1="0" x2="0"   y2="900" stroke="#3B82F6" strokeWidth="0.3"/>
-          {/* Chevron arrows like HealthEdge */}
-          <polyline points="520,200 560,240 520,280" stroke="#E11D48" strokeWidth="1.5" fill="none" opacity="0.6"/>
-          <polyline points="540,260 580,300 540,340" stroke="#E11D48" strokeWidth="1" fill="none" opacity="0.4"/>
-          <polyline points="560,320 600,360 560,400" stroke="#E11D48" strokeWidth="0.7" fill="none" opacity="0.3"/>
-        </svg>
+      {/* Health Score button — hidden while intro is showing */}
+      <div style={{
+        position:'fixed', top:76, right:24, zIndex:1001,
+        opacity: showIntro ? 0 : 1,
+        pointerEvents: showIntro ? 'none' : 'auto',
+        transition:'opacity 0.5s ease',
+      }}>
+        <button onClick={()=>setShowModal(true)} style={{ display:'flex',alignItems:'center',gap:7,padding:'9px 16px',borderRadius:999,background:'linear-gradient(135deg,#1A6BB5,#2E86D4)',border:'none',color:'#fff',fontFamily:"'Sora',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer',letterSpacing:'0.03em',boxShadow:'0 4px 20px rgba(26,107,181,0.4)',transition:'all 0.2s',whiteSpace:'nowrap' }}
+          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform='translateY(-1px)';(e.currentTarget as HTMLElement).style.boxShadow='0 8px 28px rgba(26,107,181,0.5)';}}
+          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform='';(e.currentTarget as HTMLElement).style.boxShadow='0 4px 20px rgba(26,107,181,0.4)';}}
+        ><span style={{ fontSize:14 }}>✦</span>Check Your Health Score</button>
       </div>
-      <div className="hc-hero-glow"/><div className="hc-hero-glow2"/>
 
-      {/* Main content */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 64px', width: '100%', position: 'relative', zIndex: 2 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 80, alignItems: 'center' }}>
+      <div style={{ background:'#fff', padding:'80px 48px 0' }}>
+        <section style={{ width:'100%',minHeight:'calc(80vh - 80px)',background:'linear-gradient(135deg,#060E1E 0%,#0A1628 40%,#0D2140 70%,#091830 100%)',position:'relative',overflow:'hidden',borderRadius:'16px' }}>
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
+            .hh-glow1{position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(26,107,181,0.12) 0%,transparent 65%);top:-80px;left:-80px;pointer-events:none;}
+            .hh-glow2{position:absolute;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,rgba(91,156,246,0.06) 0%,transparent 65%);bottom:-40px;left:30%;pointer-events:none;}
+            .hh-fu{opacity:0;transform:translateY(20px);transition:opacity 0.65s ease,transform 0.65s ease;}
+            .hh-fu.in{opacity:1;transform:translateY(0);}
+            .hh-phrase{transition:opacity 0.35s ease,transform 0.35s ease;display:inline;}
+            .hh-phrase.on{opacity:1;transform:translateY(0);}
+            .hh-phrase.off{opacity:0;transform:translateY(8px);}
 
-          {/* LEFT — text */}
-          <div>
-            {/* Eyebrow */}
-            <div className={`hc-fu ${in_?'in':''}`} style={{ transitionDelay:'0ms', display:'inline-flex', alignItems:'center', gap:8, marginBottom:32 }}>
-              <div style={{ width:32, height:1, background:'#1A6BB5' }}/>
-              <span style={{ fontSize:11, fontWeight:700, color:'#5B9CF6', letterSpacing:'0.18em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif" }}>
-                India's Unified Healthcare Platform
-              </span>
-            </div>
+            /* PHOTO: fills entire right half, mask-blends left edge into dark bg */
+            .hh-photo-wrap{
+              position:absolute;right:0;top:0;bottom:0;width:55%;
+              transition:opacity 0.8s ease;
+              pointer-events:none;
+            }
+            .hh-photo-wrap.show{opacity:1;}
+            .hh-photo-wrap.hide{opacity:0;}
+            .hh-photo-inner{
+              position:absolute;inset:0;
+              background-size:cover;
+              background-position:center top;
+              /* CSS mask: left side dissolves into dark background naturally */
+              -webkit-mask-image:linear-gradient(to right, transparent 0%, rgba(0,0,0,0.05) 8%, rgba(0,0,0,0.4) 22%, rgba(0,0,0,0.85) 40%, black 60%);
+              mask-image:linear-gradient(to right, transparent 0%, rgba(0,0,0,0.05) 8%, rgba(0,0,0,0.4) 22%, rgba(0,0,0,0.85) 40%, black 60%);
+            }
+            /* Top/bottom edge fade */
+            .hh-photo-inner::after{
+              content:'';position:absolute;inset:0;
+              background:
+                linear-gradient(to bottom, rgba(6,14,30,0.3) 0%, transparent 12%, transparent 82%, rgba(6,14,30,0.5) 100%);
+            }
+            @keyframes photoIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
+            .hh-photo-enter{animation:photoIn 1.1s ease both;}
 
-            {/* H1 */}
-            <h1 className={`hc-fu ${in_?'in':''}`} style={{
-              transitionDelay: '80ms',
-              fontFamily: "'Sora',sans-serif",
-              fontSize: 'clamp(2.8rem,4.5vw,5rem)',
-              fontWeight: 900,
-              color: '#EEF4FF',
-              lineHeight: 1.05,
-              letterSpacing: '-0.03em',
-              margin: '0 0 8px',
+            /* CAROUSEL: plain text, anchored to right edge */
+            .hh-carousel{
+              position:absolute;right:0;top:0;bottom:0;width:48%;
+              display:flex;align-items:center;justify-content:flex-end;
+              padding:0 56px 0 24px;
+              transition:opacity 0.5s ease;
+              z-index:3;
+            }
+            .hh-carousel.visible{opacity:1;}
+            .hh-carousel.hidden{opacity:0;pointer-events:none;}
+
+            /* Carousel text transitions */
+            .hh-rp{transition:opacity 0.4s ease,transform 0.4s ease;}
+            .hh-rp.on{opacity:1;transform:translateY(0);}
+            .hh-rp.off{opacity:0;transform:translateY(12px);}
+
+            .hh-btn-s{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border:none;background:#1A6BB5;color:#fff;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.2s;border-radius:3px;}
+            .hh-btn-s:hover{background:#2E86D4;transform:translateY(-1px);}
+            .hh-btn-o{display:inline-flex;align-items:center;gap:8px;padding:11px 26px;border:1px solid rgba(255,255,255,0.22);background:transparent;color:rgba(255,255,255,0.78);font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.2s;border-radius:3px;}
+            .hh-btn-o:hover{border-color:#5B9CF6;color:#fff;}
+            @keyframes scrollB{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
+            .hh-scroll{animation:scrollB 2s ease infinite;}
+            @media(max-width:1024px){.hh-photo-wrap{display:none!important;}.hh-carousel{display:none!important;}}
+            @media(max-width:768px){.hh-inner{padding:32px 24px!important;}.hh-h1{font-size:2rem!important;}}
+
+            /* ── INTRO SPLASH ───────────────────────────────────────── */
+            @keyframes hhiFadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+            @keyframes hhiBarGrow{from{width:0%}to{width:100%}}
+            @keyframes hhiDotPulse{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.45)}}
+            .hhi-block{animation:hhiFadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both}
+            .hhi-d1{animation-delay:0.1s}.hhi-d2{animation-delay:0.27s}
+            .hhi-d3{animation-delay:0.45s}.hhi-d4{animation-delay:0.62s}
+            .hhi-bar{animation:hhiBarGrow ${INTRO_DURATION}ms linear 0.15s both}
+            .hhi-dot{display:inline-block;animation:hhiDotPulse 2s ease infinite;margin:0 9px;color:#1a3a5c;line-height:1}
+            /* ─────────────────────────────────────────────────────────── */
+          `}</style>
+
+          <div className="hh-glow1"/><div className="hh-glow2"/>
+
+          {/* ── INTRO SPLASH (9s) ─────────────────────────────────────
+               position:absolute = inside hero box only.
+               Navbar + sections below remain fully visible & scrollable.
+          ──────────────────────────────────────────────────────────── */}
+          {showIntro && (
+            <div style={{
+              position:'absolute', inset:0, zIndex:20,
+              borderRadius:16, overflow:'hidden',
+              opacity: introFading ? 0 : 1,
+              transition:`opacity ${INTRO_FADE_MS}ms ease`,
+              pointerEvents: introFading ? 'none' : 'auto',
             }}>
-              Your health,<br/>finally —
-            </h1>
+              <div style={{ position:'absolute',inset:0,backgroundImage:`url(${INTRO_PHOTO})`,backgroundSize:'cover',backgroundPosition:'center center' }}/>
 
-            {/* Rotating line */}
-            <h1 style={{
-              fontFamily: "'Sora',sans-serif",
-              fontSize: 'clamp(2.8rem,4.5vw,5rem)',
-              fontWeight: 900,
-              lineHeight: 1.05,
-              letterSpacing: '-0.03em',
-              margin: '0 0 32px',
-              color: '#5B9CF6',
-              minHeight: '1.1em',
-            }}>
-              <span className={`hc-phrase ${show?'show':'hide'}`}>{PHRASES[idx]}</span>
-            </h1>
+              {/* Text — centred in clear upper zone, no card/bg */}
+              <div style={{ position:'absolute',top:'42%',left:'50%',transform:'translate(-50%,-50%)',width:'min(700px,88%)',textAlign:'center' }}>
 
-            {/* Sub */}
-            <p className={`hc-fu ${in_?'in':''}`} style={{
-              transitionDelay: '180ms',
-              fontFamily: "'DM Sans',sans-serif",
-              fontSize: 18,
-              lineHeight: 1.75,
-              color: 'rgba(220,232,255,0.72)',
-              maxWidth: 520,
-              margin: '0 0 40px',
-              fontWeight: 400,
-            }}>
-              Book verified doctors, track medications, join anonymous health communities, and carry your complete medical history — everywhere. Free, built for India.
-            </p>
-
-            {/* CTAs */}
-            <div className={`hc-fu ${in_?'in':''}`} style={{ transitionDelay:'260ms', display:'flex', gap:16, flexWrap:'wrap', marginBottom:52 }}>
-              <Link href="/?home=1#signup" className="hc-btn-w">Get Started Free →</Link>
-              <Link href="/communities"    className="hc-btn-o">Explore Platform</Link>
-            </div>
-
-            {/* Bottom stats strip */}
-            <div className={`hc-fu ${in_?'in':''}`} style={{ transitionDelay:'340ms', display:'flex', gap:40, flexWrap:'wrap' }}>
-              {[
-                { v:'37+',  l:'NMC-Verified Doctors' },
-                { v:'10k+', l:'Patients Served'       },
-                { v:'18+',  l:'Health Communities'    },
-              ].map((s,i) => (
-                <div key={i} style={{ fontFamily:"'Sora',sans-serif" }}>
-                  <div style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-0.02em', lineHeight:1 }}>{s.v}</div>
-                  <div style={{ fontSize:12, color:'rgba(180,200,240,0.65)', marginTop:4, fontFamily:"'DM Sans',sans-serif", fontWeight:500 }}>{s.l}</div>
+                {/* "HealthConnect" — no colon, dark navy */}
+                <div className="hhi-block hhi-d1" style={{ fontFamily:"'Sora',sans-serif",fontSize:'clamp(1.7rem,3.2vw,2.8rem)',fontWeight:900,color:'#071428',lineHeight:1.08,letterSpacing:'-0.025em',marginBottom:6,textShadow:'0 1px 12px rgba(255,255,255,0.55)' }}>
+                  HealthConnect
                 </div>
-              ))}
+
+                {/* "India's Unified Healthcare Platform" — distinct blue, one line */}
+                <div className="hhi-block hhi-d2" style={{ fontFamily:"'Sora',sans-serif",fontSize:'clamp(1.35rem,2.5vw,2.2rem)',fontWeight:800,color:'#1A4A8A',lineHeight:1.1,letterSpacing:'-0.015em',whiteSpace:'nowrap',marginBottom:18,textShadow:'0 1px 10px rgba(255,255,255,0.5)' }}>
+                  India's Unified Healthcare Platform
+                </div>
+
+                {/* Sub-items — near-black */}
+                <div className="hhi-block hhi-d3" style={{ fontFamily:"'DM Sans',sans-serif",fontSize:'clamp(0.9rem,1.45vw,1.15rem)',fontWeight:700,color:'#0A0F1A',display:'flex',alignItems:'center',justifyContent:'center',flexWrap:'nowrap',gap:0,marginBottom:16,textShadow:'0 1px 8px rgba(255,255,255,0.6)' }}>
+                  {['Patients Health','Communities','Find A Doctor','Find A Hospital'].map((item,i,arr)=>(
+                    <span key={i} style={{ display:'flex',alignItems:'center',whiteSpace:'nowrap' }}>
+                      <span>{item}</span>
+                      {i<arr.length-1 && <span className="hhi-dot">•</span>}
+                    </span>
+                  ))}
+                </div>
+
+                {/* CTA — semi-dark green, bolder */}
+                <div className="hhi-block hhi-d4" style={{ fontFamily:"'Sora',sans-serif",fontSize:'clamp(0.78rem,1.15vw,0.95rem)',fontWeight:800,color:'#0D6B4A',letterSpacing:'0.11em',textTransform:'uppercase',textShadow:'0 1px 8px rgba(255,255,255,0.55)' }}>
+                  — Let's start your Health Journey —
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ position:'absolute',bottom:0,left:0,right:0,height:3,background:'rgba(13,107,74,0.15)' }}>
+                <div className="hhi-bar" style={{ height:'100%',background:'linear-gradient(to right,#0D9488,#0D6B4A,#14B8A6)',borderRadius:'0 0 0 16px' }}/>
+              </div>
+            </div>
+          )}
+          {/* ── END INTRO SPLASH ──────────────────────────────────────── */}
+
+          {/* Subtle lines left side only */}
+          <div style={{ position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden',borderRadius:16,zIndex:1 }}>
+            <svg viewBox="0 0 500 900" style={{ position:'absolute',left:0,top:0,width:'45%',height:'100%',opacity:0.07 }} preserveAspectRatio="none">
+              <line x1="500" y1="0" x2="100" y2="900" stroke="#5B9CF6" strokeWidth="1"/>
+              <line x1="450" y1="0" x2="50"  y2="900" stroke="#5B9CF6" strokeWidth="0.6"/>
+              <line x1="400" y1="0" x2="0"   y2="900" stroke="#5B9CF6" strokeWidth="0.4"/>
+            </svg>
+          </div>
+
+          {/* PHOTO — full bleed, mask-blended, no border radius card look */}
+          <div className={`hh-photo-wrap ${photoShow?'show':'hide'}`}>
+            <div className="hh-photo-inner hh-photo-enter" style={{ backgroundImage:`url(${HERO_PHOTO})` }}/>
+          </div>
+
+          {/* CAROUSEL — plain text overlay, anchored right */}
+          <div className={`hh-carousel ${phase==='rotating'?'visible':'hidden'}`}>
+            <div style={{ maxWidth:340, width:'100%' }}>
+              <RightPanel ri={ci} rightIdx={carouselIdx} rightShow={carouselShow}/>
             </div>
           </div>
 
-          {/* RIGHT — HealthEdge-style floating trust card */}
-          <div className={`hc-fu ${in_?'in':''}`} style={{ transitionDelay:'200ms', alignSelf:'flex-end', paddingBottom:80 }}>
-            <div className="hc-trust-card">
-              <div style={{ fontSize:10, fontWeight:800, color:'#1A6BB5', letterSpacing:'0.12em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif", marginBottom:12 }}>
-                HealthConnect India
+          {/* LEFT TEXT CONTENT */}
+          <div className="hh-inner" style={{ position:'relative',zIndex:2,maxWidth:1280,margin:'0 auto',padding:'44px 56px',minHeight:'calc(80vh - 80px)',display:'flex',alignItems:'center' }}>
+            <div style={{ maxWidth:'46%' }}>
+              <div className={`hh-fu ${mounted?'in':''}`} style={{ transitionDelay:'0ms',display:'flex',alignItems:'center',gap:10,marginBottom:18 }}>
+                <div style={{ width:28,height:1,background:'#5B9CF6' }}/>
+                <span style={{ fontSize:12,fontWeight:700,color:'#5B9CF6',letterSpacing:'0.18em',textTransform:'uppercase',fontFamily:"'DM Sans',sans-serif" }}>India's Unified Healthcare Platform</span>
               </div>
-              <div style={{ fontSize:18, fontWeight:900, color:'#0A1628', fontFamily:"'Sora',sans-serif", lineHeight:1.3, marginBottom:16 }}>
-                Free forever.<br/>NMC Verified.<br/>ABDM Compliant.
+
+              <h1 className={`hh-fu hh-h1 ${mounted?'in':''}`} style={{ transitionDelay:'80ms',fontFamily:"'Sora',sans-serif",fontSize:'clamp(2.1rem,3.4vw,3.8rem)',fontWeight:900,color:'#EEF4FF',lineHeight:1.08,letterSpacing:'-0.03em',margin:'0 0 4px' }}>
+                Your health,<br/>finally —
+              </h1>
+
+              <h1 style={{ fontFamily:"'Sora',sans-serif",fontSize:'clamp(2.1rem,3.4vw,3.8rem)',fontWeight:900,lineHeight:1.08,letterSpacing:'-0.03em',margin:'0 0 20px',color:'#5B9CF6',minHeight:'1.1em' }}>
+                {phase==='photo'
+                  ? <span style={{ opacity:0 }}>organised &amp; private.</span>
+                  : <span className={`hh-phrase ${carouselShow?'on':'off'}`}>{ci.phrase}</span>
+                }
+              </h1>
+
+              <p className={`hh-fu ${mounted?'in':''}`} style={{ transitionDelay:'160ms',fontFamily:"'DM Sans',sans-serif",fontSize:15,lineHeight:1.72,color:'rgba(210,228,255,0.68)',maxWidth:440,margin:'0 0 26px' }}>
+                Book NMC-verified doctors, manage your health records, and connect with anonymous health communities — free to explore, proudly built for India.
+              </p>
+
+              <div className={`hh-fu ${mounted?'in':''}`} style={{ transitionDelay:'230ms',display:'flex',gap:12,flexWrap:'wrap',marginBottom:30 }}>
+                <Link href="/?home=1#signup" className="hh-btn-s">Get Started Free →</Link>
+                <Link href="/doctors" className="hh-btn-o">Find a Doctor</Link>
               </div>
-              <div style={{ height:1, background:'#E8F0F8', marginBottom:16 }}/>
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+
+              <div className={`hh-fu ${mounted?'in':''}`} style={{ transitionDelay:'300ms',display:'flex',gap:28,flexWrap:'wrap' }}>
                 {[
-                  { icon:'🔒', t:'End-to-end encrypted' },
-                  { icon:'✓',  t:'Zero ads. Zero data sales.' },
-                  { icon:'⭐', t:'Trusted by 10,000+ patients' },
-                ].map((item,i) => (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, fontSize:13, color:'#2C4A6A', fontFamily:"'DM Sans',sans-serif", fontWeight:500 }}>
-                    <span style={{ fontSize:16 }}>{item.icon}</span>{item.t}
+                  { v:counts.patients,    l:'Patients'         },
+                  { v:counts.doctors,     l:'Verified Doctors' },
+                  { v:counts.communities, l:'Communities'      },
+                  { v:counts.hospitals,   l:'Hospitals'        },
+                ].map((s,i)=>(
+                  <div key={i} style={{ fontFamily:"'Sora',sans-serif" }}>
+                    <div style={{ fontSize:24,fontWeight:900,color:'#fff',letterSpacing:'-0.02em',lineHeight:1 }}>{s.v}</div>
+                    <div style={{ fontSize:10,color:'rgba(170,195,240,0.5)',marginTop:3,fontFamily:"'DM Sans',sans-serif",fontWeight:500 }}>{s.l}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop:20 }}>
-                <Link href="/?home=1#signup" style={{ display:'block', textAlign:'center', padding:'12px', background:'#0A1628', color:'#fff', fontSize:13, fontWeight:700, textDecoration:'none', fontFamily:"'Sora',sans-serif", letterSpacing:'0.06em', textTransform:'uppercase' }}>
-                  Create Free Account →
-                </Link>
-              </div>
             </div>
           </div>
 
-        </div>
+          <div className="hh-scroll" style={{ position:'absolute',bottom:16,left:'50%',transform:'translateX(-50%)',display:'flex',flexDirection:'column',alignItems:'center',gap:4,zIndex:4 }}>
+            <div style={{ width:1,height:24,background:'linear-gradient(to bottom,transparent,rgba(91,156,246,0.35))' }}/>
+            <div style={{ width:4,height:4,borderRadius:'50%',background:'rgba(91,156,246,0.4)' }}/>
+          </div>
+        </section>
       </div>
-
-      {/* Scroll indicator */}
-      <div className="hc-scroll" style={{ position:'absolute', bottom:32, left:'50%', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-        <div style={{ width:1, height:40, background:'linear-gradient(to bottom,transparent,rgba(91,156,246,0.5))' }}/>
-        <div style={{ width:5, height:5, borderRadius:'50%', background:'rgba(91,156,246,0.6)' }}/>
-      </div>
-    </section>
+    </>
   );
 }

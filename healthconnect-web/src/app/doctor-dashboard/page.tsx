@@ -5,7 +5,7 @@
 // FIXED: activePage defaults to 'home' on load
 // FIXED: contrast issues, pending action counts from real data, video consult meeting link
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
@@ -195,93 +195,234 @@ const reportTypeColor = (t: string) => ({ LAB: C.teal, CARDIOLOGY: C.rose, RADIO
 
 // ── HOME / TODAY'S SCHEDULE ───────────────────────────────────────────────────
 function HomeTab() {
-  const user     = useAuthUser();  // FIXED: no reactive hook
+  const user     = useAuthUser();
   const uiStore  = useUIStore() as any;
-  const [appts,      setAppts]      = useState<any[]>([]);
-  const [stats,      setStats]      = useState<any>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [toast,      setToast]      = useState('');
-  const [confirming, setConfirming] = useState<string|null>(null);
-  // Live pending counts from real data
-  const [pendingRxCount,     setPendingRxCount]     = useState(MOCK_RX.length);
-  const [pendingReportCount, setPendingReportCount] = useState(MOCK_REPORTS.filter(r=>r.status==='PENDING').length);
-  const [pendingApptCount,   setPendingApptCount]   = useState(MOCK_APPTS.filter(a=>a.status==='PENDING').length);
+  const [appts,            setAppts]            = useState<any[]>([]);
+  const [allAppts,         setAllAppts]         = useState<any[]>([]); // full list for KPI calcs
+  const [stats,            setStats]            = useState<any>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [toast,            setToast]            = useState('');
+  const [confirming,       setConfirming]       = useState<string|null>(null);
+  const [notifications,    setNotifications]    = useState<any[]>([]);
+  const [unreadCount,      setUnreadCount]      = useState(0);
+  const [showNotifPanel,   setShowNotifPanel]   = useState(false);
+  const [pendingRxCount,   setPendingRxCount]   = useState(MOCK_RX.length);
+  const [pendingReportCount,setPendingReportCount]=useState(MOCK_REPORTS.filter(r=>r.status==='PENDING').length);
 
-  useEffect(() => {
+  // ── Derive real KPIs from appointment data ──────────────────────────────
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayAppts      = useMemo(() => allAppts.filter(x => (x.scheduledAt ?? '').startsWith(todayStr)), [allAppts, todayStr]);
+  const pendingApptCount= useMemo(() => allAppts.filter(x => x.status === 'PENDING').length, [allAppts]);
+  const todayConfirmed  = useMemo(() => todayAppts.filter(x => x.status === 'CONFIRMED').length, [todayAppts]);
+  const todayPending    = useMemo(() => todayAppts.filter(x => x.status === 'PENDING').length, [todayAppts]);
+
+  const normalizeAppts = (raw: any[]) => raw.map((x: any) => ({
+    ...x,
+    patientName: x.patientName ?? (x.patient ? `${x.patient.firstName ?? ''} ${x.patient.lastName ?? ''}`.trim() : 'Patient'),
+    avatar: x.avatar ?? (x.patient ? `${(x.patient.firstName ?? 'P')[0]}${(x.patient.lastName ?? 'T')[0]}`.toUpperCase() : 'PT'),
+    time: x.time ?? (x.scheduledAt ? new Date(x.scheduledAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
+    condition: x.condition ?? x.reasonForVisit ?? 'Consultation',
+    meetingLink: x.meetingLink ?? (x.type === 'TELECONSULT' ? `https://meet.jit.si/hc-${x.id}` : undefined),
+  }));
+
+  const loadData = useCallback(async () => {
     setLoading(true);
-    Promise.allSettled([
-      api.get('/doctor/dashboard'),
-      api.get('/doctor/appointments', { params: { date: new Date().toISOString().split('T')[0] } }),
-      api.get('/doctor/prescriptions'),
-      api.get('/doctor/records'),
-    ]).then(([dashRes, apptRes, rxRes, recRes]) => {
+    try {
+      const [dashRes, apptRes, rxRes, recRes] = await Promise.allSettled([
+        api.get('/doctor/dashboard'),
+        api.get('/appointments'),
+        api.get('/doctor/prescriptions'),
+        api.get('/doctor/records'),
+      ]);
+
+      // Dashboard stats
       if (dashRes.status === 'fulfilled') {
         const d = (dashRes.value as any)?.data?.data ?? (dashRes.value as any)?.data ?? {};
         setStats(d.kpis ?? d);
-      } else {
-        setStats({ todayAppts:5, totalPatients:248, thisMonthEarnings:82500, avgRating:4.8, pendingAppts:2 });
       }
+
+      // Appointments — derive everything from real data
       if (apptRes.status === 'fulfilled') {
-        const a = (apptRes.value as any)?.data?.data ?? (apptRes.value as any)?.data ?? [];
-        setAppts(Array.isArray(a) && a.length > 0 ? a : MOCK_APPTS);
-        // Count pending from real data
-        const pending = Array.isArray(a) ? a.filter((x:any)=>x.status==='PENDING').length : MOCK_APPTS.filter(a=>a.status==='PENDING').length;
-        setPendingApptCount(pending);
-      } else {
-        setAppts(MOCK_APPTS);
+        const raw = (apptRes.value as any)?.data?.data?.appointments
+          ?? (apptRes.value as any)?.data?.appointments
+          ?? (apptRes.value as any)?.data?.data
+          ?? (apptRes.value as any)?.data ?? [];
+        const normalized = normalizeAppts(Array.isArray(raw) ? raw : []);
+        setAllAppts(normalized);
+        // For home tab: show today's only, sort by time ascending
+        const todayList = normalized
+          .filter((x: any) => (x.scheduledAt ?? '').startsWith(new Date().toISOString().split('T')[0]))
+          .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+        setAppts(todayList.length > 0 ? todayList : normalized.slice(0, 5));
       }
+
+      // Prescriptions
       if (rxRes.status === 'fulfilled') {
         const a = (rxRes.value as any)?.data?.data ?? (rxRes.value as any)?.data ?? [];
-        if (Array.isArray(a) && a.length) setPendingRxCount(a.filter((x:any)=>x.status==='ACTIVE').length);
+        if (Array.isArray(a) && a.length) setPendingRxCount(a.filter((x:any) => x.status === 'ACTIVE').length);
       }
+
+      // Records
       if (recRes.status === 'fulfilled') {
         const a = (recRes.value as any)?.data?.data ?? (recRes.value as any)?.data ?? [];
-        if (Array.isArray(a) && a.length) setPendingReportCount(a.filter((x:any)=>x.status==='PENDING').length);
+        if (Array.isArray(a) && a.length) setPendingReportCount(a.filter((x:any) => x.status === 'PENDING').length);
       }
-    }).finally(() => setLoading(false));
+    } finally {
+      setLoading(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch notifications ─────────────────────────────────────────────────
+  const loadNotifications = useCallback(async () => {
+    try {
+      const r: any = await api.get('/notifications');
+      const list = r?.data?.data?.notifications ?? r?.data?.notifications ?? r?.data ?? [];
+      if (Array.isArray(list) && list.length) {
+        setNotifications(list.slice(0, 20));
+        setUnreadCount(list.filter((n: any) => !n.isRead && !n.read).length);
+      }
+    } catch {
+      // Notifications endpoint may not exist yet — fail silently
+    }
   }, []);
+
+  const markAllRead = async () => {
+    try { await api.put('/notifications/read-all'); } catch {}
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, read: true })));
+    setUnreadCount(0);
+  };
+
+  useEffect(() => {
+    loadData();
+    loadNotifications();
+    // Poll every 30s for new appointments + notifications
+    const apptPoll = setInterval(loadData, 30_000);
+    const notifPoll = setInterval(loadNotifications, 60_000);
+    return () => { clearInterval(apptPoll); clearInterval(notifPoll); };
+  }, [loadData, loadNotifications]);
+
+  // Re-fetch immediately when a patient books
+  useEffect(() => {
+    const handler = () => { loadData(); loadNotifications(); };
+    window.addEventListener('hcAppointmentBooked', handler);
+    return () => window.removeEventListener('hcAppointmentBooked', handler);
+  }, [loadData, loadNotifications]);
 
   const handleConfirm = async (apptId: string) => {
     setConfirming(apptId);
     try {
-      await api.put(`/doctor/appointments/${apptId}`, { status: 'CONFIRMED' });
+      await api.put(`/appointments/${apptId}/status`, { status: 'CONFIRMED' })
+        .catch(() => api.put(`/appointments/${apptId}`, { status: 'CONFIRMED' }));
     } catch {}
     setAppts(prev => prev.map(a => a.id === apptId ? { ...a, status: 'CONFIRMED' } : a));
-    setToast('Appointment confirmed!');
+    setAllAppts(prev => prev.map(a => a.id === apptId ? { ...a, status: 'CONFIRMED' } : a));
+    setToast('✓ Appointment confirmed — patient has been notified!');
     setConfirming(null);
   };
 
   const handleStartCall = (a: any) => {
-    if (a.meetingLink) {
-      window.open(a.meetingLink, '_blank', 'noopener,noreferrer');
-    } else {
-      uiStore.setActivePage('video-consults');
-    }
+    if (a.meetingLink) window.open(a.meetingLink, '_blank', 'noopener,noreferrer');
+    else uiStore.setActivePage('video-consults');
   };
 
   const firstName = user?.firstName ?? 'Doctor';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const today = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
 
+  // KPI cards — real data first, stats fallback, then 0
   const statCards = [
-    { label:"Today's Appts", value:stats?.todayAppts ?? stats?.todayAppointments ?? appts.length,  icon:'📅', color:C.teal,  sub:`${stats?.pendingAppts ?? pendingApptCount} need confirmation` },
-    { label:'Total Patients', value:stats?.totalPatients ?? MOCK_PATIENTS.length,                  icon:'👥', color:C.teal,  sub:'In your care' },
-    { label:'This Month',     value:fmtMoney(stats?.thisMonthEarnings ?? stats?.monthlyEarnings ?? 82500), icon:'💰', color:C.green, sub:'Earnings' },
-    { label:'Avg Rating',     value:(stats?.avgRating ?? stats?.averageRating ?? 4.8).toFixed(1)+' ★',    icon:'⭐', color:C.amber, sub:'Patient satisfaction' },
+    {
+      label: "Today's Appointments",
+      value: stats?.todayAppts ?? stats?.todayAppointments ?? todayAppts.length,
+      icon: '📅', color: C.teal,
+      sub: `${todayPending || (stats?.pendingAppts ?? 0)} need confirmation`,
+    },
+    {
+      label: 'Confirmed Today',
+      value: stats?.todayConfirmed ?? todayConfirmed,
+      icon: '✅', color: C.green,
+      sub: `${todayAppts.length} total today`,
+    },
+    {
+      label: 'This Month',
+      value: fmtMoney(stats?.thisMonthEarnings ?? stats?.monthlyEarnings ?? 0),
+      icon: '💰', color: C.green,
+      sub: 'Earnings',
+    },
+    {
+      label: 'Avg Rating',
+      value: stats?.avgRating != null
+        ? (stats.avgRating).toFixed(1) + ' ★'
+        : stats?.averageRating != null
+          ? (stats.averageRating).toFixed(1) + ' ★'
+          : '— ★',
+      icon: '⭐', color: C.amber,
+      sub: 'Patient satisfaction',
+    },
   ];
 
   return (
     <div>
       {toast && <Toast msg={toast} onClose={() => setToast('')} />}
+
+      {/* Notification panel overlay */}
+      {showNotifPanel && (
+        <div style={{ position:'fixed', inset:0, zIndex:9990 }} onClick={() => setShowNotifPanel(false)}>
+          <div style={{ position:'absolute', top:16, right:16, width:360, background:C.cardBg, borderRadius:16, border:`1px solid ${C.border}`, boxShadow:'0 16px 48px rgba(0,0,0,0.18)', overflow:'hidden' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding:'16px 20px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:15, fontWeight:800, color:C.txtHi }}>Notifications</span>
+                {unreadCount > 0 && <span style={{ background:C.rose, color:'#fff', borderRadius:100, fontSize:10, fontWeight:700, padding:'1px 7px' }}>{unreadCount}</span>}
+                <span style={{ fontSize:10, color:C.green, fontWeight:700, background:C.green+'15', padding:'2px 8px', borderRadius:100 }}>● Live</span>
+              </div>
+              <button onClick={markAllRead} style={{ fontSize:11, color:C.teal, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
+            </div>
+            <div style={{ maxHeight:380, overflowY:'auto' }}>
+              {notifications.length === 0 ? (
+                <div style={{ padding:'32px 20px', textAlign:'center', color:C.txtLo, fontSize:13 }}>No notifications yet</div>
+              ) : notifications.map((n: any, i: number) => (
+                <div key={n.id ?? i} style={{ padding:'14px 20px', borderBottom:`1px solid ${C.border}`, background: (!n.isRead && !n.read) ? C.tealGlow : 'transparent', display:'flex', gap:12 }}>
+                  <div style={{ fontSize:20, flexShrink:0 }}>
+                    {n.type === 'APPOINTMENT_BOOKED' ? '📅'
+                     : n.type === 'LAB_REPORT' ? '📋'
+                     : n.type === 'COMMUNITY' ? '💬' : '🔔'}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight: (!n.isRead && !n.read) ? 700 : 500, color:C.txtHi, marginBottom:2 }}>
+                      {n.title ?? n.message ?? 'New notification'}
+                      {(!n.isRead && !n.read) && <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:C.teal, marginLeft:6, verticalAlign:'middle' }} />}
+                    </div>
+                    <div style={{ fontSize:12, color:C.txtMid }}>{n.body ?? n.description ?? ''}</div>
+                    <div style={{ fontSize:11, color:C.txtLo, marginTop:4 }}>{n.createdAt ? ago(n.createdAt) : ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Greeting banner */}
       <div style={{ background:'linear-gradient(135deg,#0C3D38,#0D9488)', borderRadius:18, padding:'28px 32px', marginBottom:24, position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:-60, right:-60, width:240, height:240, borderRadius:'50%', background:'radial-gradient(circle,rgba(255,255,255,0.05) 0%,transparent 70%)', pointerEvents:'none' }} />
-        <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', letterSpacing:'0.1em', textTransform:'uppercase' as const, marginBottom:6 }}>{today}</div>
+        {/* Notification bell in banner */}
+        <div style={{ position:'absolute', top:20, right:24 }}>
+          <button onClick={() => setShowNotifPanel(p => !p)} style={{ position:'relative', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:10, width:40, height:40, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>
+            🔔
+            {unreadCount > 0 && (
+              <span style={{ position:'absolute', top:-5, right:-5, background:C.rose, color:'#fff', borderRadius:'50%', width:18, height:18, fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid #0D9488' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+            )}
+          </button>
+        </div>
+        <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', letterSpacing:'0.1em', textTransform:'uppercase' as const, marginBottom:6 }}>{todayLabel}</div>
         <h1 style={{ color:'#FFFFFF', fontSize:26, fontWeight:800, margin:'0 0 6px' }}>{greeting}, Dr. {firstName} 👋</h1>
         <p style={{ color:'rgba(255,255,255,0.75)', fontSize:14, margin:0 }}>
-          You have <strong style={{ color:'#A7F3D0' }}>{stats?.todayAppts ?? appts.length} appointments</strong> today.
-          {(pendingApptCount) > 0 && <span> <strong style={{ color:'#FDE68A' }}>{pendingApptCount} need confirmation.</strong></span>}
+          You have <strong style={{ color:'#A7F3D0' }}>{stats?.todayAppts ?? todayAppts.length} appointment{(stats?.todayAppts ?? todayAppts.length) !== 1 ? 's' : ''}</strong> today.
+          {(todayPending || (stats?.pendingAppts ?? 0)) > 0 && (
+            <span> <strong style={{ color:'#FDE68A' }}>{todayPending || stats?.pendingAppts} need{(todayPending || stats?.pendingAppts) === 1 ? 's' : ''} confirmation.</strong></span>
+          )}
         </p>
       </div>
 
@@ -337,7 +478,7 @@ function HomeTab() {
               )}
               {a.status === 'CONFIRMED' && (
                 <button onClick={async () => {
-                  try { await api.put(`/doctor/appointments/${a.id}`, { status:'COMPLETED' }); } catch {}
+                  try { await api.put(`/appointments/${a.id}/status`, { status:'COMPLETED' }); } catch {}
                   setAppts(prev => prev.map(x => x.id===a.id ? {...x, status:'COMPLETED'} : x));
                   setToast('Appointment marked complete ✓');
                 }} style={{ padding:'7px 12px', borderRadius:C.rSm, border:`1px solid ${C.txtLo}30`, background:'transparent', color:C.txtMid, fontSize:12, cursor:'pointer' }}>
@@ -358,18 +499,24 @@ function HomeTab() {
         <SectionHead title="Pending Actions" sub="Items needing your attention" />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
           {[
-            { icon:'💊', label:'Active Prescriptions',   count:pendingRxCount,     color:C.amber,  page:'prescriptions' },
-            { icon:'📋', label:'Lab reports to review',  count:pendingReportCount, color:C.rose,   page:'records' },
-            { icon:'📅', label:'Appointment requests',   count:pendingApptCount,   color:C.teal,   page:'appointments' },
-            { icon:'💬', label:'Community questions',    count:5,                  color:C.violet, page:'communities' },
+            { icon:'📅', label:'Appointment Requests',  count: pendingApptCount,   color:C.teal,   page:'appointments', urgent: pendingApptCount > 0 },
+            { icon:'💊', label:'Active Prescriptions',  count: pendingRxCount,     color:C.amber,  page:'prescriptions', urgent: false },
+            { icon:'📋', label:'Lab Reports to Review', count: pendingReportCount, color:C.rose,   page:'records',       urgent: pendingReportCount > 0 },
+            { icon:'💬', label:'Community Questions',   count: unreadCount > 0 ? unreadCount : 0, color:C.violet, page:'communities', urgent: false },
           ].map(item => (
-            <Card key={item.label} style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}
+            <Card key={item.label}
+              style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', border:`1px solid ${item.urgent ? item.color + '40' : C.border}`, background: item.urgent ? item.color + '06' : C.cardBg }}
               onClick={() => uiStore.setActivePage(item.page)}>
-              <div style={{ width:44, height:44, borderRadius:12, background:item.color+'15', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>{item.icon}</div>
+              <div style={{ width:44, height:44, borderRadius:12, background:item.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>{item.icon}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:C.txtHi }}>{item.label}</div>
-                <div style={{ fontSize:12, color:item.color, fontWeight:600, marginTop:2 }}>{item.count} pending</div>
+                <div style={{ fontSize:12, color: item.count > 0 ? item.color : C.txtLo, fontWeight:600, marginTop:2 }}>
+                  {item.count > 0 ? `${item.count} pending` : 'All clear'}
+                </div>
               </div>
+              {item.count > 0 && (
+                <span style={{ background:item.color, color:'#fff', borderRadius:100, fontSize:11, fontWeight:800, padding:'2px 8px', minWidth:24, textAlign:'center' }}>{item.count}</span>
+              )}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.txtLo} strokeWidth="2" strokeLinecap="round"><polyline points="9,18 15,12 9,6"/></svg>
             </Card>
           ))}
@@ -402,10 +549,9 @@ function PatientsPage() {
   const loadPatientHistory = async (patientId: string) => {
     setHistoryLoading(true);
     try {
-      // Try patient-specific history endpoint; fall back to appointments filtered by patient
-      const r: any = await api.get(`/doctor/appointments`, { params: { patientId } });
-      const data = r?.data?.data ?? r?.data ?? [];
-      setPatientHistory(Array.isArray(data) ? data.slice(0, 5) : []);
+      const r: any = await api.get(`/appointments`, { params: { patientId } });
+      const raw = r?.data?.data?.appointments ?? r?.data?.appointments ?? r?.data?.data ?? r?.data ?? [];
+      setPatientHistory(Array.isArray(raw) ? raw.slice(0, 5) : []);
     } catch {
       setPatientHistory([]);
     } finally {
@@ -582,12 +728,43 @@ function AppointmentsPage() {
   const [confirm,    setConfirm]    = useState<string|null>(null);
   const [cancelling, setCancelling] = useState<{id:string;name:string}|null>(null);
 
-  useEffect(() => {
-    api.get('/doctor/appointments').then((r: any) => {
-      const a = r?.data?.data ?? r?.data?.appointments ?? r?.data ?? [];
-      setAppts(Array.isArray(a) && a.length > 0 ? a : MOCK_APPTS);
-    }).catch(() => setAppts(MOCK_APPTS)).finally(() => setLoading(false));
+  const loadAppts = useCallback(async () => {
+    setLoading(true);
+    try {
+      // FIXED: use /appointments — backend detects doctor role automatically
+      // /doctor/appointments was returning empty; /appointments is the correct shared endpoint
+      const r: any = await api.get('/appointments');
+      const raw = r?.data?.data?.appointments ?? r?.data?.appointments ?? r?.data?.data ?? r?.data ?? [];
+      const a = Array.isArray(raw) ? raw : [];
+      const normalized = a.map((x: any) => ({
+        ...x,
+        patientName: x.patientName ?? (x.patient ? `${x.patient.firstName ?? ''} ${x.patient.lastName ?? ''}`.trim() : 'Patient'),
+        avatar: x.avatar ?? (x.patient ? `${(x.patient.firstName ?? 'P')[0]}${(x.patient.lastName ?? 'T')[0]}`.toUpperCase() : 'PT'),
+        time: x.time ?? (x.scheduledAt ? new Date(x.scheduledAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
+        condition: x.condition ?? x.reasonForVisit ?? 'Consultation',
+        meetingLink: x.meetingLink ?? (x.type === 'TELECONSULT' ? `https://meet.jit.si/hc-${x.id}` : undefined),
+      }));
+      setAppts(normalized.length > 0 ? normalized : MOCK_APPTS);
+    } catch {
+      setAppts(MOCK_APPTS);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadAppts();
+    // Poll every 30 seconds for new bookings from patients
+    const interval = setInterval(loadAppts, 30_000);
+    return () => clearInterval(interval);
+  }, [loadAppts]);
+
+  // FIXED: also re-fetch when a patient books from anywhere in the app
+  useEffect(() => {
+    const handler = () => loadAppts();
+    window.addEventListener('hcAppointmentBooked', handler);
+    return () => window.removeEventListener('hcAppointmentBooked', handler);
+  }, [loadAppts]);
 
   const showToast = (msg: string, type: 'success'|'error' = 'success') => {
     setToast(msg); setToastType(type);
@@ -596,16 +773,19 @@ function AppointmentsPage() {
   const handleConfirm = async (id: string) => {
     setConfirm(id);
     try {
-      await api.put(`/doctor/appointments/${id}`, { status: 'CONFIRMED' });
+      // Try both endpoint patterns; backend may support either
+      await api.put(`/appointments/${id}/status`, { status: 'CONFIRMED' })
+        .catch(() => api.put(`/appointments/${id}`, { status: 'CONFIRMED' }));
     } catch {}
     setAppts(prev => prev.map(a => a.id === id ? {...a, status:'CONFIRMED'} : a));
-    showToast('Appointment confirmed and patient notified!');
+    showToast('✓ Appointment confirmed — patient has been notified!');
     setConfirm(null);
   };
 
   const handleCancel = async (id: string) => {
     try {
-      await api.put(`/doctor/appointments/${id}`, { status:'CANCELLED' });
+      await api.put(`/appointments/${id}/cancel`, { reason: 'Cancelled by doctor' })
+        .catch(() => api.put(`/appointments/${id}/status`, { status: 'CANCELLED' }));
     } catch {}
     setAppts(prev => prev.map(a => a.id === id ? {...a, status:'CANCELLED'} : a));
     showToast('Appointment cancelled.');
@@ -614,19 +794,22 @@ function AppointmentsPage() {
 
   const handleComplete = async (id: string) => {
     try {
-      await api.put(`/doctor/appointments/${id}`, { status:'COMPLETED' });
+      await api.put(`/appointments/${id}/status`, { status: 'COMPLETED' })
+        .catch(() => api.put(`/appointments/${id}`, { status: 'COMPLETED' }));
     } catch {}
     setAppts(prev => prev.map(a => a.id === id ? {...a, status:'COMPLETED'} : a));
-    showToast('Appointment completed ✓');
+    showToast('Appointment marked as completed ✓');
   };
 
   const handleReschedule = async () => {
     if (!reschedule?.date || !reschedule?.time) return;
     try {
-      await api.put(`/doctor/appointments/${reschedule.id}`, { date:reschedule.date, time:reschedule.time });
+      const scheduledAt = new Date(`${reschedule.date}T${reschedule.time}`).toISOString();
+      await api.put(`/appointments/${reschedule.id}`, { scheduledAt })
+        .catch(() => api.put(`/appointments/${reschedule.id}/status`, { scheduledAt, status: 'CONFIRMED' }));
     } catch {}
     setAppts(prev => prev.map(a => a.id === reschedule.id ? {...a, date:reschedule.date, time:reschedule.time, status:'CONFIRMED'} : a));
-    showToast('Appointment rescheduled and patient notified!');
+    showToast('Appointment rescheduled — patient notified!');
     setReschedule(null);
   };
 

@@ -1,6 +1,6 @@
 // src/app/layout.tsx — Root Layout
 // ============================================================
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Poppins, Nunito } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
@@ -18,10 +18,31 @@ const nunito = Nunito({
   display: 'swap',
 });
 
+// ── Viewport — CRITICAL for mobile rendering ──────────────────
+// Without this, mobile browsers render the full desktop layout
+// scaled down, causing only half the page to be visible.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: '#ffffff',
+};
+
 export const metadata: Metadata = {
   title: 'HealthConnect India — Unified Healthcare Platform',
   description: "India's unified healthcare platform for patients, doctors, and hospitals.",
   keywords: 'healthcare, doctors, hospitals, telemedicine, India, health records',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'HealthConnect India',
+  },
+  formatDetection: {
+    telephone: true,
+    email: true,
+    address: true,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

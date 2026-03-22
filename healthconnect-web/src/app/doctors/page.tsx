@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore }   from '@/store/uiStore';
 import { authAPI }      from '@/lib/api';
+import BookAppointmentModal from '@/components/dashboard/BookAppointmentModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.healthconnect.sbs/api/v1';
 
@@ -182,6 +183,21 @@ const GRAD_COLORS = [
   ['#059669','#0D9488'], ['#0369A1','#0D9488'], ['#D97706','#B45309'],
   ['#DC2626','#0D9488'],
 ];
+
+// Specialty → accent colour for card top border
+const SPEC_ACCENT: Record<string, string> = {
+  'Cardiologist':'#EF4444','Neurologist':'#8B5CF6','Psychiatrist':'#A78BFA',
+  'Gynaecologist':'#EC4899','Dermatologist':'#F59E0B','Paediatrician':'#3B82F6',
+  'Orthopaedic':'#F97316','Gastroenterologist':'#10B981','Diabetologist':'#06B6D4',
+  'Endocrinologist':'#0EA5E9','Nephrologist':'#6366F1','Urologist':'#14B8A6',
+  'Pulmonologist':'#0D9488','Oncologist':'#7C3AED','Ophthalmologist':'#2563EB',
+  'ENT':'#059669','Physiotherapist':'#16A34A','Nutritionist':'#65A30D',
+  'General Physician':'#0D9488','Rheumatologist':'#9333EA',
+};
+function specAccent(s: string): string {
+  const key = Object.keys(SPEC_ACCENT).find(k => s.toLowerCase().includes(k.toLowerCase()));
+  return key ? SPEC_ACCENT[key] : '#1A6BB5';
+}
 
 // ── normalizeDoctor — correct field mapping to match seed/Prisma schema ─────
 function normalizeDoctor(d: any, idx: number) {
@@ -392,161 +408,134 @@ function SkeletonCard({ view }: { view: 'tile' | 'list' }) {
   );
 }
 
-// ── Doctor card — tile view ────────────────────────────────────────────────
+// ── Doctor card — tile view ───────────────────────────────────────────────
 function DoctorTile({ d, onProfile, onBook }: { d: Doctor; onProfile: (d: Doctor) => void; onBook: (d: Doctor) => void }) {
   const [hov, setHov] = useState(false);
   const [g1, g2] = GRAD_COLORS[d.gradIndex];
-  const stars = Math.round(d.rating);
+  const accent = specAccent(d.specialization);
+  const nextSlot = d.nextAvailableSlot ?? (d.isAvailable ? 'Today' : 'Tomorrow');
   return (
     <div
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => onProfile(d)}
       style={{
-        background: hov ? C.cardBgHov : C.cardBg,
-        border: `1px solid ${hov ? C.cardBorderHov : C.cardBorder}`,
-        borderRadius: 16, padding: '20px', cursor: 'pointer',
-        transition: 'all 0.22s', position: 'relative',
-        boxShadow: hov ? C.shadowHov : C.shadow,
-        transform: hov ? 'translateY(-2px)' : '',
-        display: 'flex', flexDirection: 'column' as const,
+        background: '#FFFFFF', borderRadius: 14,
+        border: `1.5px solid ${hov ? accent : '#E2EBF8'}`,
+        boxShadow: hov ? `0 8px 28px ${accent}22, 0 2px 8px rgba(26,107,181,0.06)` : '0 1px 6px rgba(26,107,181,0.06)',
+        transform: hov ? 'translateY(-3px)' : 'none',
+        transition: 'all 0.22s cubic-bezier(0.34,1.2,0.64,1)', cursor: 'pointer',
+        display: 'flex', flexDirection: 'column' as const, overflow: 'hidden',
       }}
     >
-      {/* Online badge */}
-      {d.isAvailable && (
-        <div style={{ position: 'absolute', top: 14, right: 14, background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 100, padding: '2px 9px', fontSize: 10, color: C.green, display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', animation: 'hcPulseGreen 1.5s infinite' }} />
-          Now
-        </div>
-      )}
+      {/* Specialty accent top bar */}
+      <div style={{ height: 3, background: `linear-gradient(90deg,${accent},${accent}88)`, flexShrink: 0 }} />
 
-      {/* Avatar */}
-      <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <div style={{ width: 58, height: 58, borderRadius: '50%', background: `linear-gradient(135deg,${g1},${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 18, color: '#fff', boxShadow: `0 4px 14px ${g1}40` }}>
-            {d.initials}
+      <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column' as const, flex: 1, gap: 0 }}>
+
+        {/* Row 1: Avatar + Identity + Now badge */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+          {/* Avatar with gradient ring */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', padding: 2, background: `linear-gradient(135deg,${accent},${g2})`, boxShadow: `0 3px 10px ${accent}33` }}>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: `linear-gradient(135deg,${g1},${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, color: '#fff' }}>{d.initials}</div>
+            </div>
+            {d.isVerified && <div style={{ position: 'absolute', bottom: -1, right: -1, width: 15, height: 15, borderRadius: '50%', background: '#0D9488', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#fff', fontWeight: 800 }}>✓</div>}
           </div>
-          {d.isVerified && (
-            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 18, height: 18, borderRadius: '50%', background: C.teal, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 800 }}>✓</div>
+
+          {/* Name + spec + qual */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 13.5, color: '#0C1A3A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.25 }}>{d.name}</div>
+            <div style={{ fontSize: 11.5, color: accent, fontWeight: 700, lineHeight: 1.25 }}>{d.specialization}</div>
+            {d.qualification.length > 0 && <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}>{d.qualification.slice(0,2).join(' · ')}</div>}
+          </div>
+
+          {/* Now badge */}
+          {d.isAvailable && (
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 100, padding: '2px 7px' }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22C55E', display: 'inline-block', animation: 'hcPulseGreen 1.8s ease infinite' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#15803D' }}>Now</span>
+            </div>
           )}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 14, color: C.textPrimary, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
-          <div style={{ fontSize: 12, color: C.teal, fontWeight: 700, marginBottom: 2 }}>{d.specialization}</div>
-          {d.hcId && <div style={{ fontSize: 10, color: '#4A5E7A', fontFamily: 'var(--font-mono)' }}>✓ {d.hcId}</div>}
+
+        {/* Row 2: Location */}
+        <div style={{ fontSize: 11, color: '#64748B', fontWeight: 500, marginBottom: 7, display: 'flex', gap: 4, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, flexShrink: 0 }}>📍</span>
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.hospital}{d.city ? ` · ${d.city}` : ''}</span>
         </div>
-      </div>
 
-      {/* Hospital + location */}
-      <div style={{ fontSize: 12, color: '#1E3A6E', fontWeight: 500, marginBottom: 6, lineHeight: 1.5 }}>
-        🏥 {d.hospital}
-        {d.city && <span style={{ color: C.textMuted }}> · {d.city}</span>}
-      </div>
-
-      {/* Sub-specs */}
-      {d.subSpecializations.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
-          {d.subSpecializations.slice(0, 2).map((s: string) => (
-            <span key={s} style={{ padding: '2px 7px', borderRadius: 100, background: '#EBF3FF', border: '1px solid #93C5FD', fontSize: 10, color: '#1D4ED8', fontWeight: 600 }}>{s}</span>
-          ))}
-          {d.subSpecializations.length > 2 && <span style={{ padding: '2px 7px', borderRadius: 100, background: '#EBF3FF', border: '1px solid #93C5FD', fontSize: 10, color: '#4A5E7A' }}>+{d.subSpecializations.length-2}</span>}
+        {/* Row 3: Rating + Exp + Next Slot — compact inline */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, flexWrap: 'wrap' as const }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 6, padding: '2px 6px' }}>
+            <span style={{ fontSize: 9 }}>⭐</span>
+            <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 11, color: '#92400E' }}>{d.rating.toFixed(1)}</span>
+            <span style={{ fontSize: 10, color: '#A16207' }}>({d.reviews})</span>
+          </div>
+          {d.experience && <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: '#1E40AF' }}>{d.experience}yr</div>}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 6px', fontSize: 10, fontWeight: 600, color: '#15803D' }}>
+            <span>📅</span><span>{nextSlot}</span>
+          </div>
         </div>
-      )}
 
-      {/* Stats row */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        {d.experience && <span style={{ fontSize: 11, color: '#334E7A', fontWeight: 500, background: '#EBF0FF', border: '1px solid #A8C0E8', borderRadius: 6, padding: '2px 7px' }}>🏥 {d.experience}yr</span>}
-        {d.totalPatients > 0 && <span style={{ fontSize: 11, color: '#334E7A', fontWeight: 500, background: '#EBF0FF', border: '1px solid #A8C0E8', borderRadius: 6, padding: '2px 7px' }}>👥 {d.totalPatients >= 1000 ? (d.totalPatients/1000).toFixed(1)+'k' : d.totalPatients}</span>}
-        {d.languages.length > 0 && <span style={{ fontSize: 11, color: '#334E7A', fontWeight: 500, background: '#EBF0FF', border: '1px solid #A8C0E8', borderRadius: 6, padding: '2px 7px' }}>🗣 {d.languages[0]}{d.languages.length > 1 ? ` +${d.languages.length-1}` : ''}</span>}
-      </div>
-
-      {/* Rating + fee — flex-grow pushes button down */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[1,2,3,4,5].map((i: number) => <span key={i} style={{ color: i <= stars ? '#F59E0B' : '#D1EAE6', fontSize: 12 }}>★</span>)}
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#D97706' }}>{d.rating.toFixed(1)}</span>
-          <span style={{ fontSize: 11, color: C.textMuted }}>({d.reviews})</span>
+        {/* Row 4: Fee + Book button — same line */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 8, borderTop: `1px solid ${accent}18`, marginTop: 'auto' }}>
+          <div>
+            {d.fee ? <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 15, color: '#0C1A3A' }}>₹{d.fee}<span style={{ fontSize: 10, fontWeight: 400, color: '#94A3B8' }}> / visit</span></span> : <span style={{ fontSize: 11, color: '#15803D', fontWeight: 600 }}>Free</span>}
+            {d.teleconsultFee && d.teleconsultFee > 0 ? <div style={{ fontSize: 10, color: '#0D9488', fontWeight: 600 }}>📱 ₹{d.teleconsultFee} online</div> : null}
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); onBook(d); }}
+            style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: hov ? `linear-gradient(135deg,${accent},${accent}cc)` : `linear-gradient(135deg,#1A6BB5,#2E86D4)`, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-heading)', letterSpacing: '0.01em', flexShrink: 0, boxShadow: hov ? `0 4px 14px ${accent}44` : '0 2px 6px rgba(26,107,181,0.2)', transition: 'all 0.2s', whiteSpace: 'nowrap' as const }}
+          >
+            Book →
+          </button>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          {d.fee && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 800, color: C.teal }}>₹{d.fee}</div>}
-          {d.teleconsultFee && d.teleconsultFee > 0 && <div style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>📱 ₹{d.teleconsultFee} online</div>}
-        </div>
-      </div>
-
-      {/* CTA — always at bottom via marginTop auto on wrapper */}
-      <div style={{ marginTop: 'auto', paddingTop: 14 }}>
-        <button
-          onClick={e => { e.stopPropagation(); onBook(d); }}
-          style={{
-            width: '100%', padding: '10px', borderRadius: 9, border: 'none',
-            background: `linear-gradient(135deg,${C.tealDark},${C.tealLight})`,
-            color: '#fff', fontSize: 13, fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'var(--font-heading)', transition: 'all 0.22s',
-            boxShadow: hov ? `0 4px 14px ${C.tealGlow}` : 'none',
-            letterSpacing: '0.02em',
-          }}
-        >
-          View & Book →
-        </button>
       </div>
     </div>
   );
 }
-
 // ── Doctor card — list view ────────────────────────────────────────────────
 function DoctorRow({ d, onProfile, onBook }: { d: Doctor; onProfile: (d: Doctor) => void; onBook: (d: Doctor) => void }) {
   const [hov, setHov] = useState(false);
   const [g1, g2] = GRAD_COLORS[d.gradIndex];
+  const accent = specAccent(d.specialization);
   return (
     <div
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => onProfile(d)}
       style={{
-        background: hov ? C.cardBgHov : C.cardBg,
-        border: `1px solid ${hov ? '#1D6FA4' : '#DBEAFE'}`,
-        borderRadius: 14, padding: '16px 20px', cursor: 'pointer',
-        transition: 'all 0.2s', boxShadow: hov ? C.shadowHov : C.shadow,
-        display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap',
+        background: '#FFFFFF',
+        border: `1.5px solid ${hov ? accent : '#DBEAFE'}`,
+        borderLeft: `3px solid ${accent}`,
+        borderRadius: 12, padding: '14px 18px', cursor: 'pointer',
+        transition: 'all 0.2s',
+        boxShadow: hov ? '0 4px 20px rgba(26,107,181,0.12)' : '0 1px 8px rgba(26,107,181,0.06)',
+        display: 'flex', gap: 14, alignItems: 'center',
       }}
     >
-      {/* Avatar */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
-        <div style={{ width: 54, height: 54, borderRadius: '50%', background: `linear-gradient(135deg,${g1},${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 16, color: '#fff' }}>
-          {d.initials}
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: `linear-gradient(135deg,${g1},${g2})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 15, color: '#fff' }}>{d.initials}</div>
+        {d.isVerified && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 15, height: 15, borderRadius: '50%', background: '#0D9488', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#fff' }}>✓</div>}
+      </div>
+      <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, color: '#0C1A3A' }}>{d.name}</span>
+          {d.isAvailable && <span style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 100, padding: '1px 7px', fontSize: 10, color: '#15803D', fontWeight: 700 }}>● Now</span>}
         </div>
-        {d.isVerified && <div style={{ position: 'absolute', bottom: -1, right: -1, width: 16, height: 16, borderRadius: '50%', background: C.teal, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#fff' }}>✓</div>}
+        <div style={{ fontSize: 12, color: accent, fontWeight: 700, marginBottom: 1 }}>{d.specialization}</div>
+        {d.qualification.length > 0 && <div style={{ fontSize: 10, color: '#64748B' }}>{d.qualification.slice(0,2).join(' · ')}</div>}
+        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>📍 {d.hospital}{d.city ? ` · ${d.city}` : ''}{d.experience ? ` · ${d.experience}yr` : ''}</div>
       </div>
-
-      {/* Main info */}
-      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 15, color: C.textPrimary }}>{d.name}</span>
-          {d.isAvailable && <span style={{ background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 100, padding: '1px 7px', fontSize: 10, color: C.green, fontWeight: 600 }}>● Now</span>}
-        </div>
-        <div style={{ fontSize: 13, color: C.teal, fontWeight: 600, marginBottom: 3 }}>{d.specialization} {d.subSpecializations.length > 0 && <span style={{ color: C.textMuted, fontWeight: 400 }}>· {d.subSpecializations.slice(0,2).join(', ')}</span>}</div>
-        <div style={{ fontSize: 12, color: C.textMuted }}>🏥 {d.hospital}{d.city ? ` · ${d.city}` : ''}{d.experience ? ` · ${d.experience}yr exp` : ''}</div>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, padding: '4px 10px' }}>
+        <span>⭐</span>
+        <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 13, color: '#92400E' }}>{d.rating.toFixed(1)}</span>
+        <span style={{ fontSize: 10, color: '#A16207' }}>({d.reviews})</span>
       </div>
-
-      {/* Rating */}
-      <div style={{ flexShrink: 0, textAlign: 'center' }}>
-        <div style={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-          {[1,2,3,4,5].map((i: number) => <span key={i} style={{ color: i <= Math.round(d.rating) ? '#F59E0B' : '#D1EAE6', fontSize: 11 }}>★</span>)}
-        </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>{d.rating.toFixed(1)}</div>
-        <div style={{ fontSize: 10, color: C.textMuted }}>{d.reviews} reviews</div>
+      <div style={{ flexShrink: 0, minWidth: 70, textAlign: 'right' }}>
+        {d.fee ? <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, color: '#0C1A3A' }}>₹{d.fee}</div> : null}
+        {d.teleconsultFee && d.teleconsultFee > 0 ? <div style={{ fontSize: 10, color: '#15803D', fontWeight: 600 }}>📱 ₹{d.teleconsultFee}</div> : null}
       </div>
-
-      {/* Fee */}
-      <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 80 }}>
-        {d.fee && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 800, color: C.teal }}>₹{d.fee}</div>}
-        {d.teleconsultFee && d.teleconsultFee > 0 && <div style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>📱 ₹{d.teleconsultFee}</div>}
-        {!d.fee && <div style={{ fontSize: 13, color: C.textMuted }}>—</div>}
-      </div>
-
-      {/* CTA */}
-      <button
-        onClick={e => { e.stopPropagation(); onBook(d); }}
-        style={{ flexShrink: 0, padding: '9px 20px', borderRadius: 9, border: 'none', background: `linear-gradient(135deg,${C.tealDark},${C.tealLight})`, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap', boxShadow: `0 3px 10px ${C.teal}30` }}
-      >
+      <button onClick={e => { e.stopPropagation(); onBook(d); }} style={{ flexShrink: 0, padding: '9px 18px', borderRadius: 9, border: 'none', background: 'linear-gradient(135deg,#1A6BB5,#2E86D4)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap' as const, boxShadow: '0 2px 8px rgba(26,107,181,0.25)' }}>
         Book →
       </button>
     </div>
@@ -1050,7 +1039,7 @@ function Sidebar({
   const toggle = (g: string) => setOpenGroups(prev => ({ ...prev, [g]: !prev[g] }));
 
   return (
-    <div style={{ width: 240, flexShrink: 0, background: C.sidebarBg, border: `1px solid ${C.borderLight}`, borderRadius: 16, padding: '20px 16px', height: 'fit-content', position: 'sticky', top: 84, boxShadow: C.shadow }}>
+    <div style={{ width: 220, flexShrink: 0, background: '#FFFFFF', border: '1.5px solid #DBEAFE', borderRadius: 16, padding: '20px 16px', height: 'fit-content', position: 'sticky', top: 84, boxShadow: '0 2px 16px rgba(26,107,181,0.08)' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13, color: '#0C1A3A' }}>Filters</span>
@@ -1115,25 +1104,8 @@ function Sidebar({
         </select>
       </div>
 
-      {/* Language */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#334E7A', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 8 }}>Language</div>
-        <select value={language} onChange={e => setLanguage(e.target.value)} style={{ width: '100%', padding: '8px 10px', background: C.inputBg, border: `1px solid ${language ? C.tealBorder : C.inputBorder}`, borderRadius: 8, color: language ? C.teal : C.textSecondary, fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-          {LANGUAGES.map((l: string) => <option key={l} value={l === 'All Languages' ? '' : l}>{l}</option>)}
-        </select>
-      </div>
-
-      {/* Gender */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#334E7A', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 8 }}>Gender Preference</div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {(['Any', 'Male', 'Female'] as string[]).map((g: string) => (
-            <button key={g} onClick={() => setGender(gender === g.toUpperCase() ? '' : g === 'Any' ? '' : g.toUpperCase())} style={{ flex: 1, padding: '6px', borderRadius: 8, border: `1px solid ${(g === 'Any' && !gender) || gender === g.toUpperCase() ? C.tealBorder : C.borderLight}`, background: (g === 'Any' && !gender) || gender === g.toUpperCase() ? C.tealBg : 'transparent', color: (g === 'Any' && !gender) || gender === g.toUpperCase() ? C.teal : C.textSecondary, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-              {g}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Language — moved to quick-filter bar above cards */}
+      {/* Gender  — moved to quick-filter bar above cards */}
 
       <div style={{ height: 1, background: C.borderLight, margin: '12px 0' }} />
 
@@ -1159,6 +1131,37 @@ function Sidebar({
 export default function DoctorsPage() {
   const router = useRouter();
 
+  // ── Rotating hero headlines ──────────────────────────────────────────────
+  const HERO_HEADLINES = [
+    { line1: 'India\'s Most Trusted', line2: 'Doctor Network' },
+    { line1: '37 NMC-Verified', line2: 'Specialists Ready' },
+    { line1: 'Book in Under', line2: '2 Minutes' },
+    { line1: 'In-Person · Video', line2: 'Home Visit' },
+    { line1: 'Free to Browse.', line2: 'Always.' },
+    { line1: 'Find Doctors', line2: 'Near You' },
+  ];
+  const [headlineIdx,  setHeadlineIdx]  = useState(0);
+  const [headlineShow, setHeadlineShow] = useState(true);
+  const [showIntro,    setShowIntro]    = useState(true);
+  const [introFading,  setIntroFading]  = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setHeadlineShow(false);
+      setTimeout(() => {
+        setHeadlineIdx(i => (i + 1) % HERO_HEADLINES.length);
+        setHeadlineShow(true);
+      }, 400);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setIntroFading(true), 6000);
+    const t2 = setTimeout(() => setShowIntro(false),  6700);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
   // ── Auth state ─────────────────────────────────────────────────────────
   const [isAuth,    setIsAuth]    = useState(false);
   const [authUser,  setAuthUser]  = useState<any>(null);
@@ -1182,6 +1185,12 @@ export default function DoctorsPage() {
   const [view,      setView]      = useState<'tile'|'list'>('tile');
   const [profileDoc,setProfileDoc]= useState<Doctor | null>(null);
 
+  // ── Booking modal state ───────────────────────────────────────────────
+  const [showBookModal,    setShowBookModal]    = useState(false);
+  const [bookingDoctorId,  setBookingDoctorId]  = useState<string | null>(null);
+  const [bookingDoctorName,setBookingDoctorName]= useState<string>('');
+  const [bookedSuccessDoc, setBookedSuccessDoc] = useState<{name:string; appt:any} | null>(null);
+
   // ── Data state ────────────────────────────────────────────────────────
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);  // full unfiltered set
   const [doctors,   setDoctors]   = useState<Doctor[]>([]);    // current page slice
@@ -1203,7 +1212,7 @@ export default function DoctorsPage() {
   const [factIdx, setFactIdx] = useState(0);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const LIMIT = 12;          // cards shown per page
+  const LIMIT = 6;          // 2 cols × 3 rows = 6 cards per load
   const FETCH_LIMIT = 500;   // fetch all from API at once
 
   // ── Auth sync ─────────────────────────────────────────────────────────
@@ -1386,21 +1395,27 @@ export default function DoctorsPage() {
 
   // ── Book appointment handler ──────────────────────────────────────────
   const handleBook = (d: Doctor) => {
+    const docName = (d as any).name ?? `Dr. ${(d as any).firstName ?? ''} ${(d as any).lastName ?? ''}`.trim();
     if (isAuth) {
-      router.push(`/dashboard?book=${d.id}&doctorName=${encodeURIComponent(d.name)}&specialty=${encodeURIComponent(d.specialization)}`);
+      setBookingDoctorId(d.id);
+      setBookingDoctorName(docName);
+      setShowBookModal(true);
     } else {
       setAuthPendingDoctor(d);
       setShowAuth(true);
     }
   };
 
-  // ── After auth success, attempt booking ──────────────────────────────
+  // ── After auth success, open booking modal ────────────────────────────
   const handleAuthSuccess = (user: any) => {
     setIsAuth(true); setAuthUser(user);
     if (authPendingDoctor) {
       const d = authPendingDoctor;
+      const docName = (d as any).name ?? `Dr. ${(d as any).firstName ?? ''} ${(d as any).lastName ?? ''}`.trim();
       setAuthPendingDoctor(null);
-      router.push(`/dashboard?book=${d.id}&doctorName=${encodeURIComponent(d.name)}&specialty=${encodeURIComponent(d.specialization)}`);
+      setBookingDoctorId(d.id);
+      setBookingDoctorName(docName);
+      setShowBookModal(true);
     }
   };
 
@@ -1410,211 +1425,189 @@ export default function DoctorsPage() {
   return (
     <div style={{ background: '#F0F4FF', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
 
-      {/* ── Navbar ────────────────────────────────────────────────────────── */}
-      <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,22,40,0.97)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(20,184,166,0.12)', padding: '0 5%', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* ── INTRO SPLASH — 6s, position:absolute inside hero ──────────────── */}
+      <style>{`
+        @keyframes diFadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes diBarGrow{from{width:0%}to{width:100%}}
+        @keyframes diDotPulse{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.4)}}
+        .di-b{animation:diFadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both}
+        .di-d1{animation-delay:0.08s}.di-d2{animation-delay:0.24s}
+        .di-d3{animation-delay:0.42s}.di-d4{animation-delay:0.58s}
+        .di-bar{animation:diBarGrow 6000ms linear 0.1s both}
+        .di-dot{display:inline-block;animation:diDotPulse 2s ease infinite;margin:0 9px;color:#1A6BB5}
+      `}</style>
+
+      {/* ── Navbar — white, matches landing page ──────────────────────────── */}
+      <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: '#ffffff', borderBottom: '1px solid #E8EDF8', padding: '0 48px', height: 68, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 12px rgba(12,26,58,0.07)' }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,#0D9488,#14B8A6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, boxShadow: '0 0 16px rgba(20,184,166,0.30)' }}>🏥</div>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#0D9488,#14B8A6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontWeight: 900, fontSize: 18, color: '#fff', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}>H</div>
           <div>
-            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, color: '#fff', lineHeight: 1 }}>HealthConnect India</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: '#14B8A6', letterSpacing: '0.06em' }}>Unified Healthcare Platform</div>
+            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, color: '#0A1628', lineHeight: 1 }}>HealthConnect India</div>
+            <div style={{ fontSize: 10, color: '#0D9488', letterSpacing: '0.04em', marginTop: 2 }}>Unified Healthcare Platform</div>
           </div>
         </a>
-
-        {/* Nav links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[['Home','/'],['Doctors','/doctors'],['Communities','/communities'],['Hospitals','#'],['Learn','#']].map(([label, href]) => (
-            <a key={label} href={href} style={{ padding: '6px 11px', borderRadius: 8, fontSize: 13, fontWeight: href === '/doctors' ? 700 : 500, color: href === '/doctors' ? '#2DD4BF' : 'rgba(255,255,255,0.85)', textDecoration: 'none', background: href === '/doctors' ? 'rgba(20,184,166,0.12)' : 'transparent', border: href === '/doctors' ? '1px solid rgba(20,184,166,0.25)' : '1px solid transparent', transition: 'all 0.2s', whiteSpace: 'nowrap' as const }}>{label}</a>
+          {[['Home','/'],['Doctors','/doctors'],['Communities','/communities'],['Hospitals','#'],['Learn Hub','#']].map(([label, href]) => (
+            <a key={label} href={href} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: href === '/doctors' ? 700 : 500, color: href === '/doctors' ? '#1A6BB5' : '#374151', textDecoration: 'none', background: href === '/doctors' ? '#EBF4FF' : 'transparent', border: href === '/doctors' ? '1px solid #BFDBFE' : '1px solid transparent', transition: 'all 0.2s' }}>{label}</a>
           ))}
         </div>
-
-        {/* Auth buttons — correct: Sign In / Sign Up Free, no Dashboard */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isAuth ? (
-            <button onClick={() => router.push(getDashboardRoute(authUser?.role))} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#0D9488,#14B8A6)', color: '#fff', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              My Dashboard →
-            </button>
+            <button onClick={() => router.push(getDashboardRoute(authUser?.role))} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#0D9488,#14B8A6)', color: '#fff', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>My Dashboard →</button>
           ) : (
             <>
-              <button onClick={() => { setAuthPendingDoctor(null); setShowAuth(true); }} style={{ padding: '8px 18px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.85)', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                Sign In
-              </button>
-              <button onClick={() => { setAuthPendingDoctor(null); setShowAuth(true); }} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#0D9488,#14B8A6)', color: '#fff', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(13,148,136,0.35)' }}>
-                Sign Up Free
-              </button>
+              <button onClick={() => { setAuthPendingDoctor(null); setShowAuth(true); }} style={{ padding: '8px 18px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: '#374151', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Sign In</button>
+              <button onClick={() => { setAuthPendingDoctor(null); setShowAuth(true); }} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#0D9488,#14B8A6)', color: '#fff', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(13,148,136,0.3)' }}>Sign Up Free</button>
             </>
           )}
         </div>
       </nav>
 
-      {/* ── Hero section ──────────────────────────────────────────────────── */}
-      <div style={{ background: C.heroBg, padding: '20px 5% 18px', position: 'relative', overflow: 'hidden' }}>
-        {/* Hexagon grid overlay */}
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(20,184,166,0.08) 1px,transparent 1px)', backgroundSize: '28px 28px', pointerEvents: 'none' }} />
-        {/* Bottom fade to page */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(to bottom,transparent,rgba(0,0,0,0.15))', pointerEvents: 'none' }} />
+      {/* ── Hero section — dark navy card with rounded corners, floating on white ── */}
+      <div style={{ padding: '20px 48px 0', background: '#F0F4FF' }}>
+      <div style={{ background: 'linear-gradient(135deg,#060E1E 0%,#0A1E3D 35%,#0B2A5A 65%,#0A3366 100%)', borderRadius: 20, position: 'relative', overflow: 'hidden', padding: '40px 48px 36px', boxShadow: '0 20px 60px rgba(6,14,30,0.35)' }}>
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: '1fr minmax(420px,45%)', gap: 28, maxWidth: 1300, margin: '0 auto', alignItems: 'start' }}>
+        {/* INTRO SPLASH — absolute inside hero */}
+        {showIntro && (
+          <div style={{ position:'absolute', inset:0, zIndex:20, overflow:'hidden', borderRadius:20, opacity: introFading ? 0 : 1, transition:'opacity 0.7s ease', pointerEvents: introFading ? 'none' : 'auto' }}>
+            <div style={{ position:'absolute', inset:0, backgroundImage:'url(/images/doctors-intro.png)', backgroundSize:'cover', backgroundPosition:'center top' }} />
+            <div style={{ position:'absolute', top:'18%', left:'50%', transform:'translate(-50%,-50%)', width:'min(640px,82%)', textAlign:'center' }}>
+              {/* Subtle dark backdrop behind text for readability */}
+              <div style={{ position:'absolute', inset:'-18px -28px', background:'rgba(255,255,255,0.22)', backdropFilter:'blur(8px)', borderRadius:16, zIndex:-1 }} />
+              <div className="di-b di-d2" style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.4rem,2.6vw,2.2rem)', fontWeight:900, color:'#071428', lineHeight:1.08, letterSpacing:'-0.025em', marginBottom:5, textShadow:'0 1px 8px rgba(255,255,255,0.5)' }}>Find Your Doctor</div>
+              <div className="di-b di-d3" style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.1rem,2vw,1.75rem)', fontWeight:800, color:'#1A4A8A', lineHeight:1.1, letterSpacing:'-0.015em', whiteSpace:'nowrap', marginBottom:16, textShadow:'0 1px 8px rgba(255,255,255,0.5)' }}>in Minutes — Free, Always</div>
+              <div className="di-b di-d4" style={{ display:'flex', alignItems:'center', justifyContent:'center', flexWrap:'nowrap', gap:0, fontFamily:"'DM Sans',sans-serif", fontSize:'clamp(0.82rem,1.3vw,1.05rem)', fontWeight:700, color:'#0A0F1A', textShadow:'0 1px 6px rgba(255,255,255,0.6)' }}>
+                {['Verified Specialists','Available Now','Cities'].map((item, i, arr) => (
+                  <span key={i} style={{ display:'flex', alignItems:'center', whiteSpace:'nowrap' }}>
+                    <span>{item}</span>
+                    {i < arr.length-1 && <span className="di-dot">•</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div style={{ position:'absolute', bottom:0, left:0, right:0, height:3, background:'rgba(26,107,181,0.12)' }}>
+              <div className="di-bar" style={{ height:'100%', background:'linear-gradient(to right,#1A6BB5,#0D9488)' }} />
+            </div>
+          </div>
+        )}
 
-          {/* ── Left: heading + description + search ── */}
-          <div>
-            {/* Badge */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(20,184,166,0.14)', border: '1px solid rgba(20,184,166,0.30)', borderRadius: 100, padding: '3px 13px', fontSize: 10, color: '#67E8F9', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: 10, fontWeight: 700 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E', animation: 'hcPulseGreen 1.5s infinite', display: 'inline-block' }} />
-              Doctor Dictionary · {isFallback ? FALLBACK.length : (total > 0 ? allDoctors.length : '30+')} Doctors
+        {/* Glow orbs on dark bg */}
+        <div style={{ position:'absolute', top:-80, right:-80, width:340, height:340, borderRadius:'50%', background:'radial-gradient(circle,rgba(20,184,166,0.12),transparent 65%)', pointerEvents:'none' }} />
+        <div style={{ position:'absolute', bottom:-60, left:'20%', width:260, height:260, borderRadius:'50%', background:'radial-gradient(circle,rgba(37,99,235,0.10),transparent 65%)', pointerEvents:'none' }} />
+        <div style={{ position:'absolute', top:'40%', right:'20%', width:180, height:180, borderRadius:'50%', background:'radial-gradient(circle,rgba(13,148,136,0.08),transparent 65%)', pointerEvents:'none' }} />
+
+        {/* ── Split layout: Left = rotating headline + stats | Right = search + filters ── */}
+        <div style={{ position:'relative', zIndex:1, maxWidth:1300, margin:'0 auto', display:'grid', gridTemplateColumns:'1fr 1fr', gap:48, alignItems:'flex-end', minHeight:200 }}>
+
+          {/* LEFT: Rotating headline */}
+          <div style={{ display:'flex', flexDirection:'column' as const, justifyContent:'space-between', height:'100%' }}>
+            <div>
+              {/* Medical illustration — SVG inline */}
+              <div style={{ marginBottom:18, display:'flex', gap:10, alignItems:'center' }}>
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="36" height="36" rx="10" fill="rgba(20,184,166,0.18)" />
+                  <path d="M18 8v20M8 18h20" stroke="#14B8A6" strokeWidth="3" strokeLinecap="round"/>
+                  <circle cx="18" cy="18" r="7" stroke="rgba(20,184,166,0.5)" strokeWidth="1.5" strokeDasharray="3 2"/>
+                </svg>
+                <span style={{ fontSize:11, fontWeight:700, color:'rgba(94,234,212,0.8)', letterSpacing:'0.1em', textTransform:'uppercase' as const }}>Doctor Directory</span>
+              </div>
+
+              {/* Rotating headline — fade in/out */}
+              <style>{`
+                @keyframes hhFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+                @keyframes hhFadeOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-10px)}}
+                .hh-in{animation:hhFadeIn 0.4s ease both}
+                .hh-out{animation:hhFadeOut 0.35s ease both}
+              `}</style>
+              <div style={{ minHeight:80, marginBottom:10 }}>
+                <div className={headlineShow ? 'hh-in' : 'hh-out'}>
+                  <div style={{ fontFamily:'var(--font-heading)', fontWeight:900, fontSize:'clamp(26px,3.2vw,44px)', color:'#FFFFFF', lineHeight:1.1, letterSpacing:'-0.025em' }}>
+                    {HERO_HEADLINES[headlineIdx].line1}
+                  </div>
+                  <div style={{ fontFamily:'var(--font-heading)', fontWeight:900, fontSize:'clamp(26px,3.2vw,44px)', color:'#5EEAD4', lineHeight:1.1, letterSpacing:'-0.025em' }}>
+                    {HERO_HEADLINES[headlineIdx].line2}
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ fontSize:13, color:'rgba(148,163,184,0.9)', lineHeight:1.6, maxWidth:380, margin:'0 0 20px' }}>
+                Search by specialty, city, language or fee. Every doctor is <strong style={{ color:'#5EEAD4' }}>HCD-verified</strong>. Free to browse, always.
+              </p>
+
+              {/* Rotating dots indicator */}
+              <div style={{ display:'flex', gap:5, marginBottom:24 }}>
+                {HERO_HEADLINES.map((_,i) => (
+                  <div key={i} onClick={() => { setHeadlineIdx(i); setHeadlineShow(true); }} style={{ width: i===headlineIdx ? 18 : 5, height:5, borderRadius:3, background: i===headlineIdx ? '#14B8A6' : 'rgba(255,255,255,0.2)', transition:'all 0.3s', cursor:'pointer' }} />
+                ))}
+              </div>
             </div>
 
-            <h1 style={{ fontFamily: 'var(--font-heading)', fontWeight: 900, fontSize: 'clamp(24px,3.5vw,40px)', color: '#FFFFFF', margin: '0 0 8px', lineHeight: 1.08, letterSpacing: '-0.5px' }}>
-              Find Your Perfect<br />
-              <span style={{ background: 'linear-gradient(135deg,#14B8A6,#5EEAD4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Doctor</span>
-            </h1>
-
-            {/* Description — what the dictionary does */}
-            <p style={{ fontSize: 13, color: 'rgba(220,235,255,0.95)', marginBottom: 14, lineHeight: 1.65, maxWidth: 520 }}>
-              India&apos;s most complete doctor directory — search by name, specialty, city, language, fee or availability.
-              Every doctor is <b style={{ color: '#14B8A6' }}>HCD-verified</b>. View full profiles, sub-specializations,
-              clinic details and book in-person or online consultations — free to browse, always.
-            </p>
-
-            {/* Live stats row */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' as const }}>
+            {/* Stats — bottom left */}
+            <div style={{ display:'flex', gap:0, borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:18 }}>
               {[
-                { v: isFallback ? FALLBACK.length : (allDoctors.length || (stats?.doctors ?? '37')), l: 'Verified Doctors', c: '#14B8A6' },
-                { v: onlineCount > 0 ? onlineCount : (stats?.onlineDoctors ?? 10),                  l: 'Available Now',   c: '#22C55E' },
-                { v: stats?.users ? Math.floor(stats.users/1000)+'k+' : '22k+',                     l: 'Patients',        c: '#A78BFA' },
-              ].map(({ v, l, c }) => (
-                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.22)', borderRadius: 8, padding: '5px 12px' }}>
-                  <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 15, color: c, textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>{v}</span>
-                  <span style={{ fontSize: 11, color: 'rgba(210,230,255,0.90)' }}>{l}</span>
+                { val: String(isFallback ? FALLBACK.length : (allDoctors.length || (stats?.doctors ?? '37'))), label:'Verified Doctors', color:'#60A5FA' },
+                { val: String(onlineCount > 0 ? onlineCount : (stats?.onlineDoctors ?? 33)), label:'Available Now', color:'#34D399' },
+                { val: '4.9★', label:'Avg Rating', color:'#FBBF24' },
+                { val: '12+', label:'Cities', color:'#C084FC' },
+              ].map(({ val, label, color }, i, arr) => (
+                <div key={label} style={{ display:'flex', alignItems:'center' }}>
+                  <div style={{ padding:'0 20px', textAlign:'center' }}>
+                    <div style={{ fontFamily:'var(--font-heading)', fontWeight:900, fontSize:22, color, lineHeight:1, letterSpacing:'-0.02em' }}>{val}</div>
+                    <div style={{ fontSize:11, color:'rgba(203,213,225,0.9)', marginTop:4, textTransform:'uppercase' as const, letterSpacing:'0.07em', fontWeight:600 }}>{label}</div>
+                  </div>
+                  {i < arr.length-1 && <div style={{ width:1, height:32, background:'rgba(255,255,255,0.18)' }} />}
                 </div>
               ))}
             </div>
-
-            {/* Search bar — shorter, focused */}
-            <div style={{ position: 'relative', marginBottom: 10, maxWidth: 560 }}>
-              <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 15, pointerEvents: 'none' }}>🔍</span>
-              <input
-                id="hc-doctor-search" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Name, specialty, hospital, city, language..."
-                style={{ width: '100%', boxSizing: 'border-box' as const, padding: '11px 40px 11px 40px', background: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.18)', borderRadius: 10, color: '#F0F6FF', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)', transition: 'border-color 0.2s' }}
-                onFocus={e => (e.target.style.borderColor = '#14B8A6')}
-                onBlur={e  => (e.target.style.borderColor = 'rgba(255,255,255,0.18)')}
-              />
-              {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 10 }}>✕</button>}
-            </div>
-
-            {/* Quick filter row — removed PIN, kept City + Sort + toggles */}
-            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' as const, alignItems: 'center', marginBottom: 12 }}>
-              <select value={city} onChange={e => setCity(e.target.value)} style={{ padding: '7px 10px', background: 'rgba(255,255,255,0.08)', border: `1px solid ${city ? 'rgba(20,184,166,0.4)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 7, color: city ? '#14B8A6' : 'rgba(148,163,184,0.8)', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-                {CITIES.map((c: string) => <option key={c} value={c === 'All Cities' ? '' : c} style={{ background: '#0D1B2E', color: '#E2E8F0' }}>{c}</option>)}
-              </select>
-              <select value={sort} onChange={e => setSort(e.target.value)} style={{ padding: '7px 10px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 7, color: 'rgba(148,163,184,0.8)', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
-                {SORT_OPTIONS.map((s: typeof SORT_OPTIONS[0]) => <option key={s.value} value={s.value} style={{ background: '#0D1B2E', color: '#E2E8F0' }}>{s.label}</option>)}
-              </select>
-              <button onClick={() => setAvailable((a: boolean) => !a)} style={{ padding: '7px 12px', borderRadius: 7, border: `1px solid ${available ? 'rgba(22,163,74,0.4)' : 'rgba(255,255,255,0.12)'}`, background: available ? 'rgba(22,163,74,0.14)' : 'rgba(255,255,255,0.06)', color: available ? '#22C55E' : 'rgba(148,163,184,0.7)', fontSize: 11, fontWeight: available ? 700 : 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                {available && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} />}
-                ● Available Now
-              </button>
-              <button onClick={() => setVerified((v: boolean) => !v)} style={{ padding: '7px 12px', borderRadius: 7, border: `1px solid ${verified ? 'rgba(20,184,166,0.4)' : 'rgba(255,255,255,0.12)'}`, background: verified ? 'rgba(20,184,166,0.14)' : 'rgba(255,255,255,0.06)', color: verified ? '#14B8A6' : 'rgba(148,163,184,0.7)', fontSize: 11, fontWeight: verified ? 700 : 500, cursor: 'pointer' }}>
-                ✓ HCD Verified
-              </button>
-              {hasFilters && <button onClick={clearFilters} style={{ padding: '7px 10px', borderRadius: 7, border: '1px solid rgba(225,29,72,0.3)', background: 'rgba(225,29,72,0.08)', color: '#E11D48', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>✕ Clear</button>}
-            </div>
-
-            {/* Rotating fact ticker */}
-            <div style={{ padding: '8px 12px', background: 'rgba(20,184,166,0.12)', border: '1px solid rgba(20,184,166,0.28)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 7, maxWidth: 520 }}>
-              <span style={{ fontSize: 12, flexShrink: 0 }}>💡</span>
-              <span style={{ fontSize: 11, color: 'rgba(210,230,255,0.95)', lineHeight: 1.45 }}>{PLATFORM_FACTS[factIdx]}</span>
-            </div>
           </div>
 
-          {/* ── Right: Doctor Spotlight carousel (48% of hero) ── */}
-          {(() => {
-            const spot = DOCTOR_SPOTLIGHT[spotlightIdx];
-            return (
-              <div style={{ background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 20, padding: '18px 20px', backdropFilter: 'blur(20px)', boxShadow: '0 20px 60px rgba(0,0,0,0.28)', display: 'flex', flexDirection: 'column' as const, minHeight: 420 }}>
+          {/* RIGHT: Search + filters on dark bg */}
+          <div style={{ display:'flex', flexDirection:'column' as const, justifyContent:'flex-end', gap:10 }}>
+            {/* Abstract medical illustration */}
+            <div style={{ marginBottom:6, display:'flex', justifyContent:'flex-end', gap:8, opacity:0.6 }}>
+              {['❤️','🧠','🦴','👁️','🫁','🩸'].map((em,i) => (
+                <span key={i} style={{ fontSize:18, filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>{em}</span>
+              ))}
+            </div>
+            {/* Search bar */}
+            <div style={{ position:'relative' }}>
+              <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', fontSize:14, pointerEvents:'none', color:'#94A3B8' }}>🔍</span>
+              <input
+                id="hc-doctor-search" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Doctor name, specialty, city, language..."
+                style={{ width:'100%', boxSizing:'border-box' as const, padding:'13px 36px 13px 42px', background:'rgba(255,255,255,0.96)', border:'1.5px solid rgba(255,255,255,0.3)', borderRadius:12, color:'#0C1A3A', fontSize:13, outline:'none', fontFamily:'var(--font-body)', transition:'all 0.2s', boxShadow:'0 4px 20px rgba(0,0,0,0.25)' }}
+                onFocus={e => { e.target.style.borderColor='#14B8A6'; e.target.style.background='#fff'; e.target.style.boxShadow='0 0 0 3px rgba(20,184,166,0.2),0 4px 20px rgba(0,0,0,0.25)'; }}
+                onBlur={e  => { e.target.style.borderColor='rgba(255,255,255,0.3)'; e.target.style.background='rgba(255,255,255,0.96)'; e.target.style.boxShadow='0 4px 20px rgba(0,0,0,0.25)'; }}
+              />
+              {search && <button onClick={() => setSearch('')} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', width:18, height:18, borderRadius:'50%', border:'none', background:'#E2E8F0', color:'#64748B', cursor:'pointer', fontSize:9 }}>✕</button>}
+            </div>
 
-                {/* Card header row */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: spot.tagColor, animation: 'hcPulseGreen 1.5s infinite' }} />
-                    <span style={{ fontSize: 10, color: spot.tagColor, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', fontWeight: 700 }}>{spot.tag}</span>
-                  </div>
-                  <span style={{ fontSize: 10, color: 'rgba(210,230,255,0.6)', fontFamily: 'var(--font-mono)' }}>{spotlightIdx + 1}/{DOCTOR_SPOTLIGHT.length}</span>
-                </div>
-
-                {/* Icon */}
-                <div style={{ fontSize: 32, marginBottom: 10 }}>{spot.icon}</div>
-
-                {/* Headline */}
-                <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17, color: '#FFFFFF', lineHeight: 1.25, marginBottom: 5 }}>
-                  {spot.headline}
-                </div>
-                <div style={{ fontSize: 11, color: spot.tagColor, fontWeight: 600, marginBottom: 12, lineHeight: 1.4 }}>
-                  {spot.subheadline}
-                </div>
-
-                {/* Body */}
-                <div style={{ fontSize: 12.5, color: 'rgba(220,238,255,0.93)', lineHeight: 1.72, marginBottom: 16, flex: 1, borderLeft: '3px solid rgba(255,255,255,0.15)', paddingLeft: 12 }}>
-                  {spot.body}
-                </div>
-
-                {/* Dots */}
-                <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginBottom: 14 }}>
-                  {DOCTOR_SPOTLIGHT.map((_: typeof DOCTOR_SPOTLIGHT[0], i: number) => (
-                    <div key={i} onClick={() => setSpotlightIdx(i)} style={{ width: i === spotlightIdx ? 18 : 5, height: 5, borderRadius: 3, background: i === spotlightIdx ? spot.tagColor : 'rgba(255,255,255,0.18)', cursor: 'pointer', transition: 'all 0.3s' }} />
-                  ))}
-                </div>
-
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.12)', marginBottom: 14 }} />
-
-                {/* Stats row — compact, 3 key numbers only */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                  {([
-                    [isFallback ? FALLBACK.length : (allDoctors.length || (stats?.doctors ?? '37')), 'Verified Doctors', '#14B8A6'],
-                    [onlineCount > 0 ? onlineCount : (stats?.onlineDoctors ?? 10), 'Available Now', '#22C55E'],
-                    [stats?.users ? Math.floor(stats.users/1000)+'k+' : '22k+', 'Patients', '#A78BFA'],
-                  ] as [string|number, string, string][]).map(([val, label, col]) => (
-                    <div key={label} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', background: 'rgba(255,255,255,0.08)', borderRadius: 9, border: '1px solid rgba(255,255,255,0.14)' }}>
-                      <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17, color: col, lineHeight: 1 }}>{val}</div>
-                      <div style={{ fontSize: 9, color: 'rgba(210,230,255,0.70)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginTop: 3 }}>{label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* CTA + Join as Doctor */}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => document.getElementById('hc-doctor-search')?.focus()}
-                    style={{ flex: 1, padding: '9px', borderRadius: 9, border: 'none', background: `linear-gradient(135deg,${spot.ctaColor}cc,${spot.ctaColor})`, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-heading)' }}
-                  >
-                    {spot.cta}
-                  </button>
-                  <button onClick={() => setShowAuth(true)} style={{ padding: '9px 14px', borderRadius: 9, border: '1px solid rgba(196,181,253,0.45)', background: 'rgba(109,40,217,0.18)', color: '#DDD6FE', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap' as const }}>
-                    🩺 Join
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* ── Specialty chip bar ────────────────────────────────────────────── */}
-      <div style={{ background: '#FFFFFF', borderBottom: '1px solid #C7D7F5', padding: '12px 5%', boxShadow: '0 2px 8px rgba(12,26,58,0.05)', overflowX: 'auto' }}>
-        <div style={{ display: 'flex', gap: 7, minWidth: 'max-content' }}>
-          {SPECIALTIES.map((s: typeof SPECIALTIES[0]) => {
-            const isActive = specialty === s.value || (s.value !== '' && normalizeSpec(specialty) === normalizeSpec(s.value));
-            return (
-              <button key={s.value} onClick={() => setSpecialty(isActive ? '' : s.value)} style={{ padding: '6px 14px', borderRadius: 100, cursor: 'pointer', transition: 'all 0.18s', border: `1px solid ${isActive ? 'rgba(13,148,136,0.35)' : '#C7D7F5'}`, background: isActive ? C.tealBg : '#fff', color: isActive ? C.teal : '#2A4070', fontSize: 12, fontWeight: isActive ? 700 : 500, fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap' as const }}>
-                {s.emoji} {s.label}
+            {/* Filters row */}
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const, alignItems:'center' }}>
+              <select value={city} onChange={e => setCity(e.target.value)} style={{ flex:1, minWidth:100, padding:'9px 10px', background: city ? 'rgba(20,184,166,0.15)' : 'rgba(255,255,255,0.10)', border:`1.5px solid ${city ? '#14B8A6' : 'rgba(255,255,255,0.2)'}`, borderRadius:9, color: city ? '#5EEAD4' : 'rgba(255,255,255,0.7)', fontSize:12, outline:'none', cursor:'pointer', fontWeight: city ? 700 : 400 }}>
+                {CITIES.map((c: string) => <option key={c} value={c === 'All Cities' ? '' : c}>{c}</option>)}
+              </select>
+              <select value={sort} onChange={e => setSort(e.target.value)} style={{ flex:1, minWidth:110, padding:'9px 10px', background:'rgba(255,255,255,0.10)', border:'1.5px solid rgba(255,255,255,0.2)', borderRadius:9, color:'rgba(255,255,255,0.7)', fontSize:12, outline:'none', cursor:'pointer' }}>
+                {SORT_OPTIONS.map((s: typeof SORT_OPTIONS[0]) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+              <button onClick={() => setAvailable((a: boolean) => !a)} style={{ padding:'9px 12px', borderRadius:9, border:`1.5px solid ${available ? '#34D399' : 'rgba(255,255,255,0.2)'}`, background: available ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.08)', color: available ? '#34D399' : 'rgba(255,255,255,0.65)', fontSize:12, fontWeight: available ? 700 : 400, cursor:'pointer', display:'flex', alignItems:'center', gap:4, whiteSpace:'nowrap' as const }}>
+                {available && <span style={{ width:5, height:5, borderRadius:'50%', background:'#34D399', display:'inline-block' }} />}Available Now
               </button>
-            );
-          })}
+              <button onClick={() => setVerified((v: boolean) => !v)} style={{ padding:'9px 12px', borderRadius:9, border:`1.5px solid ${verified ? '#14B8A6' : 'rgba(255,255,255,0.2)'}`, background: verified ? 'rgba(20,184,166,0.15)' : 'rgba(255,255,255,0.08)', color: verified ? '#5EEAD4' : 'rgba(255,255,255,0.65)', fontSize:12, fontWeight: verified ? 700 : 400, cursor:'pointer', whiteSpace:'nowrap' as const }}>
+                ✓ HCD Verified
+              </button>
+              {hasFilters && <button onClick={clearFilters} style={{ padding:'9px 10px', borderRadius:9, border:'1.5px solid rgba(239,68,68,0.4)', background:'rgba(239,68,68,0.12)', color:'#FCA5A5', fontSize:12, fontWeight:600, cursor:'pointer' }}>✕ Clear</button>}
+            </div>
+          </div>
         </div>
-      </div>
+      </div>{/* close dark navy hero card */}
+      </div>{/* close hero padding wrapper */}
+
+      {/* ── Teal accent separator ─────────────────────────────────────────── */}
+      <div style={{ height: 3, background: 'linear-gradient(90deg,transparent,#0D9488 20%,#14B8A6 50%,#0D9488 80%,transparent)', margin: '0 48px', opacity: 0.5 }} />
 
       {/* ── Content area: sidebar + results ──────────────────────────────── */}
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 5% 60px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 48px 80px', display: 'flex', gap: 24, alignItems: 'flex-start', background: '#F0F4FF' }}>
 
         {/* Left sidebar */}
         <Sidebar
@@ -1631,6 +1624,76 @@ export default function DoctorsPage() {
 
         {/* Results column */}
         <div style={{ flex: 1, minWidth: 0 }}>
+
+          {/* ── Quick-filter bar: Language + Gender + Trust signals ──────── */}
+          <div style={{ background:'#FFFFFF', border:'1px solid #DBEAFE', borderRadius:12, padding:'12px 16px', marginBottom:14, boxShadow:'0 1px 6px rgba(26,107,181,0.06)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' as const }}>
+
+              {/* Language selector */}
+              <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                <span style={{ fontSize:11, fontWeight:700, color:'#334E7A', textTransform:'uppercase' as const, letterSpacing:'0.07em', whiteSpace:'nowrap' as const }}>🗣 Language</span>
+                <select
+                  value={language} onChange={e => setLanguage(e.target.value)}
+                  style={{ padding:'5px 8px', background: language ? '#EFF6FF' : '#F8FAFF', border:`1.5px solid ${language ? '#1A6BB5' : '#DBEAFE'}`, borderRadius:8, color: language ? '#1A6BB5' : '#64748B', fontSize:12, outline:'none', cursor:'pointer', fontWeight: language ? 700 : 400 }}
+                >
+                  {LANGUAGES.map((l: string) => <option key={l} value={l === 'All Languages' ? '' : l}>{l}</option>)}
+                </select>
+              </div>
+
+              <div style={{ width:1, height:24, background:'#E2EBF8', flexShrink:0 }} />
+
+              {/* Gender preference */}
+              <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                <span style={{ fontSize:11, fontWeight:700, color:'#334E7A', textTransform:'uppercase' as const, letterSpacing:'0.07em', whiteSpace:'nowrap' as const }}>👤 Gender</span>
+                <div style={{ display:'flex', gap:4 }}>
+                  {(['Any','Male','Female'] as const).map((g) => {
+                    const active = g === 'Any' ? !gender : gender === g.toUpperCase();
+                    return (
+                      <button
+                        key={g}
+                        onClick={() => setGender(g === 'Any' ? '' : gender === g.toUpperCase() ? '' : g.toUpperCase())}
+                        style={{ padding:'4px 10px', borderRadius:7, border:`1.5px solid ${active ? '#1A6BB5' : '#DBEAFE'}`, background: active ? '#EFF6FF' : 'transparent', color: active ? '#1A6BB5' : '#64748B', fontSize:11, fontWeight: active ? 700 : 500, cursor:'pointer', transition:'all 0.15s' }}
+                      >{g}</button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Divider + Trust signals pushed right */}
+              <div style={{ width:1, height:24, background:'#E2EBF8', flexShrink:0 }} />
+              <div style={{ display:'flex', alignItems:'center', gap:14, marginLeft:'auto', flexWrap:'wrap' as const }}>
+                {[
+                  { sym:'✓', text:'HCD-Verified', color:'#0D9488' },
+                  { sym:'🔒', text:'Secure Booking', color:'#1A6BB5' },
+                  { sym:'💸', text:'Free to Browse', color:'#15803D' },
+                ].map(({ sym, text, color }) => (
+                  <div key={text} style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, fontWeight:600, color }}>
+                    <span>{sym}</span><span>{text}</span>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+
+            {/* Active filter chips row */}
+            {(language || gender) && (
+              <div style={{ display:'flex', gap:6, marginTop:8, alignItems:'center', flexWrap:'wrap' as const }}>
+                <span style={{ fontSize:10, color:'#94A3B8', fontWeight:600 }}>Active:</span>
+                {language && (
+                  <div style={{ display:'flex', alignItems:'center', gap:4, background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:100, padding:'2px 10px', fontSize:11, color:'#1A6BB5', fontWeight:600 }}>
+                    🗣 {language}
+                    <button onClick={() => setLanguage('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', fontSize:10, padding:'0 0 0 2px', lineHeight:1 }}>✕</button>
+                  </div>
+                )}
+                {gender && (
+                  <div style={{ display:'flex', alignItems:'center', gap:4, background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:100, padding:'2px 10px', fontSize:11, color:'#1A6BB5', fontWeight:600 }}>
+                    👤 {gender.charAt(0) + gender.slice(1).toLowerCase()}
+                    <button onClick={() => setGender('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', fontSize:10, padding:'0 0 0 2px', lineHeight:1 }}>✕</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Result count + view toggle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
@@ -1679,7 +1742,7 @@ export default function DoctorsPage() {
           ) : (
             <>
               {view === 'tile' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16, alignItems: 'stretch' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18, alignItems: 'stretch' }}>
                   {doctors.map((d: Doctor) => <DoctorTile key={d.id} d={d} onProfile={setProfileDoc} onBook={handleBook} />)}
                   {loading && [...Array(3)].map((_: unknown, i: number) => <SkeletonCard key={`sk-${i}`} view="tile" />)}
                 </div>
@@ -1714,15 +1777,38 @@ export default function DoctorsPage() {
             </>
           )}
 
-          {/* Join as Doctor CTA strip */}
-          <div style={{ marginTop: 44, padding: '24px 28px', borderRadius: 16, border: `1.5px dashed rgba(124,58,237,0.30)`, background: C.violetBg, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: '#0C1A3A', marginBottom: 4 }}>🩺 Are you a Doctor?</div>
-              <div style={{ fontSize: 13, color: '#1E3A6E', maxWidth: 480 }}>Join HealthConnect and get your verified HCD ID. Reach patients across India who are looking for specialists like you.</div>
+          {/* ── Premium Doctor CTA banner ──────────────────────────────── */}
+          <div style={{ marginTop: 44, borderRadius: 18, overflow: 'hidden', boxShadow: '0 8px 32px rgba(6,14,30,0.14)' }}>
+            <div style={{ background: 'linear-gradient(135deg,#060E1E 0%,#0A1E3D 45%,#0A3366 75%,#0D6B82 100%)', padding: '28px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' as const, position: 'relative', overflow: 'hidden' }}>
+              {/* Glow orbs */}
+              <div style={{ position:'absolute', top:-40, right:80, width:180, height:180, borderRadius:'50%', background:'radial-gradient(circle,rgba(13,148,136,0.18),transparent 70%)', pointerEvents:'none' }} />
+              <div style={{ position:'absolute', bottom:-30, left:'40%', width:140, height:140, borderRadius:'50%', background:'radial-gradient(circle,rgba(37,99,235,0.14),transparent 70%)', pointerEvents:'none' }} />
+
+              <div style={{ position:'relative', zIndex:1 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                  <div style={{ width:38, height:38, borderRadius:10, background:'rgba(13,148,136,0.25)', border:'1px solid rgba(20,184,166,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>🩺</div>
+                  <div style={{ fontFamily:'var(--font-heading)', fontWeight:800, fontSize:17, color:'#FFFFFF' }}>Are you a Doctor?</div>
+                </div>
+                <div style={{ fontSize:13, color:'rgba(148,163,184,0.9)', maxWidth:480, lineHeight:1.6 }}>
+                  Join HealthConnect, get your <strong style={{ color:'#5EEAD4' }}>verified HCD ID</strong> and reach patients across India looking for specialists like you. <span style={{ color:'rgba(148,163,184,0.6)' }}>Free to register.</span>
+                </div>
+                {/* Trust chips */}
+                <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' as const }}>
+                  {['✓ NMC Verified Badge','✓ Real-time Bookings','✓ Free Profile'].map(chip => (
+                    <span key={chip} style={{ fontSize:11, fontWeight:600, color:'rgba(94,234,212,0.85)', background:'rgba(13,148,136,0.12)', border:'1px solid rgba(20,184,166,0.22)', borderRadius:100, padding:'3px 10px' }}>{chip}</span>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowAuth(true)}
+                style={{ position:'relative', zIndex:1, padding:'12px 28px', borderRadius:12, border:'1.5px solid rgba(20,184,166,0.5)', background:'linear-gradient(135deg,rgba(13,148,136,0.3),rgba(20,184,166,0.2))', color:'#5EEAD4', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'var(--font-heading)', whiteSpace:'nowrap' as const, transition:'all 0.2s', boxShadow:'0 4px 16px rgba(13,148,136,0.2)', backdropFilter:'blur(8px)', flexShrink:0 }}
+                onMouseEnter={e => { e.currentTarget.style.background='linear-gradient(135deg,#0D9488,#14B8A6)'; e.currentTarget.style.color='#fff'; e.currentTarget.style.borderColor='#14B8A6'; }}
+                onMouseLeave={e => { e.currentTarget.style.background='linear-gradient(135deg,rgba(13,148,136,0.3),rgba(20,184,166,0.2))'; e.currentTarget.style.color='#5EEAD4'; e.currentTarget.style.borderColor='rgba(20,184,166,0.5)'; }}
+              >
+                Register as Doctor →
+              </button>
             </div>
-            <button onClick={() => setShowAuth(true)} style={{ padding: '11px 28px', borderRadius: 10, border: '1px solid rgba(124,58,237,0.35)', background: 'rgba(124,58,237,0.12)', color: C.violet, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-heading)', whiteSpace: 'nowrap' as const, transition: 'all 0.2s' }}>
-              Register as Doctor →
-            </button>
           </div>
         </div>
       </div>
@@ -1730,6 +1816,68 @@ export default function DoctorsPage() {
       {/* ── Doctor profile modal ──────────────────────────────────────────── */}
       {profileDoc && (
         <DoctorProfileModal d={profileDoc} onClose={() => setProfileDoc(null)} onBook={(d: Doctor) => { setProfileDoc(null); handleBook(d); }} />
+      )}
+
+      {/* ── Booking modal — opens directly here, no redirect needed ──────── */}
+      {showBookModal && bookingDoctorId && (
+        <BookAppointmentModal
+          preselectedDoctorId={bookingDoctorId}
+          onClose={() => { setShowBookModal(false); setBookingDoctorId(null); setBookingDoctorName(''); }}
+          onSuccess={(appt: any) => {
+            setShowBookModal(false);
+            setBookingDoctorId(null);
+            setBookedSuccessDoc({ name: bookingDoctorName, appt });
+            setBookingDoctorName('');
+            window.dispatchEvent(new CustomEvent('hcAppointmentBooked'));
+          }}
+        />
+      )}
+
+      {/* ── Centered Booking Success Modal ────────────────────────────────── */}
+      {bookedSuccessDoc && (
+        <div style={{ position:'fixed', inset:0, zIndex:99999, background:'rgba(2,8,20,0.82)', backdropFilter:'blur(12px)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div style={{ background:'#111E33', border:'1px solid rgba(20,184,166,0.3)', borderRadius:20, width:'100%', maxWidth:480, padding:'36px 32px', boxShadow:'0 32px 80px rgba(0,0,0,0.55)', textAlign:'center' }}>
+            {/* Success icon */}
+            <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(34,197,94,0.12)', border:'2px solid rgba(34,197,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, margin:'0 auto 20px', animation:'popIn 0.4s ease' }}>✅</div>
+
+            <h2 style={{ color:'#E8F0FE', fontSize:22, fontWeight:800, margin:'0 0 10px' }}>Appointment Requested!</h2>
+            <p style={{ color:'#7A8FAF', fontSize:14, lineHeight:1.6, margin:'0 0 24px' }}>
+              Your appointment with <strong style={{ color:'#14B8A6' }}>{bookedSuccessDoc.name || 'the doctor'}</strong> has been submitted and is <strong style={{ color:'#F59E0B' }}>awaiting confirmation</strong>. You'll be notified once the doctor confirms your slot.
+            </p>
+
+            {/* Info strips */}
+            <div style={{ background:'rgba(20,184,166,0.07)', border:'1px solid rgba(20,184,166,0.2)', borderRadius:12, padding:'16px 20px', marginBottom:20, textAlign:'left' }}>
+              {[
+                { icon:'⏳', label:'Status', value:'Pending Doctor Confirmation' },
+                { icon:'📅', label:'Date & Time', value: bookedSuccessDoc.appt?.date && bookedSuccessDoc.appt?.time ? `${bookedSuccessDoc.appt.date} · ${bookedSuccessDoc.appt.time}` : 'As selected' },
+                { icon:'💡', label:'Next Step', value:'Track & manage in My Appointments on your dashboard' },
+              ].map(row => (
+                <div key={row.label} style={{ display:'flex', gap:10, alignItems:'flex-start', marginBottom:10 }}>
+                  <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{row.icon}</span>
+                  <div>
+                    <div style={{ fontSize:11, color:'rgba(148,163,184,0.7)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>{row.label}</div>
+                    <div style={{ fontSize:13, color:'#C8D8F0', fontWeight:500, marginTop:1 }}>{row.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display:'flex', gap:10 }}>
+              <button
+                onClick={() => { setBookedSuccessDoc(null); router.push(getDashboardRoute(authUser?.role)); }}
+                style={{ flex:1, padding:'13px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#0D9488,#14B8A6)', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                📋 Go to My Appointments →
+              </button>
+              <button
+                onClick={() => setBookedSuccessDoc(null)}
+                style={{ padding:'13px 20px', borderRadius:10, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'#7A8FAF', fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
+                Close
+              </button>
+            </div>
+          </div>
+          <style>{`@keyframes popIn{from{transform:scale(0.6);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+        </div>
       )}
 
       {/* ── Auth modal ────────────────────────────────────────────────────── */}

@@ -1,174 +1,152 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-// Free Unsplash photos — healthcare themed, no auth needed
-const CARDS = [
+const BASE_CARDS = [
   {
-    stat: '10,000+',
-    label: 'Patients Served',
-    sub: 'Across India',
-    desc: 'From Delhi to Kochi, patients use HealthConnect to manage their complete health record, track medications, book verified doctors, and join communities that understand their conditions.',
-    cta: 'Create Patient Profile',
-    href: '/?home=1#signup',
-    color: '#1A6BB5',
-    photo: 'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=600&q=80',
-    photoAlt: 'Patient with doctor',
+    stat: '10,000+', label: 'Patients Served', sub: 'Across India',
+    desc: 'From Delhi to Kochi, patients across India use HealthConnect to organise their health records, track medications, book verified doctors, and connect with health communities. Free to get started.',
+    cta: 'Create Your Profile', href: '/?home=1#signup', color: '#1A6BB5',
+    photo: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=700&q=80',
+    countKey: 'patients' as const,
   },
   {
-    stat: '37+',
-    label: 'NMC-Verified Doctors',
-    sub: 'With HCD Identity',
-    desc: 'Every doctor on HealthConnect carries a tamper-proof HCD ID verified by NMC/MCI. Average booking time: 1 min 42 sec. Patients see real availability and genuine reviews before booking.',
-    cta: 'Find a Doctor',
-    href: '/doctors',
-    color: '#7C3AED',
-    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=600&q=80',
-    photoAlt: 'Doctor consultation',
+    stat: '37+', label: 'Verified Doctors', sub: 'NMC/MCI with HCD ID',
+    desc: 'Every doctor carries a tamper-proof HCD identity verified by NMC/MCI. See real-time availability. Book in under 2 minutes. Read genuine patient reviews. In-person, video, or home visit.',
+    cta: 'Find a Doctor', href: '/doctors', color: '#7C3AED',
+    photo: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?w=700&q=80',
+    countKey: 'doctors' as const,
   },
   {
-    stat: '18+',
-    label: 'Health Communities',
-    sub: 'Specialist-Moderated',
-    desc: 'Anonymous, condition-specific communities for diabetes, cardiac care, mental health and more. Peer-supported patients show 37% better health outcomes (JAMA 2022). Post freely, stay private.',
-    cta: 'Find Your Community',
-    href: '/communities',
-    color: '#059669',
-    photo: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&q=80',
-    photoAlt: 'Health community support group',
+    stat: '18+', label: 'Health Communities', sub: 'Specialist-Moderated',
+    desc: 'Anonymous condition-specific groups for diabetes, cardiac care, mental health, PCOD and more. Browse freely. Post with a free account. Verified specialists moderate every group.',
+    cta: 'Explore Communities', href: '/communities', color: '#059669',
+    photo: 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=700&q=80',
+    countKey: 'communities' as const,
   },
   {
-    stat: '340+',
-    label: 'Partner Hospitals',
-    sub: 'AB-PMJAY Integrated',
-    desc: 'Find hospitals by location, specialty, and bed availability. Cashless treatment at 340+ partner hospitals under Ayushman Bharat. Emergency SOS with live hospital locator.',
-    cta: 'Find Hospitals',
-    href: '/hospitals',
-    color: '#D97706',
-    photo: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=600&q=80',
-    photoAlt: 'Modern hospital building',
+    stat: '340+', label: 'Partner Hospitals', sub: 'AB-PMJAY Integrated',
+    desc: 'Find hospitals with live bed availability across India. Integrated with Ayushman Bharat PM-JAY for cashless treatment. Emergency SOS with live locator built in.',
+    cta: 'Find Hospitals', href: '/hospitals', color: '#D97706',
+    photo: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=700&q=80',
+    countKey: 'hospitals' as const,
   },
 ];
 
 export default function PlatformNumbers() {
-  const [active, setActive] = useState(1); // default: doctors card expanded
+  const [active, setActive] = useState(1);
+  const [counts, setCounts] = useState({ doctors:'37+', communities:'18+', hospitals:'340+', patients:'10,000+' });
+
+  useEffect(() => {
+    fetch('/public/doctors?limit=500')
+      .then(r=>r.json())
+      .then(d=>{
+        const t = d?.data?.total ?? d?.total ?? (Array.isArray(d?.data)?d.data.length:null);
+        if(t>0) setCounts(p=>({...p,doctors:`${t}+`}));
+      }).catch(()=>{});
+    fetch('/api/communities')
+      .then(r=>r.json())
+      .then(d=>{
+        const arr = d?.data?.communities ?? d?.communities ?? d?.data ?? [];
+        const t = d?.data?.total ?? d?.total ?? (Array.isArray(arr)?arr.length:null);
+        if(t>0) setCounts(p=>({...p,communities:`${t}+`}));
+      }).catch(()=>{});
+  }, []);
+
+  const cards = BASE_CARDS.map(c => ({
+    ...c,
+    stat: c.countKey === 'doctors' ? counts.doctors
+        : c.countKey === 'communities' ? counts.communities
+        : c.countKey === 'hospitals' ? counts.hospitals
+        : counts.patients,
+  }));
 
   return (
-    <section style={{ background: '#fff', padding: '80px 0 0' }}>
+    <section style={{ background:'#fff', padding:'72px 0 0' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
 
         .pn-card {
-          position: relative; overflow: hidden; cursor: pointer;
-          transition: flex 0.55s cubic-bezier(0.4,0,0.2,1), background 0.3s;
-          border-right: 1px solid #E8F0F8;
+          position:relative;overflow:hidden;cursor:pointer;
+          transition:flex 0.5s cubic-bezier(0.4,0,0.2,1);
+          border-right:1px solid rgba(255,255,255,0.06);
         }
-        .pn-card:last-child { border-right: none; }
-        .pn-card.collapsed { flex: 1; }
-        .pn-card.expanded  { flex: 3.2; }
-        .pn-card:hover .pn-stat { opacity: 1; }
+        .pn-card:first-child { border-radius: 16px 0 0 16px; }
+        .pn-card:last-child  { border-radius: 0 16px 16px 0; border-right:none; }
+        .pn-card.col { flex:1; }
+        .pn-card.exp { flex:2.4; }
 
-        .pn-photo {
-          position: absolute; inset: 0;
-          background-size: cover; background-position: center;
-          transition: opacity 0.5s ease;
-        }
-        .pn-photo-overlay {
-          position: absolute; inset: 0;
-          transition: opacity 0.4s ease;
-        }
+        .pn-photo{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity 0.45s ease;}
+        .pn-overlay{position:absolute;inset:0;transition:background 0.4s ease;}
 
-        .pn-content-collapsed {
-          position: absolute; bottom: 0; left: 0; right: 0;
-          padding: 28px 24px;
-          transition: opacity 0.3s ease;
-        }
-        .pn-content-expanded {
-          position: absolute; bottom: 0; left: 0; right: 0;
-          padding: 40px 44px;
-          transition: opacity 0.35s ease;
-        }
+        .pn-col-txt{position:absolute;bottom:0;left:0;right:0;padding:20px 18px;}
+        .pn-exp-txt{position:absolute;bottom:0;left:0;right:0;padding:28px 34px;}
 
-        @keyframes pnFadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .pn-anim { animation: pnFadeIn 0.4s ease 0.15s both; }
+        @keyframes pnIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .pn-in{animation:pnIn 0.38s ease 0.08s both;}
 
-        .pn-cta-btn {
-          display: inline-flex; align-items: center; gap: 8px;
-          padding: 12px 24px; border-radius: 3px; border: none;
-          background: #fff; font-family: 'Sora',sans-serif;
-          font-size: 13px; font-weight: 700; cursor: pointer;
-          text-decoration: none; text-transform: uppercase; letter-spacing: 0.05em;
-          transition: all 0.2s;
+        .pn-cta{display:inline-flex;align-items:center;gap:6px;background:#fff;padding:9px 18px;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;text-decoration:none;text-transform:uppercase;letter-spacing:0.06em;transition:gap 0.2s;}
+        .pn-cta:hover{gap:10px;}
+
+        /* Heading — synced with Hero */
+        .pn-heading{font-family:'Sora',sans-serif;font-size:clamp(2.1rem,3.4vw,3.8rem);font-weight:900;color:#0A1628;letter-spacing:-0.03em;line-height:1.1;margin:0;}
+
+        @media(max-width:768px){
+          .pn-cards{flex-direction:column!important;height:auto!important;}
+          .pn-card{flex:1!important;min-height:280px;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.06);}
+          .pn-card:first-child{border-radius:16px 16px 0 0!important;}
+          .pn-card:last-child{border-radius:0 0 16px 16px!important;}
         }
-        .pn-cta-btn:hover { transform: translateX(3px); }
       `}</style>
 
-      {/* Section header */}
-      <div style={{ maxWidth:1280, margin:'0 auto', padding:'0 64px 48px' }}>
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
+      {/* Header */}
+      <div style={{ maxWidth:1280, margin:'0 auto', padding:'0 64px 40px' }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
           <div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
-              <div style={{ width:32, height:1, background:'#1A6BB5' }}/>
-              <span style={{ fontSize:11,fontWeight:700,color:'#1A6BB5',letterSpacing:'0.18em',textTransform:'uppercase',fontFamily:"'DM Sans',sans-serif" }}>Platform at a Glance</span>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+              <div style={{ width:28, height:1, background:'#1A6BB5' }}/>
+              <span style={{ fontSize:11, fontWeight:700, color:'#1A6BB5', letterSpacing:'0.18em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif" }}>Platform at a Glance</span>
             </div>
-            <h2 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(2rem,3vw,2.8rem)', fontWeight:900, color:'#0A1628', letterSpacing:'-0.03em', lineHeight:1.1, margin:0 }}>
-              HealthConnect<br/>by the Numbers
-            </h2>
+            <h2 className="pn-heading">HealthConnect<br/>by the Numbers</h2>
           </div>
-          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, color:'#4A6B8A', maxWidth:360, textAlign:'right', lineHeight:1.65, margin:0 }}>
-            Click any card to learn more about how HealthConnect is changing healthcare across India.
+          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, color:'#4A6B8A', maxWidth:320, lineHeight:1.6, margin:0 }}>
+            Click any card to see how each part of the platform works.
           </p>
         </div>
       </div>
 
-      {/* Expandable card row */}
-      <div style={{ display:'flex', height:500 }}>
-        {CARDS.map((c, i) => {
-          const isExp = active === i;
-          return (
-            <div
-              key={i}
-              className={`pn-card ${isExp?'expanded':'collapsed'}`}
-              onClick={() => setActive(i)}
-            >
-              {/* Photo background */}
-              <div
-                className="pn-photo"
-                style={{ backgroundImage:`url(${c.photo})`, opacity: isExp ? 1 : 0.35 }}
-              />
-              {/* Overlay */}
-              <div
-                className="pn-photo-overlay"
-                style={{ background: isExp
-                  ? `linear-gradient(to top, ${c.color}EE 0%, ${c.color}99 40%, transparent 70%)`
-                  : `linear-gradient(to top, #0A1628F0 0%, #0A162880 60%, transparent 100%)`
-                }}
-              />
-
-              {/* COLLAPSED state */}
-              {!isExp && (
-                <div className="pn-content-collapsed">
-                  <div style={{ fontSize:42,fontWeight:900,color:'#fff',letterSpacing:'-0.03em',lineHeight:1,fontFamily:"'Sora',sans-serif",marginBottom:6 }}>{c.stat}</div>
-                  <div style={{ fontSize:13,fontWeight:700,color:'rgba(255,255,255,0.9)',fontFamily:"'DM Sans',sans-serif" }}>{c.label}</div>
-                  <div style={{ fontSize:11,color:'rgba(255,255,255,0.55)',marginTop:3,fontFamily:"'DM Sans',sans-serif" }}>{c.sub}</div>
-                </div>
-              )}
-
-              {/* EXPANDED state */}
-              {isExp && (
-                <div className="pn-content-expanded pn-anim">
-                  <div style={{ fontSize:13,fontWeight:700,color:'rgba(255,255,255,0.7)',letterSpacing:'0.12em',textTransform:'uppercase',fontFamily:"'DM Sans',sans-serif",marginBottom:10 }}>{c.sub}</div>
-                  <div style={{ fontSize:58,fontWeight:900,color:'#fff',letterSpacing:'-0.04em',lineHeight:1,fontFamily:"'Sora',sans-serif",marginBottom:8 }}>{c.stat}</div>
-                  <div style={{ fontSize:22,fontWeight:800,color:'#fff',fontFamily:"'Sora',sans-serif",marginBottom:16,letterSpacing:'-0.01em' }}>{c.label}</div>
-                  <p style={{ fontSize:15,color:'rgba(255,255,255,0.82)',lineHeight:1.7,maxWidth:400,margin:'0 0 28px',fontFamily:"'DM Sans',sans-serif" }}>{c.desc}</p>
-                  <Link href={c.href} className="pn-cta-btn" style={{ color:c.color }}>
-                    {c.cta} →
-                  </Link>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Cards */}
+      <div style={{ padding:'0 48px' }}>
+        <div className="pn-cards" style={{ display:'flex', height:350, borderRadius:16, overflow:'hidden', boxShadow:'0 8px 40px rgba(15,30,60,0.12)' }}>
+          {cards.map((c,i) => {
+            const isExp = active===i;
+            return (
+              <div key={i} className={`pn-card ${isExp?'exp':'col'}`} onClick={()=>setActive(i)}>
+                <div className="pn-photo" style={{ backgroundImage:`url(${c.photo})`, opacity:isExp?1:0.36 }}/>
+                <div className="pn-overlay" style={{ background:isExp
+                  ? `linear-gradient(to top,${c.color}EE 0%,${c.color}88 45%,transparent 72%)`
+                  : 'linear-gradient(to top,#0A1628F2 0%,#0A162878 65%,transparent 100%)'
+                }}/>
+                {!isExp && (
+                  <div className="pn-col-txt">
+                    <div style={{ fontSize:36, fontWeight:900, color:'#fff', letterSpacing:'-0.03em', lineHeight:1, fontFamily:"'Sora',sans-serif", marginBottom:4 }}>{c.stat}</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.88)', fontFamily:"'DM Sans',sans-serif" }}>{c.label}</div>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', marginTop:2, fontFamily:"'DM Sans',sans-serif" }}>{c.sub}</div>
+                  </div>
+                )}
+                {isExp && (
+                  <div className="pn-exp-txt pn-in">
+                    <div style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.6)', letterSpacing:'0.12em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif", marginBottom:5 }}>{c.sub}</div>
+                    <div style={{ fontSize:50, fontWeight:900, color:'#fff', letterSpacing:'-0.04em', lineHeight:1, fontFamily:"'Sora',sans-serif", marginBottom:5 }}>{c.stat}</div>
+                    <div style={{ fontSize:19, fontWeight:800, color:'#fff', fontFamily:"'Sora',sans-serif", marginBottom:10, letterSpacing:'-0.01em' }}>{c.label}</div>
+                    <p style={{ fontSize:13, color:'rgba(255,255,255,0.78)', lineHeight:1.65, maxWidth:340, margin:'0 0 18px', fontFamily:"'DM Sans',sans-serif" }}>{c.desc}</p>
+                    <Link href={c.href} className="pn-cta" style={{ color:c.color }}>{c.cta} →</Link>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

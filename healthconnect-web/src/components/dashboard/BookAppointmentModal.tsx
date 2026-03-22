@@ -1,8 +1,10 @@
 'use client';
 // src/components/dashboard/BookAppointmentModal.tsx
-// Book-appointment flow — 4 steps
-// FIXED: uses /public/doctors/:id/availability (no auth required)
-//        shows already-booked slots as greyed out
+// FIXED:
+//  1. HOME_VISIT added as third consultation type
+//  2. Doctor search response parsing fixed (data.data.doctors vs data.data)
+//  3. Meeting link auto-generated for TELECONSULT using appointment id
+//  4. All 3 types always shown — doctor can configure which they offer
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
@@ -65,7 +67,6 @@ function getNext14Days() {
   });
 }
 
-// Convert a slot label like "9:30 AM" + a date → Date object
 function slotToDate(date: Date, slotLabel: string): Date {
   const [timePart, period] = slotLabel.split(' ');
   const [h, m] = timePart.split(':').map(Number);
@@ -82,7 +83,18 @@ const inp: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const SPECIALTIES = ['Cardiology','Neurology','Orthopedics','Dermatology','Pediatrics','Gynecology','Endocrinology','Psychiatry','General Medicine','ENT','Ophthalmology','Urology','Gastroenterology','Pulmonology','Nephrology'];
+const SPECIALTIES = [
+  'Cardiology','Neurology','Orthopedics','Dermatology','Pediatrics',
+  'Gynecology','Endocrinology','Psychiatry','General Medicine',
+  'ENT','Ophthalmology','Urology','Gastroenterology','Pulmonology','Nephrology',
+];
+
+// Consultation type definitions — all 3 always available
+const CONSULT_TYPES = [
+  { v: 'IN_PERSON',   l: '🏥 In Person',  desc: 'Visit the clinic' },
+  { v: 'TELECONSULT', l: '📹 Video Call',  desc: 'Online consultation' },
+  { v: 'HOME_VISIT',  l: '🏠 Home Visit',  desc: 'Doctor visits you' },
+] as const;
 
 export default function BookAppointmentModal({ onClose, onSuccess, preselectedDoctorId }: Props) {
   const [step,         setStep]         = useState<1|2|3|4>(1);
@@ -105,14 +117,19 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
 
   const days = getNext14Days();
 
-  // ── Load initial doctor list or preselected doctor ──────────────────────
+  // ── Load initial doctor or preselected ──────────────────────────────────
   useEffect(() => {
     if (preselectedDoctorId) {
       api.get(`/public/doctors/${preselectedDoctorId}`)
         .then((r: any) => {
-          const doc = r?.data?.data;
-          if (doc) { setSelectedDoc(doc); setStep(2); }
-          else searchDoctors();
+          // Handle both response shapes
+          const doc = r?.data?.data?.doctor ?? r?.data?.data ?? r?.data?.doctor ?? r?.data;
+          if (doc?.id) {
+            setSelectedDoc(doc);
+            setStep(2);
+          } else {
+            searchDoctors();
+          }
         })
         .catch(() => searchDoctors());
     } else {
@@ -127,7 +144,9 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
       if (search)    params.set('search', search);
       if (specialty) params.set('specialty', specialty);
       const r: any = await api.get(`/public/doctors?${params}`);
-      setDoctors(r?.data?.data ?? []);
+      // FIX: correct response shape — data.data.doctors or data.data (array) or data.doctors
+      const raw = r?.data?.data?.doctors ?? r?.data?.data ?? r?.data?.doctors ?? r?.data ?? [];
+      setDoctors(Array.isArray(raw) ? raw : []);
     } catch {
       setDoctors([]);
     } finally {
@@ -140,15 +159,14 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
     return () => clearTimeout(t);
   }, [search, specialty]);
 
-  // ── Load doctor availability when entering step 2 ───────────────────────
-  // Uses PUBLIC endpoint — no auth needed
+  // ── Load availability when entering step 2 ──────────────────────────────
   useEffect(() => {
     if (step !== 2 || !selectedDoc) return;
     setLoadingAvail(true);
     api.get(`/public/doctors/${selectedDoc.id}/availability`)
       .then((r: any) => {
-        setAvailability(r?.data?.data?.availability ?? []);
-        setBookedSlots(r?.data?.data?.bookedSlots ?? []);
+        setAvailability(r?.data?.data?.availability ?? r?.data?.availability ?? []);
+        setBookedSlots(r?.data?.data?.bookedSlots ?? r?.data?.bookedSlots ?? []);
       })
       .catch(() => {
         setAvailability([]);
@@ -157,7 +175,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
       .finally(() => setLoadingAvail(false));
   }, [step, selectedDoc]);
 
-  // ── Get available slots for a given date ────────────────────────────────
   const getSlotsForDate = (date: Date): { label: string; booked: boolean }[] => {
     const dayOfWeek = date.getDay();
     const avail = availability.find(a => a.dayOfWeek === dayOfWeek && a.isActive);
@@ -197,22 +214,36 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
         durationMinutes: 30,
         type:            apptType,
         reasonForVisit:  reason.trim(),
-        symptoms:        symptoms.trim() ? symptoms.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
+        symptoms:        symptoms.trim()
+          ? symptoms.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : [],
       };
 
       const r: any = await api.post('/appointments', payload);
       const appt = r?.data?.data ?? payload;
+
+      // Auto-generate Jitsi link for video consultations
+      const meetingLink = apptType === 'TELECONSULT'
+        ? (appt.meetingLink ?? `https://meet.jit.si/hc-${appt.id ?? Date.now()}`)
+        : undefined;
+
+      const docName = selectedDoc.name ??
+        `Dr. ${selectedDoc.firstName ?? ''} ${selectedDoc.lastName ?? ''}`.trim();
+
       const confirmed = {
         ...appt,
-        doctorName:  `Dr. ${selectedDoc.firstName} ${selectedDoc.lastName}`,
+        doctorName:  docName,
         scheduledAt: scheduledAt.toISOString(),
         time:        selectedTime,
         date:        selectedDate.label,
         type:        apptType,
+        meetingLink,
       };
       setBookedAppt(confirmed);
       setStep(4);
       onSuccess?.(confirmed);
+      // Notify all dashboard components
+      window.dispatchEvent(new CustomEvent('hcAppointmentBooked'));
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.response?.data?.error ?? 'Booking failed. Please try again.';
       setError(msg);
@@ -233,18 +264,24 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div>
               <h2 style={{ color:C.txt, fontSize:20, fontWeight:800, margin:'0 0 4px' }}>
-                {step===1?'🔍 Find a Doctor':step===2?'📅 Select Date & Time':step===3?'✏️ Confirm Booking':'🎉 Booking Confirmed!'}
+                {step===1 ? '🔍 Find a Doctor'
+                : step===2 ? '📅 Select Date & Time'
+                : step===3 ? '✏️ Confirm Booking'
+                : '🎉 Booking Confirmed!'}
               </h2>
               <p style={{ color:C.txt2, fontSize:13, margin:0 }}>
-                {step===1?'Search from verified specialists':step===2?`Booking with Dr. ${selectedDoc?.firstName} ${selectedDoc?.lastName}`:step===3?'Review and confirm your appointment':'Your appointment has been booked'}
+                {step===1 ? 'Search from verified specialists'
+                : step===2 ? `Booking with ${selectedDoc?.name ?? `Dr. ${selectedDoc?.firstName} ${selectedDoc?.lastName}`}`
+                : step===3 ? 'Review and confirm your appointment'
+                : 'Your appointment has been booked'}
               </p>
             </div>
             <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'rgba(255,255,255,0.06)', border:`1px solid ${C.border}`, color:C.txt2, cursor:'pointer', fontSize:16 }}>✕</button>
           </div>
-          {step!==4&&(
+          {step !== 4 && (
             <div style={{ display:'flex', gap:6, marginTop:16 }}>
-              {[1,2,3].map(s=>(
-                <div key={s} style={{ flex:1, height:3, borderRadius:100, background:s<=step?C.teal:'rgba(255,255,255,0.08)', transition:'background 0.3s' }} />
+              {[1,2,3].map(s => (
+                <div key={s} style={{ flex:1, height:3, borderRadius:100, background:s<=step ? C.teal : 'rgba(255,255,255,0.08)', transition:'background 0.3s' }} />
               ))}
             </div>
           )}
@@ -254,57 +291,57 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
           {/* ── STEP 1: Doctor search ── */}
-          {step===1&&(
+          {step === 1 && (
             <>
               <div style={{ display:'flex', gap:10, marginBottom:16 }}>
                 <div style={{ flex:1, position:'relative' }}>
                   <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:C.txt2, fontSize:14 }}>🔍</span>
-                  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name, specialty, city…" style={{ ...inp, paddingLeft:36 }} autoFocus />
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, specialty, city…" style={{ ...inp, paddingLeft:36 }} autoFocus />
                 </div>
-                <select value={specialty} onChange={e=>setSpecialty(e.target.value)} style={{ ...inp, width:'auto', minWidth:160, cursor:'pointer' }}>
+                <select value={specialty} onChange={e => setSpecialty(e.target.value)} style={{ ...inp, width:'auto', minWidth:160, cursor:'pointer' }}>
                   <option value="">All Specialties</option>
-                  {SPECIALTIES.map(s=><option key={s} value={s}>{s}</option>)}
+                  {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
 
-              {searching?(
+              {searching ? (
                 <div style={{ textAlign:'center', padding:40, color:C.txt2 }}>
                   <div style={{ width:28, height:28, border:`2px solid ${C.tealGlow}`, borderTop:`2px solid ${C.teal}`, borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 10px' }} />
                   Searching doctors…
                 </div>
-              ):doctors.length===0?(
+              ) : doctors.length === 0 ? (
                 <div style={{ textAlign:'center', padding:40, color:C.txt2 }}>
                   <div style={{ fontSize:40, marginBottom:12 }}>🔍</div>
                   <p style={{ margin:'0 0 8px', fontWeight:600, color:C.txt }}>No verified doctors found</p>
                   <p style={{ margin:0, fontSize:12 }}>Try a different search term or specialty</p>
                 </div>
-              ):(
+              ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  {doctors.map((doc:any)=>(
+                  {doctors.map((doc: any) => (
                     <div
                       key={doc.id}
-                      onClick={()=>{ setSelectedDoc(doc); setStep(2); }}
+                      onClick={() => { setSelectedDoc(doc); setStep(2); }}
                       style={{ padding:'16px 18px', borderRadius:14, border:`1px solid ${C.border}`, background:C.card, cursor:'pointer', display:'flex', alignItems:'center', gap:14, transition:'all 0.15s' }}
-                      onMouseEnter={e=>(e.currentTarget.style.borderColor=C.teal)}
-                      onMouseLeave={e=>(e.currentTarget.style.borderColor=C.border)}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = C.teal)}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                     >
                       <div style={{ width:48, height:48, borderRadius:'50%', background:`linear-gradient(135deg,${C.tealDk},${C.teal})`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>👨‍⚕️</div>
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:15, fontWeight:700, color:C.txt, marginBottom:4 }}>
-                          Dr. {doc.firstName} {doc.lastName}
-                          {doc.isVerified&&<span style={{ marginLeft:8, fontSize:10, background:'rgba(34,197,94,0.15)', color:C.green, border:'1px solid rgba(34,197,94,0.2)', padding:'2px 8px', borderRadius:100 }}>✓ Verified</span>}
+                          {doc.name ?? `Dr. ${doc.firstName ?? ''} ${doc.lastName ?? ''}`.trim()}
+                          {doc.isVerified && <span style={{ marginLeft:8, fontSize:10, background:'rgba(34,197,94,0.15)', color:C.green, border:'1px solid rgba(34,197,94,0.2)', padding:'2px 8px', borderRadius:100 }}>✓ HCD Verified</span>}
                         </div>
                         <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-                          <span style={{ fontSize:12, color:C.txt2 }}>🩺 {doc.specialization??'General Medicine'}</span>
-                          {doc.city&&<span style={{ fontSize:12, color:C.txt2 }}>📍 {doc.city}{doc.state?`, ${doc.state}`:''}</span>}
-                          {doc.experienceYears&&<span style={{ fontSize:12, color:C.txt2 }}>⏱ {doc.experienceYears} yrs exp</span>}
-                          {doc.languagesSpoken?.length>0&&<span style={{ fontSize:12, color:C.txt2 }}>🗣 {doc.languagesSpoken.slice(0,2).join(', ')}</span>}
+                          <span style={{ fontSize:12, color:C.txt2 }}>🩺 {doc.specialization ?? doc.specialty ?? 'General Medicine'}</span>
+                          {doc.city && <span style={{ fontSize:12, color:C.txt2 }}>📍 {doc.city}{doc.state ? `, ${doc.state}` : ''}</span>}
+                          {(doc.experienceYears ?? doc.experience) && <span style={{ fontSize:12, color:C.txt2 }}>⏱ {doc.experienceYears ?? doc.experience} yrs exp</span>}
+                          {(doc.languagesSpoken ?? doc.languages)?.length > 0 && <span style={{ fontSize:12, color:C.txt2 }}>🗣 {(doc.languagesSpoken ?? doc.languages).slice(0,2).join(', ')}</span>}
                         </div>
                       </div>
                       <div style={{ textAlign:'right', flexShrink:0 }}>
-                        {doc.averageRating>0&&<div style={{ fontSize:13, fontWeight:700, color:C.amber, marginBottom:4 }}>★ {doc.averageRating.toFixed(1)}</div>}
-                        {doc.consultationFee&&<div style={{ fontSize:13, color:C.teal, fontWeight:700 }}>₹{doc.consultationFee}</div>}
-                        {doc.isAvailableOnline&&<div style={{ fontSize:10, color:C.green, marginTop:3 }}>● Online</div>}
+                        {(doc.averageRating ?? doc.rating) > 0 && <div style={{ fontSize:13, fontWeight:700, color:C.amber, marginBottom:4 }}>★ {(doc.averageRating ?? doc.rating).toFixed(1)}</div>}
+                        {(doc.consultationFee ?? doc.fee) && <div style={{ fontSize:13, color:C.teal, fontWeight:700 }}>₹{doc.consultationFee ?? doc.fee}</div>}
+                        {doc.isAvailableOnline && <div style={{ fontSize:10, color:C.green, marginTop:3 }}>● Online Now</div>}
                       </div>
                     </div>
                   ))}
@@ -314,49 +351,55 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
           )}
 
           {/* ── STEP 2: Date & Time ── */}
-          {step===2&&selectedDoc&&(
+          {step === 2 && selectedDoc && (
             <>
-              {/* Doctor summary bar */}
+              {/* Doctor summary */}
               <div style={{ padding:'14px 16px', borderRadius:12, border:`1px solid ${C.borderHi}`, background:C.tealGlow, display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
                 <div style={{ width:44, height:44, borderRadius:'50%', background:`linear-gradient(135deg,${C.tealDk},${C.teal})`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👨‍⚕️</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:C.txt }}>Dr. {selectedDoc.firstName} {selectedDoc.lastName}</div>
-                  <div style={{ fontSize:12, color:C.txt2 }}>{selectedDoc.specialization??'General Medicine'}{selectedDoc.city?` · ${selectedDoc.city}`:''}</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.txt }}>{selectedDoc.name ?? `Dr. ${selectedDoc.firstName ?? ''} ${selectedDoc.lastName ?? ''}`.trim()}</div>
+                  <div style={{ fontSize:12, color:C.txt2 }}>{selectedDoc.specialization ?? selectedDoc.specialty ?? 'General Medicine'}{selectedDoc.city ? ` · ${selectedDoc.city}` : ''}</div>
                 </div>
-                <button onClick={()=>{ setSelectedDoc(null); setStep(1); }} style={{ background:'none', border:`1px solid ${C.border}`, color:C.txt2, cursor:'pointer', fontSize:12, padding:'4px 10px', borderRadius:6 }}>Change →</button>
+                <button onClick={() => { setSelectedDoc(null); setStep(1); }} style={{ background:'none', border:`1px solid ${C.border}`, color:C.txt2, cursor:'pointer', fontSize:12, padding:'4px 10px', borderRadius:6 }}>Change →</button>
               </div>
 
-              {/* Consultation type */}
+              {/* Consultation type — all 3 shown */}
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:10 }}>Consultation Type</div>
                 <div style={{ display:'flex', gap:8 }}>
-                  {[
-                    { v:'IN_PERSON',  l:'👤 In Person',  show:true },
-                    { v:'TELECONSULT',l:'📹 Video Call',  show:selectedDoc.isAvailableOnline??true },
-                  ].filter(t=>t.show).map(t=>(
-                    <button key={t.v} onClick={()=>setApptType(t.v as any)} style={{ padding:'10px 18px', borderRadius:10, border:`1px solid ${apptType===t.v?C.teal:C.border}`, background:apptType===t.v?C.tealGlow:'transparent', color:apptType===t.v?C.teal:C.txt2, fontSize:13, fontWeight:apptType===t.v?700:400, cursor:'pointer', transition:'all 0.15s' }}>
-                      {t.l}
+                  {CONSULT_TYPES.map(t => (
+                    <button
+                      key={t.v}
+                      onClick={() => setApptType(t.v)}
+                      style={{ flex:1, padding:'10px 8px', borderRadius:10, border:`1px solid ${apptType===t.v ? C.teal : C.border}`, background:apptType===t.v ? C.tealGlow : 'transparent', color:apptType===t.v ? C.teal : C.txt2, fontSize:12, fontWeight:apptType===t.v ? 700 : 400, cursor:'pointer', transition:'all 0.15s', textAlign:'center' as const }}
+                    >
+                      <div style={{ marginBottom:3 }}>{t.l}</div>
+                      <div style={{ fontSize:10, opacity:0.7 }}>{t.desc}</div>
                     </button>
                   ))}
                 </div>
+                {apptType === 'HOME_VISIT' && (
+                  <div style={{ marginTop:8, padding:'8px 12px', borderRadius:8, background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)', fontSize:12, color:'#D97706' }}>
+                    ⚠️ Home visit availability and fees are subject to doctor confirmation.
+                  </div>
+                )}
               </div>
 
               {/* Date picker */}
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:10 }}>Select Date</div>
                 <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4 }}>
-                  {days.map((day,i)=>{
-                    const isSunday = day.date.getDay()===0;
-                    const sel = selectedDate?.label===day.label;
-                    // Check if doctor has availability for this day
-                    const hasAvail = availability.length===0 || availability.some(a=>a.dayOfWeek===day.date.getDay()&&a.isActive);
-                    const disabled = isSunday||!hasAvail;
+                  {days.map((day, i) => {
+                    const isSunday = day.date.getDay() === 0;
+                    const sel = selectedDate?.label === day.label;
+                    const hasAvail = availability.length === 0 || availability.some(a => a.dayOfWeek === day.date.getDay() && a.isActive);
+                    const disabled = isSunday || !hasAvail;
                     return (
-                      <button key={i} onClick={()=>{ if(!disabled){ setSelectedDate(day); setSelectedTime(''); } }} disabled={disabled}
-                        style={{ flexShrink:0, width:60, padding:'10px 6px', borderRadius:12, border:`1px solid ${sel?C.teal:C.border}`, background:sel?C.tealGlow:disabled?'transparent':C.card, color:sel?C.teal:disabled?C.txt3:C.txt, cursor:disabled?'not-allowed':'pointer', textAlign:'center', opacity:disabled?0.35:1, transition:'all 0.15s' }}>
+                      <button key={i} onClick={() => { if (!disabled) { setSelectedDate(day); setSelectedTime(''); } }} disabled={disabled}
+                        style={{ flexShrink:0, width:60, padding:'10px 6px', borderRadius:12, border:`1px solid ${sel ? C.teal : C.border}`, background:sel ? C.tealGlow : disabled ? 'transparent' : C.card, color:sel ? C.teal : disabled ? C.txt3 : C.txt, cursor:disabled ? 'not-allowed' : 'pointer', textAlign:'center', opacity:disabled ? 0.35 : 1, transition:'all 0.15s' }}>
                         <div style={{ fontSize:10, marginBottom:4 }}>{day.dayName}</div>
                         <div style={{ fontSize:14, fontWeight:700 }}>{day.date.getDate()}</div>
-                        <div style={{ fontSize:10 }}>{day.date.toLocaleDateString('en-IN',{month:'short'})}</div>
+                        <div style={{ fontSize:10 }}>{day.date.toLocaleDateString('en-IN', { month:'short' })}</div>
                       </button>
                     );
                   })}
@@ -364,20 +407,20 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
               </div>
 
               {/* Time slots */}
-              {selectedDate&&(
+              {selectedDate && (
                 <div style={{ marginBottom:20 }}>
                   <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:10 }}>
                     Available Slots — {selectedDate.label}
                   </div>
-                  {loadingAvail?(
+                  {loadingAvail ? (
                     <div style={{ color:C.txt2, fontSize:13, padding:16, textAlign:'center' }}>Loading availability…</div>
-                  ):(
+                  ) : (
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
-                      {getSlotsForDate(selectedDate.date).map(({ label, booked })=>(
-                        <button key={label} onClick={()=>!booked&&setSelectedTime(label)} disabled={booked}
-                          style={{ padding:'9px 6px', borderRadius:10, border:`1px solid ${selectedTime===label?C.teal:booked?'rgba(255,255,255,0.05)':C.border}`, background:selectedTime===label?C.tealGlow:booked?'rgba(255,255,255,0.02)':'transparent', color:selectedTime===label?C.teal:booked?C.txt3:C.txt2, fontSize:12, fontWeight:selectedTime===label?700:400, cursor:booked?'not-allowed':'pointer', textAlign:'center', transition:'all 0.15s', position:'relative' }}>
+                      {getSlotsForDate(selectedDate.date).map(({ label, booked }) => (
+                        <button key={label} onClick={() => !booked && setSelectedTime(label)} disabled={booked}
+                          style={{ padding:'9px 6px', borderRadius:10, border:`1px solid ${selectedTime===label ? C.teal : booked ? 'rgba(255,255,255,0.05)' : C.border}`, background:selectedTime===label ? C.tealGlow : booked ? 'rgba(255,255,255,0.02)' : 'transparent', color:selectedTime===label ? C.teal : booked ? C.txt3 : C.txt2, fontSize:12, fontWeight:selectedTime===label ? 700 : 400, cursor:booked ? 'not-allowed' : 'pointer', textAlign:'center', transition:'all 0.15s', position:'relative' }}>
                           {label}
-                          {booked&&<div style={{ fontSize:8, color:C.txt3, marginTop:2 }}>Booked</div>}
+                          {booked && <div style={{ fontSize:8, color:C.txt3, marginTop:2 }}>Booked</div>}
                         </button>
                       ))}
                     </div>
@@ -388,19 +431,19 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
           )}
 
           {/* ── STEP 3: Confirm ── */}
-          {step===3&&selectedDoc&&selectedDate&&selectedTime&&(
+          {step === 3 && selectedDoc && selectedDate && selectedTime && (
             <>
               <div style={{ background:C.card, border:`1px solid ${C.borderHi}`, borderRadius:14, padding:'18px 20px', marginBottom:20 }}>
                 <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:14 }}>Appointment Summary</div>
                 {[
-                  { l:'Doctor',     v:`Dr. ${selectedDoc.firstName} ${selectedDoc.lastName}` },
-                  { l:'Specialty',  v:selectedDoc.specialization??'General Medicine' },
-                  { l:'Date',       v:selectedDate.label },
-                  { l:'Time',       v:selectedTime },
-                  { l:'Type',       v:apptType==='IN_PERSON'?'👤 In Person':apptType==='TELECONSULT'?'📹 Video Call':'🏠 Home Visit' },
-                  { l:'Fee',        v:selectedDoc.consultationFee?`₹${selectedDoc.consultationFee}`:'To be confirmed' },
-                  { l:'Location',   v:selectedDoc.clinicName??selectedDoc.city??'To be confirmed' },
-                ].map(row=>(
+                  { l:'Doctor',     v: selectedDoc.name ?? `Dr. ${selectedDoc.firstName ?? ''} ${selectedDoc.lastName ?? ''}`.trim() },
+                  { l:'Specialty',  v: selectedDoc.specialization ?? selectedDoc.specialty ?? 'General Medicine' },
+                  { l:'Date',       v: selectedDate.label },
+                  { l:'Time',       v: selectedTime },
+                  { l:'Type',       v: apptType === 'IN_PERSON' ? '🏥 In Person' : apptType === 'TELECONSULT' ? '📹 Video Call' : '🏠 Home Visit' },
+                  { l:'Fee',        v: (selectedDoc.consultationFee ?? selectedDoc.fee) ? `₹${selectedDoc.consultationFee ?? selectedDoc.fee}` : 'To be confirmed' },
+                  { l:'Location',   v: selectedDoc.clinicName ?? selectedDoc.hospital ?? selectedDoc.city ?? 'To be confirmed' },
+                ].map(row => (
                   <div key={row.l} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:`1px solid ${C.border}` }}>
                     <span style={{ fontSize:13, color:C.txt2 }}>{row.l}</span>
                     <span style={{ fontSize:13, fontWeight:600, color:C.txt }}>{row.v}</span>
@@ -408,17 +451,25 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                 ))}
               </div>
 
+              {apptType === 'TELECONSULT' && (
+                <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:10, background:'rgba(20,184,166,0.06)', border:`1px solid ${C.border}`, fontSize:12, color:C.txt2 }}>
+                  📹 A Jitsi video link will be generated automatically after booking. You'll find it in your appointments dashboard.
+                </div>
+              )}
+
               <div style={{ marginBottom:14 }}>
                 <label style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1, textTransform:'uppercase', display:'block', marginBottom:8 }}>Reason for Visit *</label>
-                <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="e.g. Chest pain, routine check-up, follow-up…" style={inp} autoFocus />
+                <input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Chest pain, routine check-up, follow-up…" style={inp} autoFocus />
               </div>
 
               <div style={{ marginBottom:20 }}>
-                <label style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1, textTransform:'uppercase', display:'block', marginBottom:8 }}>Symptoms <span style={{ color:C.txt3, fontWeight:400, textTransform:'none' }}>(optional, comma-separated)</span></label>
-                <input value={symptoms} onChange={e=>setSymptoms(e.target.value)} placeholder="e.g. Headache, fever, fatigue" style={inp} />
+                <label style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1, textTransform:'uppercase', display:'block', marginBottom:8 }}>
+                  Symptoms <span style={{ color:C.txt3, fontWeight:400, textTransform:'none' }}>(optional, comma-separated)</span>
+                </label>
+                <input value={symptoms} onChange={e => setSymptoms(e.target.value)} placeholder="e.g. Headache, fever, fatigue" style={inp} />
               </div>
 
-              {error&&(
+              {error && (
                 <div style={{ padding:'10px 14px', borderRadius:9, marginBottom:16, background:'rgba(244,63,94,0.08)', border:'1px solid rgba(244,63,94,0.2)', color:C.rose, fontSize:13 }}>
                   ⚠️ {error}
                 </div>
@@ -427,53 +478,64 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
           )}
 
           {/* ── STEP 4: Success ── */}
-          {step===4&&bookedAppt&&(
+          {step === 4 && bookedAppt && (
             <div style={{ textAlign:'center', padding:'20px 0' }}>
               <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(34,197,94,0.1)', border:'2px solid rgba(34,197,94,0.3)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 20px', animation:'popIn 0.4s ease' }}>✅</div>
               <h3 style={{ color:C.txt, fontSize:20, fontWeight:800, margin:'0 0 8px' }}>Booking Confirmed!</h3>
-              <p style={{ color:C.txt2, fontSize:14, margin:'0 0 24px' }}>Your appointment has been booked. The doctor will confirm it shortly.</p>
+              <p style={{ color:C.txt2, fontSize:14, margin:'0 0 24px' }}>Your appointment is booked. The doctor will confirm it shortly.</p>
               <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:'18px 20px', textAlign:'left', marginBottom:24 }}>
                 {[
-                  { l:'Doctor', v:bookedAppt.doctorName },
-                  { l:'Date',   v:bookedAppt.date },
-                  { l:'Time',   v:bookedAppt.time },
-                  { l:'Type',   v:bookedAppt.type },
-                  { l:'Status', v:'⏳ Pending Confirmation' },
-                ].map(row=>(
+                  { l:'Doctor', v: bookedAppt.doctorName },
+                  { l:'Date',   v: bookedAppt.date },
+                  { l:'Time',   v: bookedAppt.time },
+                  { l:'Type',   v: bookedAppt.type === 'IN_PERSON' ? '🏥 In Person' : bookedAppt.type === 'TELECONSULT' ? '📹 Video Call' : '🏠 Home Visit' },
+                  { l:'Status', v: '⏳ Pending Confirmation' },
+                ].map(row => (
                   <div key={row.l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:`1px solid ${C.border}` }}>
                     <span style={{ fontSize:13, color:C.txt2 }}>{row.l}</span>
                     <span style={{ fontSize:13, fontWeight:600, color:C.txt }}>{row.v}</span>
                   </div>
                 ))}
+                {bookedAppt.meetingLink && (
+                  <div style={{ padding:'10px 0', borderBottom:`1px solid ${C.border}` }}>
+                    <div style={{ fontSize:13, color:C.txt2, marginBottom:6 }}>Video Link</div>
+                    <a href={bookedAppt.meetingLink} target="_blank" rel="noreferrer"
+                      style={{ fontSize:13, color:C.teal, fontWeight:600, wordBreak:'break-all' }}>
+                      📹 {bookedAppt.meetingLink}
+                    </a>
+                  </div>
+                )}
               </div>
+              <p style={{ color:C.txt2, fontSize:12, margin:'0 0 20px' }}>
+                Check your <strong style={{ color:C.teal }}>My Appointments</strong> section in the dashboard for full details.
+              </p>
               <button onClick={onClose} style={{ width:'100%', padding:'13px 0', borderRadius:10, border:'none', background:`linear-gradient(135deg,${C.tealDk},${C.teal})`, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Done →</button>
             </div>
           )}
         </div>
 
         {/* Footer nav */}
-        {step!==4&&(
+        {step !== 4 && (
           <div style={{ padding:'16px 28px', borderTop:`1px solid ${C.border}`, display:'flex', gap:10, justifyContent:'space-between', flexShrink:0 }}>
-            <button onClick={()=>step>1?setStep(s=>(s-1) as any):onClose()} style={{ padding:'11px 24px', borderRadius:10, border:`1px solid ${C.border}`, background:'transparent', color:C.txt2, fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-              {step===1?'Cancel':'← Back'}
+            <button onClick={() => step > 1 ? setStep(s => (s - 1) as any) : onClose()} style={{ padding:'11px 24px', borderRadius:10, border:`1px solid ${C.border}`, background:'transparent', color:C.txt2, fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              {step === 1 ? 'Cancel' : '← Back'}
             </button>
-
-            {step===1&&(
-              <button onClick={()=>selectedDoc&&setStep(2)} disabled={!selectedDoc}
-                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:selectedDoc?`linear-gradient(135deg,${C.tealDk},${C.teal})`:'rgba(255,255,255,0.06)', color:selectedDoc?'#fff':C.txt3, fontSize:14, fontWeight:700, cursor:selectedDoc?'pointer':'not-allowed', fontFamily:'inherit' }}>
+            {step === 1 && (
+              <button onClick={() => selectedDoc && setStep(2)} disabled={!selectedDoc}
+                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:selectedDoc ? `linear-gradient(135deg,${C.tealDk},${C.teal})` : 'rgba(255,255,255,0.06)', color:selectedDoc ? '#fff' : C.txt3, fontSize:14, fontWeight:700, cursor:selectedDoc ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
                 Next: Select Time →
               </button>
             )}
-            {step===2&&(
-              <button onClick={()=>selectedDate&&selectedTime&&setStep(3)} disabled={!selectedDate||!selectedTime}
-                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:(selectedDate&&selectedTime)?`linear-gradient(135deg,${C.tealDk},${C.teal})`:'rgba(255,255,255,0.06)', color:(selectedDate&&selectedTime)?'#fff':C.txt3, fontSize:14, fontWeight:700, cursor:(selectedDate&&selectedTime)?'pointer':'not-allowed', fontFamily:'inherit' }}>
+            {step === 2 && (
+              <button onClick={() => selectedDate && selectedTime && setStep(3)} disabled={!selectedDate || !selectedTime}
+                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:(selectedDate && selectedTime) ? `linear-gradient(135deg,${C.tealDk},${C.teal})` : 'rgba(255,255,255,0.06)', color:(selectedDate && selectedTime) ? '#fff' : C.txt3, fontSize:14, fontWeight:700, cursor:(selectedDate && selectedTime) ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
                 Next: Confirm →
               </button>
             )}
-            {step===3&&(
-              <button onClick={handleBook} disabled={booking||!reason.trim()}
-                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:(booking||!reason.trim())?'rgba(255,255,255,0.06)':`linear-gradient(135deg,${C.tealDk},${C.teal})`, color:(booking||!reason.trim())?C.txt3:'#fff', fontSize:14, fontWeight:700, cursor:(booking||!reason.trim())?'not-allowed':'pointer', fontFamily:'inherit' }}>
-                {booking?'⟳ Booking…':'✓ Confirm Appointment'}
+            {step === 3 && (
+              <button onClick={handleBook} disabled={booking || !reason.trim()}
+                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:(booking || !reason.trim()) ? 'rgba(255,255,255,0.06)' : `linear-gradient(135deg,${C.tealDk},${C.teal})`, color:(booking || !reason.trim()) ? C.txt3 : '#fff', fontSize:14, fontWeight:700, cursor:(booking || !reason.trim()) ? 'not-allowed' : 'pointer', fontFamily:'inherit' }}>
+                {booking ? '⟳ Booking…' : '✓ Confirm Appointment'}
               </button>
             )}
           </div>
