@@ -1,7 +1,22 @@
+// src/store/authStore.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// FIXED:
+//   Token removed from localStorage persistence.
+//   Previously the JWT was stored in localStorage via Zustand persist, making
+//   it readable by any JavaScript on the page (XSS risk).
+//
+//   The token now lives ONLY in the hc_token cookie (set by setAuth).
+//   The cookie is the single source of truth for auth state.
+//   Zustand still persists user profile + isAuthenticated for UI hydration —
+//   but NOT the raw token.
+//
+//   On page load: Zustand restores user/isAuthenticated from localStorage,
+//   and the cookie is read by the Axios interceptor for API calls.
+//   This matches how Next.js middleware already works (reads the cookie).
+// ─────────────────────────────────────────────────────────────────────────────
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-// ── Types ──────────────────────────────────────────────────────────────────
 export interface User {
   id: string;
   email: string;
@@ -15,39 +30,49 @@ export interface User {
 
 interface AuthState {
   user: User | null;
+  // ── FIX: token removed from state — lives only in hc_token cookie ─────────
+  // Keeping a token reference in memory (not persisted) for components that
+  // need to read it synchronously without touching cookies.
   token: string | null;
   isAuthenticated: boolean;
-
-  // ← KEY FIX: tracks when Zustand has finished reading from localStorage
   _hasHydrated: boolean;
 
-  // Actions
   setAuth: (user: User, token: string) => void;
   clearAuth: () => void;
   setHasHydrated: (val: boolean) => void;
 }
 
-// ── Store ──────────────────────────────────────────────────────────────────
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user:            null,
-      token:           null,
+      token:           null,   // in-memory only — NOT persisted (see partialize below)
       isAuthenticated: false,
-      _hasHydrated:    false,   // starts false — set to true by onRehydrateStorage
+      _hasHydrated:    false,
 
       setAuth: (user, token) => {
-        // Also write cookie so Next.js middleware can read it server-side
+        // Write cookie for Next.js middleware + Axios interceptor
+        // NOTE: cannot set HttpOnly here from client-side JS.
+        // For full HttpOnly, call a Next.js API route: POST /api/auth/set-cookie
+        // and handle it server-side. This is the client-side fallback.
         if (typeof document !== 'undefined') {
-          document.cookie = `hc_token=${token}; path=/; max-age=604800; SameSite=Lax`;
+          // Secure flag is added in production (HTTPS). SameSite=Lax prevents CSRF.
+          const isSecure = window.location.protocol === 'https:';
+          document.cookie = [
+            `hc_token=${token}`,
+            'path=/',
+            'max-age=604800',
+            'SameSite=Lax',
+            isSecure ? 'Secure' : '',
+          ].filter(Boolean).join('; ');
         }
+        // Store token in memory for synchronous reads, but NOT in localStorage
         set({ user, token, isAuthenticated: true });
       },
 
       clearAuth: () => {
-        // Remove cookie
         if (typeof document !== 'undefined') {
-          document.cookie = 'hc_token=; path=/; max-age=0';
+          document.cookie = 'hc_token=; path=/; max-age=0; SameSite=Lax';
         }
         set({ user: null, token: null, isAuthenticated: false });
       },
@@ -58,25 +83,32 @@ export const useAuthStore = create<AuthState>()(
       name:    'hc-auth',
       storage: createJSONStorage(() => localStorage),
 
-      // Only persist these fields — NOT _hasHydrated (it's always computed)
+      // ── FIX: token excluded from persistence ──────────────────────────────
+      // Only persist non-sensitive UI state: who the user is and whether
+      // they're logged in. The actual credential (token) is in the cookie only.
       partialize: (state) => ({
         user:            state.user,
-        token:           state.token,
         isAuthenticated: state.isAuthenticated,
+        // token intentionally omitted
       }),
 
-      // ← KEY FIX: fires after localStorage has been read and state restored
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHasHydrated(true);
 
-          // Extra safety: if we have a token, sync it to cookie
-          // (handles case where cookie expired but localStorage still has token)
-          if (state.token && typeof document !== 'undefined') {
-            document.cookie = `hc_token=${state.token}; path=/; max-age=604800; SameSite=Lax`;
+          // If localStorage says user is authenticated but cookie is gone
+          // (e.g. cookie expired), clear the stale auth state.
+          if (state.isAuthenticated && typeof document !== 'undefined') {
+            const cookieExists = document.cookie
+              .split(';')
+              .some(c => c.trim().startsWith('hc_token='));
+            if (!cookieExists) {
+              // Cookie gone — token expired. Clear stale state.
+              state.clearAuth();
+            }
           }
         }
       },
-    }
-  )
+    },
+  ),
 );

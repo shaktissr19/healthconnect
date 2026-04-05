@@ -1,9 +1,13 @@
 // src/app/layout.tsx — Root Layout
-// ============================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGE: Added SessionTimeoutManager — auto-logout after 15min inactivity
+//   Warning shown at 10min, hard logout at 15min, all pages, authenticated only
+// ─────────────────────────────────────────────────────────────────────────────
 import type { Metadata, Viewport } from 'next';
 import { Poppins, Nunito } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -18,9 +22,6 @@ const nunito = Nunito({
   display: 'swap',
 });
 
-// ── Viewport — CRITICAL for mobile rendering ──────────────────
-// Without this, mobile browsers render the full desktop layout
-// scaled down, causing only half the page to be visible.
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -49,7 +50,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${poppins.variable} ${nunito.variable}`}>
       <body>
+        {/* Session timeout — 10min warning, 15min auto-logout, all pages */}
+        <SessionTimeoutManager />
+
         {children}
+
         <Toaster
           position="top-right"
           toastOptions={{
@@ -67,5 +72,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-
-// ============================================================

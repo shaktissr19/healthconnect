@@ -230,12 +230,46 @@ export default function Hero() {
   const [introFading, setIntroFading] = useState(false);
   const [phase,      setPhase]      = useState<'photo'|'rotating'>('photo');
   const [photoShow,  setPhotoShow]  = useState(true);
-  const [carouselIdx, setCarouselIdx] = useState(0);   // single index drives BOTH left phrase + right panel
+  const [carouselIdx, setCarouselIdx] = useState(0);
   const [carouselShow,setCarouselShow]= useState(false);
   const [mounted,    setMounted]    = useState(false);
   const [showModal,  setShowModal]  = useState(false);
-  const [counts,     setCounts]     = useState({ patients:'—', doctors:'37+', communities:'18+', hospitals:'340+' });
+  const [counts,     setCounts]     = useState({ patients:'—', doctors:'—', communities:'—', hospitals:'—' });
+  const [sessionToast, setSessionToast] = useState(false);
   const rotRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const introTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const skipIntro = () => {
+    setIntroFading(true);
+    setTimeout(() => {
+      setShowIntro(false);
+      setMounted(true);
+    }, INTRO_FADE_MS);
+  };
+
+  // Check for session=expired param and skip intro for repeat visitors
+  useEffect(() => {
+    // Session expired toast
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('session') === 'expired') {
+        setSessionToast(true);
+        // Clean the URL without reload
+        const url = new URL(window.location.href);
+        url.searchParams.delete('session');
+        window.history.replaceState({}, '', url.toString());
+        setTimeout(() => setSessionToast(false), 5000);
+      }
+
+      // Skip intro for repeat visitors
+      if (sessionStorage.getItem('hc_intro_seen')) {
+        setShowIntro(false);
+        setMounted(true);
+      } else {
+        sessionStorage.setItem('hc_intro_seen', '1');
+      }
+    }
+  }, []);
 
   // Single sequential chain:
   // 0s        → intro shows
@@ -274,25 +308,18 @@ export default function Hero() {
     }, TOTAL_INTRO + 5000); // starts 5s after intro fully gone
 
     // API calls — fire immediately on mount
-    const tryPatients = async () => {
-      for (const ep of ['/api/admin/stats','/api/users?role=PATIENT&limit=1','/api/patients?limit=1']) {
-        try {
-          const r = await fetch(ep); const d = await r.json();
-          const t = d?.data?.totalPatients??d?.data?.total??d?.totalPatients??d?.total??d?.count??null;
-          if (t && t > 0) { setCounts(p=>({...p,patients:`${t}+`})); break; }
-        } catch {}
-      }
-    };
-    tryPatients();
-    fetch('/public/doctors?limit=500').then(r=>r.json()).then(d=>{
-      const t=d?.data?.total??d?.total??(Array.isArray(d?.data)?d.data.length:null);
-      if(t>0) setCounts(p=>({...p,doctors:`${t}+`}));
-    }).catch(()=>{});
-    fetch('/api/communities').then(r=>r.json()).then(d=>{
-      const arr=d?.data?.communities??d?.communities??d?.data??[];
-      const t=d?.data?.total??d?.total??(Array.isArray(arr)?arr.length:null);
-      if(t>0) setCounts(p=>({...p,communities:`${t}+`}));
-    }).catch(()=>{});
+    fetch('https://api.healthconnect.sbs/api/v1/public/stats')
+      .then(r => r.json())
+      .then(d => {
+        if (!d?.success || !d?.data) return;
+        const { patients, doctors, communities, hospitals } = d.data;
+        setCounts({
+          patients:    patients    > 0 ? `${patients}+`    : '—',
+          doctors:     doctors     > 0 ? `${doctors}+`     : '—',
+          communities: communities > 0 ? `${communities}+` : '—',
+          hospitals:   hospitals   > 0 ? `${hospitals}+`   : '—',
+        });
+      }).catch(() => {});
 
     return () => {
       clearTimeout(t1); clearTimeout(t2); clearTimeout(phaseTimer);
@@ -305,6 +332,15 @@ export default function Hero() {
   return (
     <>
       {showModal && <HealthScoreModal onClose={()=>setShowModal(false)}/>}
+
+      {/* Session expired toast */}
+      {sessionToast && (
+        <div style={{ position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',zIndex:9999,background:'#1E293B',border:'1px solid rgba(255,255,255,0.12)',borderRadius:10,padding:'12px 20px',display:'flex',alignItems:'center',gap:12,boxShadow:'0 8px 32px rgba(0,0,0,0.35)',whiteSpace:'nowrap' }}>
+          <span style={{ fontSize:16 }}>🔒</span>
+          <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:500,color:'rgba(255,255,255,0.88)' }}>You were signed out due to inactivity.</span>
+          <button onClick={()=>setSessionToast(false)} style={{ background:'none',border:'none',color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:16,padding:'0 0 0 8px',lineHeight:1 }}>✕</button>
+        </div>
+      )}
 
       {/* Health Score button — hidden while intro is showing */}
       <div style={{
@@ -442,6 +478,14 @@ export default function Hero() {
               <div style={{ position:'absolute',bottom:0,left:0,right:0,height:3,background:'rgba(13,107,74,0.15)' }}>
                 <div className="hhi-bar" style={{ height:'100%',background:'linear-gradient(to right,#0D9488,#0D6B4A,#14B8A6)',borderRadius:'0 0 0 16px' }}/>
               </div>
+
+              {/* Skip button */}
+              <button
+                onClick={skipIntro}
+                style={{ position:'absolute',bottom:18,right:20,background:'rgba(0,0,0,0.28)',border:'1px solid rgba(255,255,255,0.25)',borderRadius:999,padding:'6px 16px',color:'rgba(255,255,255,0.8)',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,cursor:'pointer',letterSpacing:'0.06em',textTransform:'uppercase',transition:'all 0.2s',zIndex:10 }}
+                onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='rgba(0,0,0,0.5)';(e.currentTarget as HTMLElement).style.color='#fff';}}
+                onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='rgba(0,0,0,0.28)';(e.currentTarget as HTMLElement).style.color='rgba(255,255,255,0.8)';}}
+              >Skip →</button>
             </div>
           )}
           {/* ── END INTRO SPLASH ──────────────────────────────────────── */}

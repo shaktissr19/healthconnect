@@ -6,25 +6,26 @@ const ARTICLES = [
     photo:'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=500&q=80',
     cat:'Diabetes', catColor:'#1A6BB5',
     title:'HbA1c — What Your Diabetes Numbers Really Mean for Indians',
-    href:'/learn',
+    // FIX: was '/learn' — now links to the specific article slug
+    href:'/learn/hba1c-what-your-diabetes-numbers-really-mean',
   },
   {
     photo:'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=500&q=80',
     cat:'Cardiology', catColor:'#E11D48',
     title:'Why Heart Attacks in Young Indians Are Rising: What You Need to Know',
-    href:'/learn',
+    href:'/learn/heart-attacks-young-indians',
   },
   {
     photo:'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&q=80',
     cat:'Women Health', catColor:'#7C3AED',
     title:'PCOD & PCOS: The Complete Guide for Indian Women',
-    href:'/learn',
+    href:'/learn/pcos-complete-guide-indian-women',
   },
   {
     photo:'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&q=80',
     cat:'Mental Health', catColor:'#059669',
     title:'Managing Anxiety and Depression: Breaking the Stigma in India',
-    href:'/learn',
+    href:'/learn/mental-health-india-breaking-stigma',
   },
 ];
 

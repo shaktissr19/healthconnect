@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore }   from '@/store/uiStore';
 import { authAPI }      from '@/lib/api';
-import Navbar      from '@/components/landing/Navbar';
+import Navbar      from '@/components/PublicNavbar';
 import Hero               from '@/components/landing/Hero';
 import PlatformNumbers    from '@/components/landing/PlatformNumbers';
 import PlatformTour       from '@/components/landing/PlatformTour';
@@ -74,13 +74,18 @@ function AuthModal({
   onClose,
   onSwitchMode,
 }: {
-  mode: 'login' | 'register';
+  mode: 'login' | 'register' | 'forgot';
   onClose: () => void;
   onSwitchMode: () => void;
 }) {
   const router        = useRouter();
   const uiStore       = useUIStore() as any;
   const isLogin       = mode === 'login';
+  const isForgot      = mode === 'forgot';
+  const openForgot    = () => (useUIStore.getState() as any).openAuthModal('forgot');
+  const [forgotEmail,   setForgotEmail]   = useState('');
+  const [forgotSent,    setForgotSent]    = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   // Register step: 'role' | 'form'
   const [step,      setStep]      = useState<'role' | 'form'>(isLogin ? 'form' : 'role');
@@ -135,6 +140,14 @@ function AuthModal({
     }
   }, [email, password, firstName, lastName, isLogin, role, uiStore, onClose, router]);
 
+  const handleForgot = async () => {
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    try { await authAPI.forgotPassword({ email: forgotEmail.trim() }); }
+    catch { /* always show success — don't reveal if email exists */ }
+    finally { setForgotLoading(false); setForgotSent(true); }
+  };
+
   return (
     <div
       style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(2,8,20,0.85)', backdropFilter:'blur(14px)', padding:'0 16px' }}
@@ -154,14 +167,16 @@ function AuthModal({
               <p style={{ color:'#14B8A6', fontSize:11, fontWeight:700, letterSpacing:2, textTransform:'uppercase', margin:'0 0 4px' }}>Step 2 of 2 · {ROLES.find(r => r.key === role)?.label}</p>
             )}
             <h2 style={{ color:'#E8F0FE', fontSize:22, fontWeight:800, margin:'0 0 4px' }}>
-              {isLogin ? 'Welcome back' : step === 'role' ? 'Who are you?' : 'Create your account'}
+              {isForgot ? 'Reset Password' : isLogin ? 'Welcome back' : step === 'role' ? 'Who are you?' : 'Create your account'}
             </h2>
             <p style={{ color:'#7A8FAF', fontSize:13, margin:0 }}>
-              {isLogin
-                ? 'Sign in to HealthConnect'
-                : step === 'role'
-                  ? 'Choose your role to get started'
-                  : `Signing up as a ${ROLES.find(r => r.key === role)?.label}`}
+              {isForgot
+                ? 'Enter your email to receive a reset link'
+                : isLogin
+                  ? 'Sign in to HealthConnect'
+                  : step === 'role'
+                    ? 'Choose your role to get started'
+                    : `Signing up as a ${ROLES.find(r => r.key === role)?.label}`}
             </p>
           </div>
           <button
@@ -170,8 +185,40 @@ function AuthModal({
           >✕</button>
         </div>
 
+        {/* ── FORGOT PASSWORD FORM ── */}
+        {isForgot && (
+          <div>
+            {forgotSent ? (
+              <div style={{ textAlign:'center', padding:'8px 0' }}>
+                <div style={{ fontSize:52, marginBottom:16 }}>📧</div>
+                <div style={{ color:'#E8F0FE', fontWeight:700, fontSize:16, marginBottom:10 }}>Check your inbox</div>
+                <p style={{ color:'#7A8FAF', fontSize:14, lineHeight:1.7, marginBottom:24 }}>
+                  If an account exists for <strong style={{ color:'#E8F0FE' }}>{forgotEmail}</strong>, you'll receive a reset link within a few minutes. Check your spam folder too.
+                </p>
+                <button onClick={() => { onSwitchMode(); setForgotSent(false); setForgotEmail(''); }}
+                  style={{ width:'100%', padding:'13px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#0D9488,#14B8A6)', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                  Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <>
+                <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleForgot(); }}
+                  placeholder="Your email address" style={inp} autoFocus autoComplete="email" />
+                <button onClick={handleForgot} disabled={forgotLoading}
+                  style={{ width:'100%', padding:'13px 0', borderRadius:10, border:'none', marginBottom:16, background:forgotLoading?'rgba(255,255,255,0.06)':'linear-gradient(135deg,#0D9488,#14B8A6)', color:forgotLoading?'#7A8FAF':'#fff', fontSize:15, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer', fontFamily:'inherit' }}>
+                  {forgotLoading ? '⟳ Sending…' : 'Send Reset Link'}
+                </button>
+                <p style={{ textAlign:'center', color:'#7A8FAF', fontSize:13, margin:0 }}>
+                  <button onClick={onSwitchMode} style={{ background:'none', border:'none', color:'#14B8A6', cursor:'pointer', fontSize:13, fontWeight:700, padding:0 }}>← Back to Sign In</button>
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
         {/* ── STEP 1: Role selection ── */}
-        {!isLogin && step === 'role' && (
+        {!isForgot && !isLogin && step === 'role' && (
           <>
             <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:24 }}>
               {ROLES.map(r => (
@@ -208,7 +255,7 @@ function AuthModal({
         )}
 
         {/* ── STEP 2: Form (register) or login form ── */}
-        {(isLogin || step === 'form') && (
+        {!isForgot && (isLogin || step === 'form') && (
           <>
             {/* Back button for register step 2 */}
             {!isLogin && (
@@ -224,9 +271,15 @@ function AuthModal({
                 <input value={lastName}  onChange={e => setLast(e.target.value)}  placeholder="Last name"  style={inp} />
               </div>
             )}
-            <input type="email"    value={email}    onChange={e => setEmail(e.target.value)}    placeholder="Email address" style={inp} />
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"      style={inp} />
-
+            <input type="email"    value={email}    onChange={e => setEmail(e.target.value)}    placeholder="Email address" style={inp} autoComplete="email" />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"      style={inp} autoComplete="current-password" />
+            {isLogin && (
+              <div style={{ textAlign:'right', marginTop:-8, marginBottom:14 }}>
+                <button onClick={() => openForgot()} style={{ background:'none', border:'none', color:'#14B8A6', cursor:'pointer', fontSize:13, fontWeight:600, padding:0 }}>
+                  Forgot password?
+                </button>
+              </div>
+            )}
             {error && (
               <div style={{ padding:'10px 14px', borderRadius:9, marginBottom:16, background:'rgba(244,63,94,0.08)', border:'1px solid rgba(244,63,94,0.2)', color:'#F43F5E', fontSize:13 }}>
                 ⚠️ {error}
@@ -315,11 +368,14 @@ export default function LandingPage() {
         <Compliance />
       </main>
       <Footer />
-      {(authModal === 'login' || authModal === 'register') && (
+      {(authModal === 'login' || authModal === 'register' || authModal === 'forgot') && (
         <AuthModal
           mode={authModal}
           onClose={closeAuthModal}
-          onSwitchMode={() => openAuthModal(authModal === 'login' ? 'register' : 'login')}
+          onSwitchMode={() => openAuthModal(
+            authModal === 'forgot' ? 'login' :
+            authModal === 'login'  ? 'register' : 'login'
+          )}
         />
       )}
     </>

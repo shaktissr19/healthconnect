@@ -35,22 +35,21 @@ const BASE_CARDS = [
 
 export default function PlatformNumbers() {
   const [active, setActive] = useState(1);
-  const [counts, setCounts] = useState({ doctors:'37+', communities:'18+', hospitals:'340+', patients:'10,000+' });
+  const [counts, setCounts] = useState({ doctors:'—', communities:'—', hospitals:'—', patients:'—' });
 
   useEffect(() => {
-    fetch('/public/doctors?limit=500')
-      .then(r=>r.json())
-      .then(d=>{
-        const t = d?.data?.total ?? d?.total ?? (Array.isArray(d?.data)?d.data.length:null);
-        if(t>0) setCounts(p=>({...p,doctors:`${t}+`}));
-      }).catch(()=>{});
-    fetch('/api/communities')
-      .then(r=>r.json())
-      .then(d=>{
-        const arr = d?.data?.communities ?? d?.communities ?? d?.data ?? [];
-        const t = d?.data?.total ?? d?.total ?? (Array.isArray(arr)?arr.length:null);
-        if(t>0) setCounts(p=>({...p,communities:`${t}+`}));
-      }).catch(()=>{});
+    fetch('https://api.healthconnect.sbs/api/v1/public/stats')
+      .then(r => r.json())
+      .then(d => {
+        if (!d?.success || !d?.data) return;
+        const { patients, doctors, communities, hospitals } = d.data;
+        setCounts({
+          patients:    patients    > 0 ? `${patients}+`    : '—',
+          doctors:     doctors     > 0 ? `${doctors}+`     : '—',
+          communities: communities > 0 ? `${communities}+` : '—',
+          hospitals:   hospitals   > 0 ? `${hospitals}+`   : '—',
+        });
+      }).catch(() => {});
   }, []);
 
   const cards = BASE_CARDS.map(c => ({

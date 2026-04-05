@@ -4,11 +4,11 @@ import { create } from 'zustand';
 
 interface UIState {
   sidebarOpen: boolean;
-  authModal: 'login' | 'register' | null;
+  authModal: 'login' | 'register' | 'forgot' | null;
   activePage: string;
   activeTab: string;
   toggleSidebar: () => void;
-  openAuthModal: (type: 'login' | 'register') => void;
+  openAuthModal: (type: 'login' | 'register' | 'forgot') => void;
   closeAuthModal: () => void;
   setActivePage: (page: string) => void;
   setActiveTab: (tab: string) => void;

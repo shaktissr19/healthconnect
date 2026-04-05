@@ -59,7 +59,7 @@ export default function FindDoctorsLandingPage() {
 
         {/* Text content */}
         <div style={{ flex: 1, position:'relative', zIndex:1 }}>
-          <div style={{ fontSize:10, fontWeight:700, color:'rgba(168,200,255,0.75)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'rgba(100,116,139,0.75)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>
             HealthConnect India · Verified Specialists
           </div>
           <h1 style={{ fontSize:26, fontWeight:900, color:'#FFFFFF', margin:'0 0 10px', lineHeight:1.25 }}>
@@ -84,7 +84,7 @@ export default function FindDoctorsLandingPage() {
               </svg>
             </button>
           </a>
-          <div style={{ marginTop:10, fontSize:11, color:'rgba(168,200,255,0.5)' }}>No account needed · Book in under 2 minutes</div>
+          <div style={{ marginTop:10, fontSize:11, color:'rgba(100,116,139,0.5)' }}>No account needed · Book in under 2 minutes</div>
         </div>
 
         {/* Compact doctor illustration */}

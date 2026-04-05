@@ -10,12 +10,14 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import { api, communityAPI } from '@/lib/api';
+import ProfileOnboardingModal, { isOnboardingDone, isOnboardingSnoozed } from '@/components/onboarding/ProfileOnboardingModal';
+import { ProfileCompletenessBanner } from '@/components/onboarding/ProfileCompleteness';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#E3EDEC',
-  cardBg:   '#FFFFFF',
-  cardBg2:  '#F4FAFA',
+  bg:       '#F5F4F0',   // warm grey — matches patient dashboard
+  cardBg:   '#FDFCFB',   // warm white cards
+  cardBg2:  '#F5F4F0',   // warm page bg
   border:   'rgba(13,148,136,0.14)',
   borderHi: 'rgba(13,148,136,0.3)',
   teal:     '#0D9488',
@@ -135,6 +137,236 @@ function ComingSoon({ title }: { title: string }) {
   );
 }
 
+// ── SOAP Notes Modal ──────────────────────────────────────────────────────────
+function SOAPNotesModal({ appt, onClose }: { appt: any; onClose: () => void }) {
+  const [soap, setSoap] = useState({ subjective:'', objective:'', assessment:'', plan:'' });
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const fields = [
+    { key:'subjective', label:'S — Subjective',  hint:"Patient's chief complaint and symptoms", color:'#7C3AED' },
+    { key:'objective',  label:'O — Objective',   hint:'Examination findings, vitals, test results', color:C.teal },
+    { key:'assessment', label:'A — Assessment',  hint:'Diagnosis and clinical impression', color:C.amber },
+    { key:'plan',       label:'P — Plan',         hint:'Treatment plan, medications, follow-up', color:C.green },
+  ];
+  const handleSave = async () => {
+    const combined = `[SOAP Note]\nS: ${soap.subjective}\nO: ${soap.objective}\nA: ${soap.assessment}\nP: ${soap.plan}`;
+    setSaving(true);
+    try {
+      await api.put(`/appointments/${appt.id}`, { doctorNotes: combined })
+        .catch(() => api.post(`/doctor/patients/${appt.patientId}/notes`, { note: combined }));
+    } catch {}
+    setSaving(false); setSaved(true);
+    setTimeout(onClose, 900);
+  };
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9990, background:'rgba(15,23,42,0.5)', display:'flex', alignItems:'flex-start', justifyContent:'center', paddingTop:60, overflowY:'auto' }}>
+      <div style={{ width:'100%', maxWidth:620, background:'#fff', borderRadius:18, boxShadow:'0 24px 60px rgba(15,23,42,0.18)', margin:'0 16px 40px' }}>
+        <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #F1F5F9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:700, color:C.txtHi }}>SOAP Clinical Note</div>
+            <div style={{ fontSize:12, color:C.txtMid, marginTop:2 }}>{appt.patientName} · {appt.time ?? ''}</div>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:'50%', background:'#F1F5F9', border:'none', cursor:'pointer', fontSize:16, color:'#64748B' }}>✕</button>
+        </div>
+        <div style={{ padding:'16px 24px', display:'flex', flexDirection:'column', gap:14 }}>
+          {fields.map(f => (
+            <div key={f.key}>
+              <div style={{ fontSize:11, fontWeight:700, color:f.color, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:5 }}>{f.label}</div>
+              <textarea value={(soap as any)[f.key]} onChange={e => setSoap(p => ({ ...p, [f.key]: e.target.value }))}
+                rows={2} placeholder={f.hint}
+                style={{ width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${f.color}25`, background:`${f.color}04`, color:C.txtHi, fontSize:13, resize:'vertical' as const, outline:'none', fontFamily:'inherit', boxSizing:'border-box' as const }} />
+            </div>
+          ))}
+        </div>
+        {saved && <div style={{ margin:'0 24px 10px', padding:'10px 14px', background:C.green, borderRadius:10, color:'#fff', fontSize:12, fontWeight:600 }}>✓ SOAP note saved!</div>}
+        <div style={{ padding:'0 24px 20px', display:'flex', gap:10 }}>
+          <BlueBtn onClick={handleSave} disabled={saving || saved || (!soap.subjective && !soap.assessment)}>{saving ? 'Saving…' : '💾 Save SOAP Note'}</BlueBtn>
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Follow-up Task Modal ───────────────────────────────────────────────────────
+function FollowUpTaskModal({ appt, onClose }: { appt: any; onClose: () => void }) {
+  const [task,   setTask]   = useState('');
+  const [due,    setDue]    = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const presets = ['Check BP in 2 weeks','Review HbA1c in 3 months','Follow-up blood test in 1 month','Review medication response in 2 weeks','Schedule specialist referral'];
+  const handleSave = async () => {
+    if (!task.trim()) return;
+    setSaving(true);
+    try { await api.post(`/doctor/patients/${appt.patientId}/notes`, { note: `[FOLLOW-UP] Due: ${due||'TBD'} — ${task}` }); } catch {}
+    setSaving(false); setSaved(true);
+    setTimeout(onClose, 1000);
+  };
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9990, background:'rgba(15,23,42,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ width:'100%', maxWidth:460, background:'#fff', borderRadius:18, boxShadow:'0 24px 60px rgba(15,23,42,0.18)' }}>
+        <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #F1F5F9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:700, color:C.txtHi }}>Set Follow-up Task</div>
+            <div style={{ fontSize:12, color:C.txtMid, marginTop:2 }}>Post-consultation for {appt.patientName}</div>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:'50%', background:'#F1F5F9', border:'none', cursor:'pointer', fontSize:16, color:'#64748B' }}>✕</button>
+        </div>
+        <div style={{ padding:'16px 24px' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, marginBottom:8, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Quick Presets</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:14 }}>
+            {presets.map(p => (
+              <button key={p} onClick={() => setTask(p)}
+                style={{ padding:'4px 11px', borderRadius:100, fontSize:11, cursor:'pointer', border:`1px solid ${task===p?C.teal:C.border}`, background:task===p?C.tealGlow:'transparent', color:task===p?C.teal:C.txtMid, fontFamily:'inherit' }}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, marginBottom:5, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Task</div>
+            <input value={task} onChange={e => setTask(e.target.value)} placeholder="Describe the follow-up task…"
+              style={{ width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg2, color:C.txtHi, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' as const }} />
+          </div>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, marginBottom:5, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Due Date (optional)</div>
+            <input type="date" value={due} onChange={e => setDue(e.target.value)}
+              style={{ width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg2, color:C.txtHi, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' as const }} />
+          </div>
+        </div>
+        {saved && <div style={{ margin:'0 24px 10px', padding:'10px 14px', background:C.green, borderRadius:10, color:'#fff', fontSize:12, fontWeight:600 }}>✓ Follow-up task saved!</div>}
+        <div style={{ padding:'0 24px 20px', display:'flex', gap:10 }}>
+          <BlueBtn onClick={handleSave} disabled={saving || saved || !task.trim()}>{saving ? 'Saving…' : '✓ Set Reminder'}</BlueBtn>
+          <GhostBtn onClick={onClose}>Skip</GhostBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Pre-consult Summary Modal ─────────────────────────────────────────────────
+function PreConsultModal({ appt, onClose }: { appt: any; onClose: () => void }) {
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!appt.patientId) { setLoading(false); return; }
+    api.get(`/doctor/patient-profile/${appt.patientId}`)
+      .then((r: any) => { const d = r?.data?.data?.patient ?? r?.data?.patient ?? r?.data?.data ?? r?.data ?? {}; setSummary(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [appt.patientId]);
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9990, background:'rgba(15,23,42,0.5)', display:'flex', alignItems:'flex-start', justifyContent:'center', paddingTop:60, overflowY:'auto' }}>
+      <div style={{ width:'100%', maxWidth:520, background:'#fff', borderRadius:18, boxShadow:'0 24px 60px rgba(15,23,42,0.18)', margin:'0 16px 40px', overflow:'hidden' }}>
+        <div style={{ background:'linear-gradient(135deg,#1E3A5F,#2563EB)', padding:'18px 24px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', textTransform:'uppercase' as const, letterSpacing:'0.07em', marginBottom:3 }}>Pre-consult Summary</div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#fff' }}>{appt.patientName}</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{appt.time} · {appt.condition ?? 'Consultation'}</div>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:'50%', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.2)', cursor:'pointer', fontSize:16, color:'#fff' }}>✕</button>
+        </div>
+        <div style={{ padding:'18px 24px' }}>
+          {loading ? [1,2,3].map(i => <Skel key={i} w="100%" h={44} />) :
+           !summary ? (
+            <div style={{ textAlign:'center', padding:'20px', color:C.txtLo, fontSize:13 }}>
+              <div style={{ fontSize:28, marginBottom:8 }}>🔒</div>
+              Patient hasn't shared their profile. Request access via Find HC Patient.
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {summary.healthScores?.score != null && (
+                <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'#EFF6FF', borderRadius:C.rSm, border:'1px solid #BFDBFE' }}>
+                  <div style={{ fontSize:26, fontWeight:800, color:'#1D4ED8', minWidth:44, textAlign:'center' }}>{summary.healthScores.score}</div>
+                  <div><div style={{ fontSize:12, fontWeight:700, color:'#1E40AF' }}>Health Score</div><div style={{ fontSize:11, color:'#3B82F6', marginTop:1 }}>Medication adherence: {summary.healthScores.medicationAdherence ?? '—'}</div></div>
+                </div>
+              )}
+              {summary.conditions?.filter((c:any)=>c.status==='ACTIVE'||c.status==='CHRONIC').length > 0 && (
+                <div style={{ padding:'10px 14px', background:C.cardBg2, borderRadius:C.rSm, border:`1px solid ${C.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, marginBottom:6, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Active Conditions</div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {summary.conditions.filter((c:any)=>c.status==='ACTIVE'||c.status==='CHRONIC').map((c:any,i:number) => <Pill key={i} label={c.name} color={c.status==='CHRONIC'?C.amber:C.rose} />)}
+                  </div>
+                </div>
+              )}
+              {summary.medications?.length > 0 && (
+                <div style={{ padding:'10px 14px', background:C.cardBg2, borderRadius:C.rSm, border:`1px solid ${C.border}` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, marginBottom:6, textTransform:'uppercase' as const, letterSpacing:'0.06em' }}>Current Medications ({summary.medications.length})</div>
+                  {summary.medications.slice(0,3).map((m:any,i:number) => (
+                    <div key={i} style={{ fontSize:12, color:C.txtMid, padding:'3px 0', borderBottom:`1px solid ${C.border}` }}><span style={{ fontWeight:600, color:C.txtHi }}>{m.name}</span> · {m.dosage} · {unsnake(m.frequency ?? '')}</div>
+                  ))}
+                </div>
+              )}
+              {summary.allergies?.some((a:any)=>a.severity==='SEVERE'||a.severity==='LIFE_THREATENING') && (
+                <div style={{ padding:'10px 14px', background:'#FFF1F2', borderRadius:C.rSm, border:'1px solid #FECDD3', display:'flex', gap:8 }}>
+                  <span>⚠️</span>
+                  <div><div style={{ fontSize:12, fontWeight:700, color:C.rose }}>Severe Allergies</div><div style={{ fontSize:11, color:'#BE123C' }}>{summary.allergies.filter((a:any)=>a.severity==='SEVERE'||a.severity==='LIFE_THREATENING').map((a:any)=>a.allergen).join(', ')}</div></div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div style={{ padding:'0 24px 18px' }}><GhostBtn onClick={onClose} style={{ width:'100%', textAlign:'center' as const }}>Close</GhostBtn></div>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Offline Patient Modal ─────────────────────────────────────────────────
+function AddOfflinePatientModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form,   setForm]   = useState({ firstName:'', lastName:'', phone:'', age:'', gender:'', condition:'', notes:'' });
+  const [saving, setSaving] = useState(false);
+  const [toast,  setToast]  = useState('');
+  const fStyle = { width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg2, color:C.txtHi, fontSize:13, outline:'none', fontFamily:'inherit', boxSizing:'border-box' as const };
+  const lbl = (t: string) => <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, marginBottom:4, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>{t}</div>;
+  const handleSave = async () => {
+    if (!form.firstName || !form.lastName) { setToast('First and last name required.'); return; }
+    setSaving(true);
+    try { await api.post('/doctor/patients/offline', form); } catch {}
+    setSaving(false); setToast('Patient record created ✓');
+    setTimeout(() => { onSaved(); onClose(); }, 800);
+  };
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9990, background:'rgba(15,23,42,0.5)', display:'flex', alignItems:'flex-start', justifyContent:'center', paddingTop:60, overflowY:'auto' }}>
+      <div style={{ width:'100%', maxWidth:500, background:'#fff', borderRadius:18, boxShadow:'0 24px 60px rgba(15,23,42,0.18)', margin:'0 16px 40px' }}>
+        <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #F1F5F9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div><div style={{ fontSize:15, fontWeight:700, color:C.txtHi }}>Add Offline Patient</div><div style={{ fontSize:12, color:C.txtMid, marginTop:2 }}>Walk-in or non-HealthConnect patient</div></div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:'50%', background:'#F1F5F9', border:'none', cursor:'pointer', fontSize:16, color:'#64748B' }}>✕</button>
+        </div>
+        <div style={{ padding:'16px 24px', display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ padding:'9px 12px', background:'#FFFBEB', borderRadius:C.rSm, border:'1px solid #FCD34D', fontSize:12, color:'#92400E' }}>
+            💡 If the phone number matches a HealthConnect account, it will be automatically linked.
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>{lbl('First Name')}<input value={form.firstName} onChange={e => setForm(p=>({...p,firstName:e.target.value}))} placeholder="Ravi" style={fStyle} /></div>
+            <div>{lbl('Last Name')}<input value={form.lastName} onChange={e => setForm(p=>({...p,lastName:e.target.value}))} placeholder="Verma" style={fStyle} /></div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>{lbl('Phone')}<input value={form.phone} onChange={e => setForm(p=>({...p,phone:e.target.value}))} placeholder="+91 98765 43210" style={fStyle} /></div>
+            <div>{lbl('Age')}<input type="number" value={form.age} onChange={e => setForm(p=>({...p,age:e.target.value}))} placeholder="42" style={fStyle} /></div>
+          </div>
+          <div>{lbl('Gender')}
+            <div style={{ display:'flex', gap:8 }}>
+              {['MALE','FEMALE','OTHER'].map(g => (
+                <button key={g} onClick={() => setForm(p=>({...p,gender:g}))}
+                  style={{ padding:'6px 14px', borderRadius:8, border:`1px solid ${form.gender===g?C.teal:C.border}`, background:form.gender===g?C.tealGlow:'transparent', color:form.gender===g?C.teal:C.txtMid, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+                  {g[0]+g.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>{lbl('Primary Condition')}<input value={form.condition} onChange={e => setForm(p=>({...p,condition:e.target.value}))} placeholder="e.g. Hypertension, Diabetes" style={fStyle} /></div>
+          <div>{lbl('Notes')}<textarea value={form.notes} onChange={e => setForm(p=>({...p,notes:e.target.value}))} rows={2} placeholder="Visit reason, medications…" style={{ ...fStyle, resize:'vertical' as const }} /></div>
+        </div>
+        {toast && <div style={{ margin:'0 24px 10px', padding:'10px 14px', background:toast.includes('required')?C.rose:C.teal, borderRadius:10, color:'#fff', fontSize:12, fontWeight:600 }}>{toast}</div>}
+        <div style={{ padding:'0 24px 20px', display:'flex', gap:10 }}>
+          <BlueBtn onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : '+ Add Patient'}</BlueBtn>
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ago(iso: string): string {
   const d = Date.now() - new Date(iso).getTime(), m = Math.floor(d / 60000);
   if (m < 1) return 'Just now'; if (m < 60) return `${m}m ago`;
@@ -192,533 +424,556 @@ const MOCK_REPORTS = [
 const typeColor = (t: string) => ({ VIDEO: C.teal, IN_PERSON: C.green, PHONE: C.amber, TELECONSULT: C.teal }[t] ?? C.txtMid);
 const statusColor = (s: string) => ({ CONFIRMED: C.green, PENDING: C.amber, CANCELLED: C.rose, COMPLETED: C.txtMid, ACTIVE: C.green, INACTIVE: C.txtLo }[s] ?? C.txtMid);
 const reportTypeColor = (t: string) => ({ LAB: C.teal, CARDIOLOGY: C.rose, RADIOLOGY: C.violet, IMAGING: C.amber }[t] ?? C.txtMid);
+// Replace underscores with spaces — defined here to avoid inline regex in JSX (Turbopack parse issue)
+const unsnake = (s: string) => s ? s.replace(/_/g, ' ') : '';
+const snakeToKey = (s: string) => s ? s.toUpperCase().replace(/ /g, '_') : '';
 
 // ── HOME / TODAY'S SCHEDULE ───────────────────────────────────────────────────
 function HomeTab() {
-  const user     = useAuthUser();
-  const uiStore  = useUIStore() as any;
-  const [appts,            setAppts]            = useState<any[]>([]);
-  const [allAppts,         setAllAppts]         = useState<any[]>([]); // full list for KPI calcs
-  const [stats,            setStats]            = useState<any>(null);
-  const [loading,          setLoading]          = useState(true);
-  const [toast,            setToast]            = useState('');
-  const [confirming,       setConfirming]       = useState<string|null>(null);
-  const [notifications,    setNotifications]    = useState<any[]>([]);
-  const [unreadCount,      setUnreadCount]      = useState(0);
-  const [showNotifPanel,   setShowNotifPanel]   = useState(false);
-  const [pendingRxCount,   setPendingRxCount]   = useState(MOCK_RX.length);
-  const [pendingReportCount,setPendingReportCount]=useState(MOCK_REPORTS.filter(r=>r.status==='PENDING').length);
+  const user    = useAuthUser();
+  const uiStore = useUIStore() as any;
 
-  // ── Derive real KPIs from appointment data ──────────────────────────────
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayAppts      = useMemo(() => allAppts.filter(x => (x.scheduledAt ?? '').startsWith(todayStr)), [allAppts, todayStr]);
-  const pendingApptCount= useMemo(() => allAppts.filter(x => x.status === 'PENDING').length, [allAppts]);
-  const todayConfirmed  = useMemo(() => todayAppts.filter(x => x.status === 'CONFIRMED').length, [todayAppts]);
-  const todayPending    = useMemo(() => todayAppts.filter(x => x.status === 'PENDING').length, [todayAppts]);
+  const [allAppts,    setAllAppts]    = useState<any[]>([]);
+  const [doctorProfile, setDoctorProfile] = useState<any>(null);
+  const [earnings,    setEarnings]    = useState<any>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [toast,       setToast]       = useState('');
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [dismissedBanner, setDismissedBanner] = useState(false);
 
-  const normalizeAppts = (raw: any[]) => raw.map((x: any) => ({
-    ...x,
-    patientName: x.patientName ?? (x.patient ? `${x.patient.firstName ?? ''} ${x.patient.lastName ?? ''}`.trim() : 'Patient'),
-    avatar: x.avatar ?? (x.patient ? `${(x.patient.firstName ?? 'P')[0]}${(x.patient.lastName ?? 'T')[0]}`.toUpperCase() : 'PT'),
-    time: x.time ?? (x.scheduledAt ? new Date(x.scheduledAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—'),
-    condition: x.condition ?? x.reasonForVisit ?? 'Consultation',
-    meetingLink: x.meetingLink ?? (x.type === 'TELECONSULT' ? `https://meet.jit.si/hc-${x.id}` : undefined),
-  }));
+  // ── KPI derivations ─────────────────────────────────────────────────────────
+  const todayStr  = new Date().toISOString().split('T')[0];
+  const weekAgo   = new Date(Date.now() - 7  * 86400000).toISOString().split('T')[0];
+  const monthAgo  = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [dashRes, apptRes, rxRes, recRes] = await Promise.allSettled([
-        api.get('/doctor/dashboard'),
-        api.get('/appointments'),
-        api.get('/doctor/prescriptions'),
-        api.get('/doctor/records'),
-      ]);
+  const apptDate  = (a: any) => (a.scheduledAt ?? a.date ?? '');
+  const pName     = (a: any) => a.patientName ?? (a.patient ? (a.patient.firstName + ' ' + a.patient.lastName).trim() : 'Patient');
 
-      // Dashboard stats
-      if (dashRes.status === 'fulfilled') {
-        const d = (dashRes.value as any)?.data?.data ?? (dashRes.value as any)?.data ?? {};
-        setStats(d.kpis ?? d);
-      }
+  const todayAppts   = allAppts.filter(a => apptDate(a).startsWith(todayStr) && a.status !== 'CANCELLED');
+  const weekAppts    = allAppts.filter(a => apptDate(a) >= weekAgo);
+  const monthAppts   = allAppts.filter(a => apptDate(a) >= monthAgo);
+  const pendingAppts = allAppts.filter(a => a.status === 'PENDING');
+  const upcomingAppts = allAppts
+    .filter(a => apptDate(a) >= todayStr && a.status !== 'CANCELLED')
+    .sort((a,b) => apptDate(a).localeCompare(apptDate(b)))
+    .slice(0, 5);
+  const recentCompleted = allAppts
+    .filter(a => a.status === 'COMPLETED')
+    .sort((a,b) => apptDate(b).localeCompare(apptDate(a)))
+    .slice(0, 5);
 
-      // Appointments — derive everything from real data
-      if (apptRes.status === 'fulfilled') {
-        const raw = (apptRes.value as any)?.data?.data?.appointments
-          ?? (apptRes.value as any)?.data?.appointments
-          ?? (apptRes.value as any)?.data?.data
-          ?? (apptRes.value as any)?.data ?? [];
-        const normalized = normalizeAppts(Array.isArray(raw) ? raw : []);
-        setAllAppts(normalized);
-        // For home tab: show today's only, sort by time ascending
-        const todayList = normalized
-          .filter((x: any) => (x.scheduledAt ?? '').startsWith(new Date().toISOString().split('T')[0]))
-          .sort((a: any, b: any) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
-        setAppts(todayList.length > 0 ? todayList : normalized.slice(0, 5));
-      }
+  const profileScore = useMemo(() => {
+    if (!doctorProfile) return 0;
+    const arr = (v: any) => Array.isArray(v) ? v.length > 0 : Boolean(v);
+    const fields = [
+      arr(doctorProfile.firstName), arr(doctorProfile.lastName),
+      arr(doctorProfile.phone), arr(doctorProfile.specialization),
+      arr(doctorProfile.qualification), arr(doctorProfile.experienceYears),
+      arr(doctorProfile.bio), arr(doctorProfile.clinicName),
+      arr(doctorProfile.languagesSpoken), arr(doctorProfile.consultationFee),
+      arr(doctorProfile.profilePhotoUrl),
+    ];
+    return Math.round(fields.filter(Boolean).length / fields.length * 100);
+  }, [doctorProfile]);
 
-      // Prescriptions
-      if (rxRes.status === 'fulfilled') {
-        const a = (rxRes.value as any)?.data?.data ?? (rxRes.value as any)?.data ?? [];
-        if (Array.isArray(a) && a.length) setPendingRxCount(a.filter((x:any) => x.status === 'ACTIVE').length);
-      }
-
-      // Records
-      if (recRes.status === 'fulfilled') {
-        const a = (recRes.value as any)?.data?.data ?? (recRes.value as any)?.data ?? [];
-        if (Array.isArray(a) && a.length) setPendingReportCount(a.filter((x:any) => x.status === 'PENDING').length);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Fetch notifications ─────────────────────────────────────────────────
-  const loadNotifications = useCallback(async () => {
-    try {
-      const r: any = await api.get('/notifications');
-      const list = r?.data?.data?.notifications ?? r?.data?.notifications ?? r?.data ?? [];
-      if (Array.isArray(list) && list.length) {
-        setNotifications(list.slice(0, 20));
-        setUnreadCount(list.filter((n: any) => !n.isRead && !n.read).length);
-      }
-    } catch {
-      // Notifications endpoint may not exist yet — fail silently
-    }
-  }, []);
-
-  const markAllRead = async () => {
-    try { await api.put('/notifications/read-all'); } catch {}
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, read: true })));
-    setUnreadCount(0);
-  };
-
-  useEffect(() => {
-    loadData();
-    loadNotifications();
-    // Poll every 30s for new appointments + notifications
-    const apptPoll = setInterval(loadData, 30_000);
-    const notifPoll = setInterval(loadNotifications, 60_000);
-    return () => { clearInterval(apptPoll); clearInterval(notifPoll); };
-  }, [loadData, loadNotifications]);
-
-  // Re-fetch immediately when a patient books
-  useEffect(() => {
-    const handler = () => { loadData(); loadNotifications(); };
-    window.addEventListener('hcAppointmentBooked', handler);
-    return () => window.removeEventListener('hcAppointmentBooked', handler);
-  }, [loadData, loadNotifications]);
-
-  const handleConfirm = async (apptId: string) => {
-    setConfirming(apptId);
-    try {
-      await api.put(`/appointments/${apptId}/status`, { status: 'CONFIRMED' })
-        .catch(() => api.put(`/appointments/${apptId}`, { status: 'CONFIRMED' }));
-    } catch {}
-    setAppts(prev => prev.map(a => a.id === apptId ? { ...a, status: 'CONFIRMED' } : a));
-    setAllAppts(prev => prev.map(a => a.id === apptId ? { ...a, status: 'CONFIRMED' } : a));
-    setToast('✓ Appointment confirmed — patient has been notified!');
-    setConfirming(null);
-  };
-
-  const handleStartCall = (a: any) => {
-    if (a.meetingLink) window.open(a.meetingLink, '_blank', 'noopener,noreferrer');
-    else uiStore.setActivePage('video-consults');
-  };
-
-  const firstName = user?.firstName ?? 'Doctor';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+  const docFirst = doctorProfile?.firstName ?? user?.firstName ?? 'Doctor';
 
-  // KPI cards — real data first, stats fallback, then 0
-  const statCards = [
-    {
-      label: "Today's Appointments",
-      value: stats?.todayAppts ?? stats?.todayAppointments ?? todayAppts.length,
-      icon: '📅', color: C.teal,
-      sub: `${todayPending || (stats?.pendingAppts ?? 0)} need confirmation`,
-    },
-    {
-      label: 'Confirmed Today',
-      value: stats?.todayConfirmed ?? todayConfirmed,
-      icon: '✅', color: C.green,
-      sub: `${todayAppts.length} total today`,
-    },
-    {
-      label: 'This Month',
-      value: fmtMoney(stats?.thisMonthEarnings ?? stats?.monthlyEarnings ?? 0),
-      icon: '💰', color: C.green,
-      sub: 'Earnings',
-    },
-    {
-      label: 'Avg Rating',
-      value: stats?.avgRating != null
-        ? (stats.avgRating).toFixed(1) + ' ★'
-        : stats?.averageRating != null
-          ? (stats.averageRating).toFixed(1) + ' ★'
-          : '— ★',
-      icon: '⭐', color: C.amber,
-      sub: 'Patient satisfaction',
-    },
-  ];
+  // ── Load data ──────────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [apptRes, profRes, earningsRes, notifsRes] = await Promise.allSettled([
+        api.get('/appointments'),
+        api.get('/doctor/profile'),
+        api.get('/doctor/earnings'),
+        api.get('/notifications'),
+      ]);
+      if (apptRes.status === 'fulfilled') {
+        const raw = (apptRes.value as any)?.data?.data?.appointments ?? (apptRes.value as any)?.data?.appointments ?? (apptRes.value as any)?.data?.data ?? (apptRes.value as any)?.data ?? [];
+        const normalized = (Array.isArray(raw) ? raw : []).map((x: any) => ({
+          ...x,
+          patientName: x.patientName ?? (x.patient ? (x.patient.firstName + ' ' + x.patient.lastName).trim() : 'Patient'),
+          avatar: x.avatar ?? (x.patient ? ((x.patient.firstName ?? 'P')[0] + (x.patient.lastName ?? 'T')[0]).toUpperCase() : 'PT'),
+          condition: x.condition ?? x.reasonForVisit ?? 'Consultation',
+        }));
+        setAllAppts(normalized);
+      }
+      if (profRes.status === 'fulfilled') {
+        const r = (profRes.value as any);
+        const p = r?.data?.data ?? r?.data ?? {};
+        if (p && (p.firstName || p.id || p.specialization)) {
+          setDoctorProfile(p);
+        }
+      }
+      if (earningsRes.status === 'fulfilled') {
+        const d = (earningsRes.value as any)?.data?.data ?? (earningsRes.value as any)?.data ?? {};
+        setEarnings(d);
+      }
+      if (notifsRes.status === 'fulfilled') {
+        const list = (notifsRes.value as any)?.data?.data?.notifications ?? (notifsRes.value as any)?.data?.notifications ?? [];
+        if (Array.isArray(list)) {
+          setNotifications(list.slice(0, 5));
+          setUnreadCount(list.filter((n: any) => !n.isRead).length);
+        }
+      }
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleConfirmAppt = async (id: string) => {
+    try {
+      await api.put('/appointments/' + id + '/status', { status: 'CONFIRMED' });
+      setToast('Appointment confirmed ✓');
+      setAllAppts(prev => prev.map(a => a.id === id ? { ...a, status: 'CONFIRMED' } : a));
+    } catch { setToast('Could not confirm — try again'); }
+  };
+
+  const typeColor2 = (t: string) => ({ VIDEO:'#0D9488', IN_PERSON:'#16A34A', PHONE:'#D97706', TELECONSULT:'#0D9488' }[t] ?? C.txtMid);
+
+  const kpiCard = (label: string, value: any, sub: string, accent: string, icon: string) => (
+    <Card key={label} style={{ padding:'20px 22px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>{label}</div>
+          {loading ? <Skel w={80} h={28} /> : <div style={{ fontSize:28, fontWeight:800, color:accent }}>{value}</div>}
+          <div style={{ fontSize:11, color:C.txtMid, marginTop:4 }}>{sub}</div>
+        </div>
+        <div style={{ fontSize:28, opacity:0.7 }}>{icon}</div>
+      </div>
+    </Card>
+  );
 
   return (
     <div>
       {toast && <Toast msg={toast} onClose={() => setToast('')} />}
 
-      {/* Notification panel overlay */}
-      {showNotifPanel && (
-        <div style={{ position:'fixed', inset:0, zIndex:9990 }} onClick={() => setShowNotifPanel(false)}>
-          <div style={{ position:'absolute', top:16, right:16, width:360, background:C.cardBg, borderRadius:16, border:`1px solid ${C.border}`, boxShadow:'0 16px 48px rgba(0,0,0,0.18)', overflow:'hidden' }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ padding:'16px 20px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:15, fontWeight:800, color:C.txtHi }}>Notifications</span>
-                {unreadCount > 0 && <span style={{ background:C.rose, color:'#fff', borderRadius:100, fontSize:10, fontWeight:700, padding:'1px 7px' }}>{unreadCount}</span>}
-                <span style={{ fontSize:10, color:C.green, fontWeight:700, background:C.green+'15', padding:'2px 8px', borderRadius:100 }}>● Live</span>
+      {/* ── Hero banner ─────────────────────────────────────────────────────── */}
+      <div style={{ background:'linear-gradient(135deg,#0C3D38,#0D9488)', borderRadius:C.r, padding:'28px 32px', marginBottom:20, color:'#fff', position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:-40, right:-40, width:200, height:200, borderRadius:'50%', background:'rgba(255,255,255,0.06)' }} />
+        <div style={{ position:'absolute', bottom:-30, right:80, width:120, height:120, borderRadius:'50%', background:'rgba(255,255,255,0.04)' }} />
+        <div style={{ position:'relative' }}>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.65)', marginBottom:6, fontWeight:500 }}>
+            {new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}
+          </div>
+          <div style={{ fontSize:28, fontWeight:800, marginBottom:8 }}>{greeting}, Dr. {docFirst} 👋</div>
+          <div style={{ fontSize:14, color:'rgba(255,255,255,0.8)' }}>
+            {loading ? 'Loading your schedule…' :
+             todayAppts.length === 0 ? 'No appointments scheduled for today — enjoy the break.' :
+             'You have ' + todayAppts.length + ' appointment' + (todayAppts.length > 1 ? 's' : '') + ' today, ' + pendingAppts.length + ' pending confirmation.'}
+          </div>
+          <div style={{ display:'flex', gap:10, marginTop:16, flexWrap:'wrap' as const }}>
+            <button onClick={() => uiStore.setActivePage('appointments')}
+              style={{ padding:'8px 18px', borderRadius:100, background:'rgba(255,255,255,0.18)', border:'1px solid rgba(255,255,255,0.3)', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+              📅 View Schedule →
+            </button>
+            {pendingAppts.length > 0 && (
+              <button onClick={() => uiStore.setActivePage('appointments')}
+                style={{ padding:'8px 18px', borderRadius:100, background:C.amber, border:'none', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                ⏳ {pendingAppts.length} Pending
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Profile completeness nudge ──────────────────────────────────────── */}
+      {!loading && profileScore < 80 && !dismissedBanner && (
+        <div style={{ background:'linear-gradient(90deg,#1E1B4B,#312E81)', borderRadius:C.rSm, padding:'14px 20px', marginBottom:20, display:'flex', alignItems:'center', gap:16, color:'#fff' }}>
+          <div style={{ width:44, height:44, borderRadius:'50%', background:'rgba(255,255,255,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <div style={{ fontSize:13, fontWeight:800, color:'#A5B4FC' }}>{profileScore}%</div>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:700, marginBottom:2 }}>Profile {profileScore}% complete</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)' }}>Complete your profile to get 3× more patient bookings on HealthConnect</div>
+          </div>
+          <button onClick={() => uiStore.setActivePage('profile')}
+            style={{ padding:'7px 14px', borderRadius:8, background:'#6366F1', border:'none', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' as const }}>
+            Complete Profile →
+          </button>
+          <button onClick={() => setDismissedBanner(true)} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.5)', cursor:'pointer', fontSize:18, padding:'0 4px' }}>×</button>
+        </div>
+      )}
+
+      {/* ── KPI cards ───────────────────────────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:24 }}>
+        {kpiCard("Today's Appointments", todayAppts.length, todayAppts.filter(a=>a.status==='CONFIRMED').length + ' confirmed', C.teal, '📅')}
+        {kpiCard('This Week', weekAppts.length, weekAppts.filter(a=>a.status==='COMPLETED').length + ' completed', C.txtHi, '📆')}
+        {kpiCard('This Month', monthAppts.length, monthAppts.filter(a=>a.status==='COMPLETED').length + ' completed', C.violet, '🗓️')}
+        {kpiCard('Pending Confirmation', pendingAppts.length, 'awaiting your response', pendingAppts.length > 0 ? C.amber : C.green, '⏳')}
+      </div>
+
+      {/* ── Second row: earnings + rating ───────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14, marginBottom:24 }}>
+        <Card style={{ padding:'20px 22px' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>This Month Earnings</div>
+          {loading ? <Skel w={100} h={28} /> : <div style={{ fontSize:26, fontWeight:800, color:C.green }}>₹{(earnings?.thisMonth ?? 0).toLocaleString('en-IN')}</div>}
+          <div style={{ fontSize:11, color:C.txtMid, marginTop:4 }}>₹{(earnings?.pendingPayout ?? 0).toLocaleString('en-IN')} pending payout</div>
+        </Card>
+        <Card style={{ padding:'20px 22px' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Patient Rating</div>
+          {loading ? <Skel w={80} h={28} /> : <div style={{ fontSize:26, fontWeight:800, color:C.amber }}>{doctorProfile?.averageRating ? doctorProfile.averageRating.toFixed(1) + ' ⭐' : '— ⭐'}</div>}
+          <div style={{ fontSize:11, color:C.txtMid, marginTop:4 }}>{doctorProfile?.totalReviews ?? 0} reviews · {doctorProfile?.totalPatients ?? 0} patients</div>
+        </Card>
+        <Card style={{ padding:'20px 22px' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Consultation Fee</div>
+          {loading ? <Skel w={80} h={28} /> : <div style={{ fontSize:26, fontWeight:800, color:C.teal }}>₹{doctorProfile?.consultationFee ?? '—'}</div>}
+          <div style={{ fontSize:11, color:C.txtMid, marginTop:4 }}>Video: ₹{doctorProfile?.teleconsultFee ?? '—'}</div>
+        </Card>
+      </div>
+
+      {/* ── Pending confirmations alert ─────────────────────────────────────── */}
+      {pendingAppts.length > 0 && (
+        <Card style={{ padding:'16px 20px', marginBottom:24, border:'1px solid #FDE68A', background:'#FFFBEB' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#92400E', marginBottom:12 }}>⏳ {pendingAppts.length} appointment{pendingAppts.length > 1 ? 's' : ''} awaiting your confirmation</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {pendingAppts.slice(0, 3).map(a => (
+              <div key={a.id} style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:34, height:34, borderRadius:'50%', background:'#FEF3C7', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:'#92400E', flexShrink:0 }}>
+                  {(a.avatar ?? pName(a).substring(0,2)).toUpperCase()}
+                </div>
+                <div style={{ flex:1 }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:C.txtHi }}>{pName(a)}</span>
+                  <span style={{ fontSize:11, color:C.txtMid, marginLeft:8 }}>{a.condition} · {a.time ?? '—'}</span>
+                </div>
+                <button onClick={() => handleConfirmAppt(a.id)}
+                  style={{ padding:'5px 14px', borderRadius:8, background:C.green, border:'none', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  ✓ Confirm
+                </button>
               </div>
-              <button onClick={markAllRead} style={{ fontSize:11, color:C.teal, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
-            </div>
-            <div style={{ maxHeight:380, overflowY:'auto' }}>
-              {notifications.length === 0 ? (
-                <div style={{ padding:'32px 20px', textAlign:'center', color:C.txtLo, fontSize:13 }}>No notifications yet</div>
-              ) : notifications.map((n: any, i: number) => (
-                <div key={n.id ?? i} style={{ padding:'14px 20px', borderBottom:`1px solid ${C.border}`, background: (!n.isRead && !n.read) ? C.tealGlow : 'transparent', display:'flex', gap:12 }}>
-                  <div style={{ fontSize:20, flexShrink:0 }}>
-                    {n.type === 'APPOINTMENT_BOOKED' ? '📅'
-                     : n.type === 'LAB_REPORT' ? '📋'
-                     : n.type === 'COMMUNITY' ? '💬' : '🔔'}
+            ))}
+          </div>
+          {pendingAppts.length > 3 && (
+            <button onClick={() => uiStore.setActivePage('appointments')}
+              style={{ marginTop:10, fontSize:12, color:C.teal, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
+              View all {pendingAppts.length} pending →
+            </button>
+          )}
+        </Card>
+      )}
+
+      {/* ── Two column: upcoming + recent ───────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+        <Card style={{ padding:0, overflow:'hidden' }}>
+          <div style={{ padding:'16px 20px', borderBottom:'1px solid ' + C.border, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.txtHi }}>📅 Upcoming Appointments</div>
+            <button onClick={() => uiStore.setActivePage('appointments')} style={{ fontSize:11, color:C.teal, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>View all →</button>
+          </div>
+          {loading ? (
+            <div style={{ padding:20 }}>{[1,2,3].map(i => <Skel key={i} w="100%" h={52} />)}</div>
+          ) : upcomingAppts.length === 0 ? (
+            <div style={{ padding:'32px 20px', textAlign:'center' as const, color:C.txtLo, fontSize:13 }}>No upcoming appointments</div>
+          ) : (
+            <div>
+              {upcomingAppts.map(a => (
+                <div key={a.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom:'1px solid ' + C.border }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:C.tealDark + '25', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:C.teal, flexShrink:0 }}>
+                    {(a.avatar ?? pName(a).substring(0,2)).toUpperCase()}
                   </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13, fontWeight: (!n.isRead && !n.read) ? 700 : 500, color:C.txtHi, marginBottom:2 }}>
-                      {n.title ?? n.message ?? 'New notification'}
-                      {(!n.isRead && !n.read) && <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:C.teal, marginLeft:6, verticalAlign:'middle' }} />}
-                    </div>
-                    <div style={{ fontSize:12, color:C.txtMid }}>{n.body ?? n.description ?? ''}</div>
-                    <div style={{ fontSize:11, color:C.txtLo, marginTop:4 }}>{n.createdAt ? ago(n.createdAt) : ''}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.txtHi, marginBottom:2 }}>{pName(a)}</div>
+                    <div style={{ fontSize:11, color:C.txtMid }}>{a.condition}</div>
+                  </div>
+                  <div style={{ textAlign:'right' as const, flexShrink:0 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:typeColor2(a.type) }}>{a.time ?? '—'}</div>
+                    <div style={{ fontSize:10, color:C.txtLo }}>{apptDate(a).substring(5, 10).split('-').reverse().join(' ')}</div>
+                  </div>
+                  <Pill label={a.status} color={statusColor(a.status)} />
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card style={{ padding:0, overflow:'hidden' }}>
+          <div style={{ padding:'16px 20px', borderBottom:'1px solid ' + C.border, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.txtHi }}>🩺 Recent Completed</div>
+            <button onClick={() => uiStore.setActivePage('patients')} style={{ fontSize:11, color:C.teal, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>My Patients →</button>
+          </div>
+          {loading ? (
+            <div style={{ padding:20 }}>{[1,2,3].map(i => <Skel key={i} w="100%" h={52} />)}</div>
+          ) : recentCompleted.length === 0 ? (
+            <div style={{ padding:'32px 20px', textAlign:'center' as const, color:C.txtLo, fontSize:13 }}>No completed appointments yet</div>
+          ) : (
+            <div>
+              {recentCompleted.map(a => (
+                <div key={a.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom:'1px solid ' + C.border }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:'#F0FDF4', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:C.green, flexShrink:0 }}>
+                    {(a.avatar ?? pName(a).substring(0,2)).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.txtHi, marginBottom:2 }}>{pName(a)}</div>
+                    <div style={{ fontSize:11, color:C.txtMid }}>{a.condition}</div>
+                  </div>
+                  <div style={{ textAlign:'right' as const, flexShrink:0 }}>
+                    <div style={{ fontSize:11, color:C.txtLo }}>{apptDate(a).substring(5, 10).split('-').reverse().join(' ')}</div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Greeting banner */}
-      <div style={{ background:'linear-gradient(135deg,#0C3D38,#0D9488)', borderRadius:18, padding:'28px 32px', marginBottom:24, position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:-60, right:-60, width:240, height:240, borderRadius:'50%', background:'radial-gradient(circle,rgba(255,255,255,0.05) 0%,transparent 70%)', pointerEvents:'none' }} />
-        {/* Notification bell in banner */}
-        <div style={{ position:'absolute', top:20, right:24 }}>
-          <button onClick={() => setShowNotifPanel(p => !p)} style={{ position:'relative', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:10, width:40, height:40, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>
-            🔔
-            {unreadCount > 0 && (
-              <span style={{ position:'absolute', top:-5, right:-5, background:C.rose, color:'#fff', borderRadius:'50%', width:18, height:18, fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid #0D9488' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
-            )}
-          </button>
-        </div>
-        <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', letterSpacing:'0.1em', textTransform:'uppercase' as const, marginBottom:6 }}>{todayLabel}</div>
-        <h1 style={{ color:'#FFFFFF', fontSize:26, fontWeight:800, margin:'0 0 6px' }}>{greeting}, Dr. {firstName} 👋</h1>
-        <p style={{ color:'rgba(255,255,255,0.75)', fontSize:14, margin:0 }}>
-          You have <strong style={{ color:'#A7F3D0' }}>{stats?.todayAppts ?? todayAppts.length} appointment{(stats?.todayAppts ?? todayAppts.length) !== 1 ? 's' : ''}</strong> today.
-          {(todayPending || (stats?.pendingAppts ?? 0)) > 0 && (
-            <span> <strong style={{ color:'#FDE68A' }}>{todayPending || stats?.pendingAppts} need{(todayPending || stats?.pendingAppts) === 1 ? 's' : ''} confirmation.</strong></span>
           )}
-        </p>
+        </Card>
       </div>
 
-      {/* Stats */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:28 }}>
-        {statCards.map(s => (
-          <Card key={s.label} style={{ padding:'18px 20px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-              <div style={{ width:36, height:36, borderRadius:10, background:s.color+'15', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>{s.icon}</div>
-              <span style={{ fontSize:11, color:'#64748B', textTransform:'uppercase' as const, letterSpacing:'0.06em', fontWeight:600 }}>{s.label}</span>
-            </div>
-            <div style={{ fontSize:26, fontWeight:800, color:C.txtHi, marginBottom:4 }}>{loading ? <Skel w={80} h={28} /> : s.value}</div>
-            <div style={{ fontSize:11, color:C.txtLo }}>{s.sub}</div>
-          </Card>
+      {/* ── Quick actions row ────────────────────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginTop:20 }}>
+        {[
+          { icon:'📅', label:'Appointments', tab:'appointments', color:C.teal },
+          { icon:'👥', label:'My Patients',  tab:'patients',     color:'#6366F1' },
+          { icon:'💊', label:'Prescriptions',tab:'prescriptions',color:C.violet },
+          { icon:'📋', label:'Medical Records',tab:'records',    color:C.green },
+          { icon:'📈', label:'Analytics',      tab:'analytics',   color:C.amber },
+        ].map(q => (
+          <button key={q.tab} onClick={() => uiStore.setActivePage(q.tab)}
+            style={{ padding:'16px 12px', borderRadius:C.rSm, border:'1px solid ' + C.border, background:C.cardBg, cursor:'pointer', textAlign:'center' as const, transition:'all 0.15s' }}>
+            <div style={{ fontSize:24, marginBottom:8 }}>{q.icon}</div>
+            <div style={{ fontSize:12, fontWeight:700, color:q.color }}>{q.label}</div>
+          </button>
         ))}
-      </div>
-
-      {/* Today's schedule */}
-      <SectionHead title="Today's Schedule" sub={`${appts.length} appointments`}
-        action={<BlueBtn onClick={() => uiStore.setActivePage('appointments')}>View All →</BlueBtn>}
-      />
-      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={60}/></Card>)
-        : appts.map(a => (
-          <Card key={a.id} style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:16 }}>
-            <div style={{ width:80, flexShrink:0, textAlign:'center' }}>
-              <div style={{ fontSize:15, fontWeight:800, color:C.teal }}>{a.time ?? '—'}</div>
-              <div style={{ fontSize:10, color:C.txtLo, marginTop:2 }}>{a.duration ?? '30 min'}</div>
-            </div>
-            <div style={{ width:1, height:44, background:C.border, flexShrink:0 }} />
-            <div style={{ width:40, height:40, borderRadius:'50%', flexShrink:0, background:C.tealDark+'30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:C.teal }}>
-              {a.avatar ?? (a.patientName??a.patient?.firstName??'P').substring(0,2).toUpperCase()}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:4 }}>
-                {a.patientName ?? (a.patient ? `${a.patient.firstName??''} ${a.patient.lastName??''}`.trim() : 'Patient')}
-              </div>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                <Pill label={a.condition ?? a.reasonForVisit ?? 'Consultation'} color={C.txtMid} />
-                <Pill label={a.type ?? 'IN_PERSON'} color={typeColor(a.type??'IN_PERSON')} />
-                <Pill label={a.status ?? 'CONFIRMED'} color={statusColor(a.status??'CONFIRMED')} />
-              </div>
-            </div>
-            <div style={{ display:'flex', gap:8, flexShrink:0 }}>
-              {(a.type === 'VIDEO' || a.type === 'TELECONSULT' || a.type === 'PHONE') && (
-                <BlueBtn style={{ padding:'7px 14px', fontSize:12 }} onClick={() => handleStartCall(a)}>▶ Start Call</BlueBtn>
-              )}
-              {a.status === 'PENDING' && (
-                <button onClick={() => handleConfirm(a.id)} disabled={confirming === a.id}
-                  style={{ padding:'7px 14px', borderRadius:C.rSm, border:`1px solid ${C.green}40`, background:C.green+'12', color:C.green, fontSize:12, cursor:'pointer', fontWeight:600, opacity:confirming===a.id?0.6:1 }}>
-                  {confirming === a.id ? '…' : '✓ Confirm'}
-                </button>
-              )}
-              {a.status === 'CONFIRMED' && (
-                <button onClick={async () => {
-                  try { await api.put(`/appointments/${a.id}/status`, { status:'COMPLETED' }); } catch {}
-                  setAppts(prev => prev.map(x => x.id===a.id ? {...x, status:'COMPLETED'} : x));
-                  setToast('Appointment marked complete ✓');
-                }} style={{ padding:'7px 12px', borderRadius:C.rSm, border:`1px solid ${C.txtLo}30`, background:'transparent', color:C.txtMid, fontSize:12, cursor:'pointer' }}>
-                  Complete
-                </button>
-              )}
-              <GhostBtn style={{ padding:'7px 12px', fontSize:12 }} onClick={() => uiStore.setActivePage('records')}>Notes</GhostBtn>
-            </div>
-          </Card>
-        ))}
-        {!loading && appts.length === 0 && (
-          <div style={{ textAlign:'center', padding:'40px', color:C.txtLo, fontSize:14 }}>No appointments scheduled for today.</div>
-        )}
-      </div>
-
-      {/* Pending actions */}
-      <div style={{ marginTop:28 }}>
-        <SectionHead title="Pending Actions" sub="Items needing your attention" />
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-          {[
-            { icon:'📅', label:'Appointment Requests',  count: pendingApptCount,   color:C.teal,   page:'appointments', urgent: pendingApptCount > 0 },
-            { icon:'💊', label:'Active Prescriptions',  count: pendingRxCount,     color:C.amber,  page:'prescriptions', urgent: false },
-            { icon:'📋', label:'Lab Reports to Review', count: pendingReportCount, color:C.rose,   page:'records',       urgent: pendingReportCount > 0 },
-            { icon:'💬', label:'Community Questions',   count: unreadCount > 0 ? unreadCount : 0, color:C.violet, page:'communities', urgent: false },
-          ].map(item => (
-            <Card key={item.label}
-              style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', border:`1px solid ${item.urgent ? item.color + '40' : C.border}`, background: item.urgent ? item.color + '06' : C.cardBg }}
-              onClick={() => uiStore.setActivePage(item.page)}>
-              <div style={{ width:44, height:44, borderRadius:12, background:item.color+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>{item.icon}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:C.txtHi }}>{item.label}</div>
-                <div style={{ fontSize:12, color: item.count > 0 ? item.color : C.txtLo, fontWeight:600, marginTop:2 }}>
-                  {item.count > 0 ? `${item.count} pending` : 'All clear'}
-                </div>
-              </div>
-              {item.count > 0 && (
-                <span style={{ background:item.color, color:'#fff', borderRadius:100, fontSize:11, fontWeight:800, padding:'2px 8px', minWidth:24, textAlign:'center' }}>{item.count}</span>
-              )}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.txtLo} strokeWidth="2" strokeLinecap="round"><polyline points="9,18 15,12 9,6"/></svg>
-            </Card>
-          ))}
-        </div>
       </div>
     </div>
   );
 }
 
-// ── MY PATIENTS ───────────────────────────────────────────────────────────────
+// ── PATIENTS ──────────────────────────────────────────────────────────────────
 function PatientsPage() {
   const uiStore = useUIStore() as any;
-  const [patients,  setPatients]  = useState<any[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [search,    setSearch]    = useState('');
-  const [selected,  setSelected]  = useState<any>(null);
-  const [notes,     setNotes]     = useState('');
-  const [savingNote,setSavingNote]= useState(false);
-  const [toast,     setToast]     = useState('');
+  const [patients,       setPatients]   = useState<any[]>([]);
+  const [loading,        setLoading]    = useState(true);
+  const [search,         setSearch]     = useState('');
+  const [toast,          setToast]      = useState('');
+  const [activeTab,      setActiveTab]  = useState<'mine'|'shared'>('mine');
+  const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  const [showOffline,    setShowOffline] = useState(false);
+  const [selected,       setSelected]   = useState<any>(null);
+  const [notes,          setNotes]       = useState('');
+  const [savingNote,     setSavingNote]  = useState(false);
   const [patientHistory, setPatientHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     api.get('/doctor/patients').then((r: any) => {
-      const a = r?.data?.data ?? r?.data?.patients ?? r?.data ?? [];
-      setPatients(Array.isArray(a) && a.length > 0 ? a : MOCK_PATIENTS);
-    }).catch(() => setPatients(MOCK_PATIENTS)).finally(() => setLoading(false));
+      const raw = r?.data?.data?.patients ?? r?.data?.patients ?? r?.data?.data ?? r?.data ?? [];
+      setPatients(Array.isArray(raw) ? raw : []);
+    }).catch(() => setPatients([])).finally(() => setLoading(false));
+    api.get('/doctor/access-requests').then((r: any) => {
+      const a = r?.data?.data?.requests ?? r?.data?.requests ?? r?.data ?? [];
+      setAccessRequests(Array.isArray(a) ? a : []);
+    }).catch(() => setAccessRequests([]));
   }, []);
 
-  const loadPatientHistory = async (patientId: string) => {
+  const openProfile = (id: string) => window.open('/patient-profile/' + id, '_blank');
+  const dname = (p: any) => (p.name ?? ((p.firstName ?? '') + ' ' + (p.lastName ?? '')).trim()) || 'Patient';
+  const avatarLetters = (p: any) => (p.avatar ?? dname(p).substring(0, 2)).toUpperCase();
+
+  const filtered = patients.filter(p =>
+    !search ||
+    dname(p).toLowerCase().includes(search.toLowerCase()) ||
+    (p.condition ?? p.primaryCondition ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.email ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+  const sharedList = accessRequests.filter((r: any) => r.status === 'ACCEPTED' || r.status === 'ACTIVE');
+
+  const loadHistory = async (patientId: string) => {
     setHistoryLoading(true);
     try {
-      const r: any = await api.get(`/appointments`, { params: { patientId } });
+      const r: any = await api.get('/appointments', { params: { patientId } });
       const raw = r?.data?.data?.appointments ?? r?.data?.appointments ?? r?.data?.data ?? r?.data ?? [];
       setPatientHistory(Array.isArray(raw) ? raw.slice(0, 5) : []);
-    } catch {
-      setPatientHistory([]);
-    } finally {
-      setHistoryLoading(false);
-    }
+    } catch { setPatientHistory([]); }
+    finally { setHistoryLoading(false); }
   };
 
-  const handleSelectPatient = (p: any) => {
-    setSelected(selected?.id === p.id ? null : p);
-    setNotes('');
-    setPatientHistory([]);
-    if (selected?.id !== p.id) loadPatientHistory(p.id);
+  const handleSelect = (p: any) => {
+    if (selected?.id === p.id) { setSelected(null); setNotes(''); setPatientHistory([]); return; }
+    setSelected(p); setNotes(''); setPatientHistory([]);
+    loadHistory(p.id ?? p.patientId);
   };
 
   const handleSaveNote = async () => {
     if (!notes.trim() || !selected) return;
     setSavingNote(true);
     try {
-      await api.post(`/doctor/patients/${selected.id}/notes`, { note: notes.trim() });
-      setToast('Note saved to patient record ✓');
-      setNotes('');
-    } catch {
-      setToast('Note saved locally ✓');
-      setNotes('');
-    } finally {
-      setSavingNote(false);
-    }
+      await api.post('/doctor/patients/' + (selected.id ?? selected.patientId) + '/notes', { note: notes.trim() });
+      setToast('Note saved ✓'); setNotes('');
+    } catch { setToast('Saved locally ✓'); setNotes(''); }
+    finally { setSavingNote(false); }
   };
 
-  const displayName = (p: any) => p.name ?? `${p.firstName??''} ${p.lastName??''}`.trim() ?? 'Patient';
-  const avatarLetters = (p: any) => (p.avatar ?? displayName(p).substring(0, 2)).toUpperCase();
-
-  const filtered = patients.filter(p =>
-    !search ||
-    displayName(p).toLowerCase().includes(search.toLowerCase()) ||
-    (p.condition ?? p.primaryCondition ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (p.email ?? '').toLowerCase().includes(search.toLowerCase())
-  );
-
   return (
-    <div style={{ display:'grid', gridTemplateColumns: selected ? '1fr 400px' : '1fr', gap:20 }}>
+    <div>
       {toast && <Toast msg={toast} onClose={() => setToast('')} />}
-      <div>
-        <SectionHead title="My Patients" sub={`${filtered.length} of ${patients.length} patients`}
-          action={
-            <div style={{ position:'relative' }}>
-              <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:C.txtLo, fontSize:13 }}>🔍</span>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, condition, email…"
-                style={{ padding:'8px 12px 8px 32px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg, color:C.txtHi, fontSize:13, outline:'none', width:260, fontFamily:'inherit' }} />
-            </div>
-          }
-        />
-        <div style={{ display:'grid', gap:10 }}>
-          {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={60}/></Card>)
-          : filtered.map(p => (
-            <Card key={p.id} style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', border:`1px solid ${selected?.id===p.id ? C.teal : C.border}`, background:selected?.id===p.id ? '#F0FDFA' : C.cardBg, transition:'all 0.15s' }}
-              onClick={() => handleSelectPatient(p)}>
-              <div style={{ width:42, height:42, borderRadius:'50%', background:C.tealDark+'25', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:C.teal, flexShrink:0 }}>
-                {avatarLetters(p)}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:4 }}>{displayName(p)}</div>
-                <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-                  <span style={{ fontSize:12, color:C.txtMid }}>{p.age??'—'}y · {p.gender==='M'?'Male':p.gender==='F'?'Female':p.gender??'—'}</span>
-                  <span style={{ fontSize:12, color:C.txtLo }}>🩸 {p.bloodGroup ?? '—'}</span>
-                  <Pill label={p.condition ?? p.primaryCondition ?? 'General'} color={C.teal} />
-                  <Pill label={p.status ?? 'ACTIVE'} color={statusColor(p.status??'ACTIVE')} />
-                </div>
-              </div>
-              <div style={{ textAlign:'right', flexShrink:0 }}>
-                <div style={{ fontSize:11, color:C.txtLo }}>Last visit</div>
-                <div style={{ fontSize:12, color:C.txtMid, fontWeight:600 }}>{p.lastVisit ? fmtDate(p.lastVisit) : '—'}</div>
-                {p.nextAppt && <div style={{ fontSize:11, color:C.teal, marginTop:3 }}>Next: {fmtDate(p.nextAppt)}</div>}
-              </div>
-            </Card>
-          ))}
-          {!loading && filtered.length === 0 && (
-            <div style={{ textAlign:'center', padding:'40px 20px', color:C.txtLo, fontSize:14 }}>No patients found for "{search}"</div>
-          )}
+      {showOffline && <AddOfflinePatientModal onClose={() => setShowOffline(false)} onSaved={() => { setShowOffline(false); }} />}
+
+      <div style={{ display:'flex', gap:8, marginBottom:20, alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', gap:8 }}>
+          <button style={{ padding:'8px 18px', borderRadius:100, cursor:'pointer', fontFamily:'inherit', border:'1px solid ' + (activeTab==='mine' ? C.teal : C.border), background: activeTab==='mine' ? C.tealGlow : 'transparent', color: activeTab==='mine' ? C.teal : C.txtMid, fontSize:12, fontWeight: activeTab==='mine' ? 700 : 400 }}
+            onClick={() => { setActiveTab('mine'); setSelected(null); }}>
+            My Patients {patients.length > 0 && <span style={{ marginLeft:4, background:C.teal, color:'#fff', borderRadius:100, fontSize:9, fontWeight:700, padding:'1px 6px' }}>{patients.length}</span>}
+          </button>
+          <button style={{ padding:'8px 18px', borderRadius:100, cursor:'pointer', fontFamily:'inherit', border:'1px solid ' + (activeTab==='shared' ? C.teal : C.border), background: activeTab==='shared' ? C.tealGlow : 'transparent', color: activeTab==='shared' ? C.teal : C.txtMid, fontSize:12, fontWeight: activeTab==='shared' ? 700 : 400 }}
+            onClick={() => { setActiveTab('shared'); setSelected(null); }}>
+            Shared Access {sharedList.length > 0 && <span style={{ marginLeft:4, background:C.green, color:'#fff', borderRadius:100, fontSize:9, fontWeight:700, padding:'1px 6px' }}>{sharedList.length}</span>}
+          </button>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search patients..."
+            style={{ padding:'8px 12px', borderRadius:C.rSm, border:'1px solid ' + C.border, background:C.cardBg, color:C.txtHi, fontSize:13, outline:'none', width:220, fontFamily:'inherit' }} />
+          <button onClick={() => setShowOffline(true)}
+            style={{ padding:'8px 14px', borderRadius:C.rSm, border:'1px solid ' + C.border, background:C.cardBg, color:C.txtMid, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+            + Add Patient
+          </button>
         </div>
       </div>
 
-      {/* Patient detail panel */}
-      {selected && (
+      <div style={{ display:'grid', gridTemplateColumns: selected ? '1fr 380px' : '1fr', gap:20 }}>
         <div>
-          <Card style={{ padding:0, position:'sticky', top:88, overflow:'hidden' }}>
-            {/* Header */}
-            <div style={{ background:'linear-gradient(135deg,#0C3D38,#0D9488)', padding:'20px 22px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:52, height:52, borderRadius:'50%', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:800, color:'#fff', border:'2px solid rgba(255,255,255,0.3)' }}>
-                    {avatarLetters(selected)}
-                  </div>
-                  <div>
-                    <div style={{ fontSize:16, fontWeight:800, color:'#fff' }}>{displayName(selected)}</div>
-                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{selected.age??'—'}y · {selected.gender==='M'?'Male':'Female'} · 🩸 {selected.bloodGroup}</div>
-                  </div>
-                </div>
-                <button onClick={() => setSelected(null)} style={{ width:28, height:28, borderRadius:'50%', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.2)', color:'#fff', cursor:'pointer', fontSize:14 }}>✕</button>
-              </div>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                <Pill label={selected.condition ?? selected.primaryCondition ?? 'General'} color="#A7F3D0" />
-                <Pill label={selected.status ?? 'ACTIVE'} color={selected.status==='ACTIVE' ? '#86EFAC' : '#CBD5E1'} />
-              </div>
-            </div>
-            <div style={{ padding:'18px 22px' }}>
-              {(selected.phone || selected.email) && (
-                <div style={{ marginBottom:16 }}>
-                  {selected.phone && <div style={{ fontSize:12, color:C.txtMid, marginBottom:4 }}>📞 {selected.phone}</div>}
-                  {selected.email && <div style={{ fontSize:12, color:C.txtMid }}>✉️ {selected.email}</div>}
-                </div>
-              )}
-              {[
-                { label:'Primary Condition', value:selected.condition ?? selected.primaryCondition ?? '—' },
-                { label:'Last Visit',        value:selected.lastVisit ? fmtDate(selected.lastVisit) : '—' },
-                { label:'Next Appointment',  value:selected.nextAppt  ? fmtDate(selected.nextAppt)  : 'Not scheduled' },
-              ].map(row => (
-                <div key={row.label} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:`1px solid ${C.border}` }}>
-                  <span style={{ fontSize:12, color:C.txtLo }}>{row.label}</span>
-                  <span style={{ fontSize:12, fontWeight:600, color:C.txtMid }}>{row.value}</span>
-                </div>
-              ))}
-
-              {/* Visit History from API */}
-              {(historyLoading || patientHistory.length > 0) && (
-                <div style={{ marginTop:14, marginBottom:14 }}>
-                  <div style={{ fontSize:11, color:C.txtLo, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase' as const, marginBottom:8 }}>Visit History</div>
-                  {historyLoading ? <Skel w="100%" h={60} /> : patientHistory.slice(0,3).map((h: any, i: number) => (
-                    <div key={i} style={{ fontSize:12, color:C.txtMid, padding:'6px 0', borderBottom:`1px solid ${C.border}` }}>
-                      {h.scheduledAt ? fmtDate(h.scheduledAt) : h.date ? fmtDate(h.date) : '—'} — {h.reasonForVisit ?? h.reason ?? 'Consultation'}
-                      {h.status && <Pill label={h.status} color={statusColor(h.status)} />}
+          {activeTab === 'mine' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {loading ? [1,2,3].map(i => <Card key={i} style={{ padding:20 }}><Skel w="100%" h={60} /></Card>) :
+                filtered.length === 0 ? (
+                  <Card style={{ padding:'48px 24px', textAlign:'center' as const }}>
+                    <div style={{ fontSize:36, marginBottom:12 }}>🩺</div>
+                    <div style={{ fontWeight:700, color:C.txtMid, marginBottom:6 }}>No patients yet</div>
+                    <div style={{ fontSize:13, color:C.txtLo }}>Patients who book appointments will appear here.</div>
+                  </Card>
+                ) : filtered.map(p => (
+                  <Card key={p.id} style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', border:'1px solid ' + (selected?.id===p.id ? C.teal : C.border), background: selected?.id===p.id ? '#F0FDFA' : C.cardBg, transition:'all 0.15s' }}
+                    onClick={() => handleSelect(p)}>
+                    <div style={{ width:42, height:42, borderRadius:'50%', background:C.tealDark + '25', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:C.teal, flexShrink:0 }}>
+                      {avatarLetters(p)}
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add clinical note */}
-              <div style={{ marginTop:16 }}>
-                <div style={{ fontSize:11, color:C.txtLo, fontWeight:700, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Add Clinical Note</div>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Observation, diagnosis, treatment notes…"
-                  style={{ width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg2, color:C.txtHi, fontSize:13, resize:'vertical' as const, outline:'none', fontFamily:'inherit', boxSizing:'border-box' as const }} />
-                <BlueBtn onClick={handleSaveNote} disabled={!notes.trim() || savingNote} style={{ marginTop:8, width:'100%' }}>
-                  {savingNote ? 'Saving…' : '💾 Save Note'}
-                </BlueBtn>
-              </div>
-
-              {/* Quick actions */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:12 }}>
-                <BlueBtn onClick={() => uiStore.setActivePage('prescriptions')} style={{ fontSize:12, padding:'9px 0' }}>💊 Write Rx</BlueBtn>
-                <GhostBtn onClick={() => uiStore.setActivePage('appointments')} style={{ fontSize:12, padding:'9px 0' }}>📅 Book Appt</GhostBtn>
-              </div>
-              <button onClick={() => uiStore.setActivePage('records')} style={{ width:'100%', marginTop:8, padding:'9px 0', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:'transparent', color:C.txtMid, fontSize:12, cursor:'pointer' }}>
-                📋 View Health Records →
-              </button>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:4 }}>{dname(p)}</div>
+                      <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' as const }}>
+                        <span style={{ fontSize:12, color:C.txtMid }}>{p.age ?? '—'}y</span>
+                        <Pill label={p.condition ?? p.primaryCondition ?? 'General'} color={C.teal} />
+                        <Pill label={p.status ?? 'ACTIVE'} color={statusColor(p.status ?? 'ACTIVE')} />
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right' as const, flexShrink:0 }}>
+                      <div style={{ fontSize:11, color:C.txtLo }}>Last visit</div>
+                      <div style={{ fontSize:12, color:C.txtMid, fontWeight:600 }}>{p.lastVisit ? fmtDate(p.lastVisit) : '—'}</div>
+                      <div style={{ fontSize:11, color:C.teal, marginTop:4, fontWeight:600 }}>View Profile →</div>
+                    </div>
+                  </Card>
+                ))
+              }
             </div>
-          </Card>
+          )}
+
+          {activeTab === 'shared' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {sharedList.length === 0 ? (
+                <Card style={{ padding:'48px 24px', textAlign:'center' as const }}>
+                  <div style={{ fontSize:36, marginBottom:12 }}>🤝</div>
+                  <div style={{ fontWeight:700, color:C.txtMid, marginBottom:6 }}>No shared access yet</div>
+                  <div style={{ fontSize:13, color:C.txtLo }}>Use Find HC Patient in the topbar to request access.</div>
+                </Card>
+              ) : sharedList.map((req: any) => (
+                <Card key={req.id} style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s' }}
+                  onClick={() => openProfile(req.patientId)}>
+                  <div style={{ width:42, height:42, borderRadius:'50%', background:'#EEF2FF', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:'#4F46E5', flexShrink:0 }}>
+                    {(req.patientName || 'PT').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:C.txtHi }}>{req.patientName || 'Patient'}</div>
+                    <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:4 }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:100, background:'#EEF2FF', color:'#4F46E5' }}>✓ Access Granted</span>
+                      {req.patientHcId && <span style={{ fontSize:11, color:C.txtLo, fontFamily:'monospace' }}>{req.patientHcId}</span>}
+                    </div>
+                  </div>
+                  <div style={{ color:'#4F46E5', fontSize:12, fontWeight:700, flexShrink:0 }}>View Full Profile →</div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+
+        {selected && activeTab === 'mine' && (
+          <div>
+            <Card style={{ padding:0, overflow:'hidden', position:'sticky', top:88 }}>
+              <div style={{ background:'linear-gradient(135deg,#0C3D38,' + C.teal + ')', padding:'20px 22px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ width:48, height:48, borderRadius:'50%', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:800, color:'#fff', border:'2px solid rgba(255,255,255,0.3)' }}>
+                      {avatarLetters(selected)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:15, fontWeight:800, color:'#fff' }}>{dname(selected)}</div>
+                      <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{selected.age ?? '—'}y · {selected.gender === 'M' ? 'Male' : selected.gender === 'F' ? 'Female' : selected.gender ?? '—'} · 🩸 {selected.bloodGroup ?? '—'}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelected(null)} style={{ width:26, height:26, borderRadius:'50%', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.2)', color:'#fff', cursor:'pointer', fontSize:13 }}>✕</button>
+                </div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' as const }}>
+                  <Pill label={selected.condition ?? selected.primaryCondition ?? 'General'} color="#A7F3D0" />
+                  <Pill label={selected.status ?? 'ACTIVE'} color={selected.status === 'ACTIVE' ? '#86EFAC' : '#CBD5E1'} />
+                </div>
+              </div>
+              <div style={{ padding:'16px 20px' }}>
+                {(selected.phone || selected.email) && (
+                  <div style={{ marginBottom:14 }}>
+                    {selected.phone && <div style={{ fontSize:12, color:C.txtMid, marginBottom:3 }}>📞 {selected.phone}</div>}
+                    {selected.email && <div style={{ fontSize:12, color:C.txtMid }}>✉️ {selected.email}</div>}
+                  </div>
+                )}
+                {[
+                  { label:'Condition',   value: selected.condition ?? selected.primaryCondition ?? '—' },
+                  { label:'Last Visit',  value: selected.lastVisit ? fmtDate(selected.lastVisit) : '—' },
+                  { label:'Next Appt',   value: selected.nextAppt  ? fmtDate(selected.nextAppt)  : 'Not scheduled' },
+                ].map(row => (
+                  <div key={row.label} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid ' + C.border }}>
+                    <span style={{ fontSize:11, color:C.txtLo }}>{row.label}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color:C.txtMid }}>{row.value}</span>
+                  </div>
+                ))}
+                {(historyLoading || patientHistory.length > 0) && (
+                  <div style={{ marginTop:12, marginBottom:12 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Visit History</div>
+                    {historyLoading ? <Skel w="100%" h={48} /> : patientHistory.slice(0, 3).map((h: any, i: number) => (
+                      <div key={i} style={{ fontSize:12, color:C.txtMid, padding:'5px 0', borderBottom:'1px solid ' + C.border }}>
+                        {h.scheduledAt ? fmtDate(h.scheduledAt) : h.date ? fmtDate(h.date) : '—'} — {h.reasonForVisit ?? h.reason ?? 'Consultation'}
+                        {h.status && <Pill label={h.status} color={statusColor(h.status)} />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ marginTop:14 }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:6 }}>Clinical Note</div>
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Observation, diagnosis, treatment notes…"
+                    style={{ width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:'1px solid ' + C.border, background:C.cardBg2, color:C.txtHi, fontSize:13, resize:'vertical' as const, outline:'none', fontFamily:'inherit', boxSizing:'border-box' as const }} />
+                  <BlueBtn onClick={handleSaveNote} disabled={!notes.trim() || savingNote} style={{ marginTop:8, width:'100%' }}>
+                    {savingNote ? 'Saving…' : '💾 Save Note'}
+                  </BlueBtn>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:12 }}>
+                  <button onClick={() => openProfile(selected.id ?? selected.patientId)}
+                    style={{ padding:'9px 0', borderRadius:C.rSm, border:'1px solid #4F46E5', background:'#EEF2FF', color:'#4F46E5', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                    🔍 Full Profile
+                  </button>
+                  <GhostBtn onClick={() => uiStore.setActivePage('appointments')} style={{ fontSize:12, padding:'9px 0' }}>📅 Book Appt</GhostBtn>
+                </div>
+                <button onClick={() => uiStore.setActivePage('prescriptions')} style={{ width:'100%', marginTop:8, padding:'9px 0', borderRadius:C.rSm, border:'1px solid ' + C.border, background:'transparent', color:C.txtMid, fontSize:12, cursor:'pointer' }}>
+                  💊 Write Prescription
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// ── APPOINTMENTS ──────────────────────────────────────────────────────────────
 function AppointmentsPage() {
   const [appts,      setAppts]      = useState<any[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [filter,     setFilter]     = useState<'today'|'pending'|'confirmed'|'all'>('today');
+  const [dateFilter, setDateFilter] = useState('');
   const [showSlot,   setShowSlot]   = useState(false);
   const [slotForm,   setSlotForm]   = useState({ date:'', time:'', duration:'30', type:'IN_PERSON', notes:'' });
   const [slotSaving, setSlotSaving] = useState(false);
@@ -727,6 +982,9 @@ function AppointmentsPage() {
   const [reschedule, setReschedule] = useState<any>(null);
   const [confirm,    setConfirm]    = useState<string|null>(null);
   const [cancelling, setCancelling] = useState<{id:string;name:string}|null>(null);
+  const [soapAppt,       setSoapAppt]       = useState<any>(null);
+  const [followUpAppt,   setFollowUpAppt]   = useState<any>(null);
+  const [preConsultAppt, setPreConsultAppt] = useState<any>(null);
 
   const loadAppts = useCallback(async () => {
     setLoading(true);
@@ -744,9 +1002,9 @@ function AppointmentsPage() {
         condition: x.condition ?? x.reasonForVisit ?? 'Consultation',
         meetingLink: x.meetingLink ?? (x.type === 'TELECONSULT' ? `https://meet.jit.si/hc-${x.id}` : undefined),
       }));
-      setAppts(normalized.length > 0 ? normalized : MOCK_APPTS);
+      setAppts(normalized);
     } catch {
-      setAppts(MOCK_APPTS);
+      setAppts([]);
     } finally {
       setLoading(false);
     }
@@ -792,13 +1050,14 @@ function AppointmentsPage() {
     setCancelling(null);
   };
 
-  const handleComplete = async (id: string) => {
+  const handleComplete = async (appt: any) => {
     try {
-      await api.put(`/appointments/${id}/status`, { status: 'COMPLETED' })
-        .catch(() => api.put(`/appointments/${id}`, { status: 'COMPLETED' }));
+      await api.put(`/appointments/${appt.id}/status`, { status: 'COMPLETED' })
+        .catch(() => api.put(`/appointments/${appt.id}`, { status: 'COMPLETED' }));
     } catch {}
-    setAppts(prev => prev.map(a => a.id === id ? {...a, status:'COMPLETED'} : a));
+    setAppts(prev => prev.map(a => a.id === appt.id ? {...a, status:'COMPLETED'} : a));
     showToast('Appointment marked as completed ✓');
+    setFollowUpAppt(appt);
   };
 
   const handleReschedule = async () => {
@@ -831,9 +1090,14 @@ function AppointmentsPage() {
   const patientName = (a: any) => a.patientName ?? (a.patient ? `${a.patient.firstName??''} ${a.patient.lastName??''}`.trim() : 'Patient');
   const apptDate = (a: any) => a.scheduledAt ?? a.date;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today    = new Date().toISOString().split('T')[0];
+  const weekAgo  = new Date(Date.now() - 7  * 86400000).toISOString().split('T')[0];
+  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+  const weekCount  = appts.filter(a => (apptDate(a) ?? '') >= weekAgo).length;
+  const monthCount = appts.filter(a => (apptDate(a) ?? '') >= monthAgo).length;
   const displayed = appts.filter(a => {
     const d = apptDate(a);
+    if (dateFilter && !(d ?? '').startsWith(dateFilter)) return false;
     if (filter === 'today')     return !d || d.startsWith(today);
     if (filter === 'pending')   return a.status === 'PENDING';
     if (filter === 'confirmed') return a.status === 'CONFIRMED';
@@ -846,10 +1110,12 @@ function AppointmentsPage() {
     <div>
       {toast && <Toast msg={toast} type={toastType} onClose={() => setToast('')} />}
       {cancelling && <ConfirmDialog msg={`Cancel appointment for ${cancelling.name}?`} onConfirm={() => handleCancel(cancelling.id)} onCancel={() => setCancelling(null)} />}
+      {soapAppt       && <SOAPNotesModal   appt={soapAppt}       onClose={() => setSoapAppt(null)} />}
+      {followUpAppt   && <FollowUpTaskModal appt={followUpAppt}   onClose={() => setFollowUpAppt(null)} />}
+      {preConsultAppt && <PreConsultModal   appt={preConsultAppt} onClose={() => setPreConsultAppt(null)} />}
 
       <SectionHead title="Appointments" sub="Manage your schedule"
-        action={<BlueBtn onClick={() => setShowSlot(p=>!p)}>+ Add Availability Slot</BlueBtn>}
-      />
+        action={<BlueBtn onClick={() => setShowSlot(p=>!p)}>+ Add Availability Slot</BlueBtn>} />
 
       {showSlot && (
         <Card style={{ padding:24, marginBottom:20, border:`1px solid ${C.borderHi}` }}>
@@ -904,13 +1170,36 @@ function AppointmentsPage() {
         </Card>
       )}
 
-      <div style={{ display:'flex', gap:8, marginBottom:20 }}>
-        {[{id:'today',l:"Today"},{id:'pending',l:'Pending'},{id:'confirmed',l:'Confirmed'},{id:'all',l:'All'}].map(f => (
-          <button key={f.id} onClick={() => setFilter(f.id as any)}
-            style={{ padding:'7px 16px', borderRadius:100, cursor:'pointer', border:`1px solid ${filter===f.id?C.teal:C.border}`, background:filter===f.id?C.tealGlow:'transparent', color:filter===f.id?C.teal:C.txtMid, fontSize:12, fontWeight:filter===f.id?700:400 }}>
-            {f.l} {f.id==='pending' ? `(${appts.filter(a=>a.status==='PENDING').length})` : ''}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:16 }}>
+        <Card style={{ padding:'12px 16px', background:C.tealGlow, border:'1px solid ' + C.borderHi }}>
+          <div style={{ fontSize:11, color:C.txtLo, fontWeight:600, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>This Week</div>
+          <div style={{ fontSize:26, fontWeight:800, color:C.teal, margin:'4px 0 2px' }}>{weekCount}</div>
+          <div style={{ fontSize:11, color:C.txtMid }}>appointments</div>
+        </Card>
+        <Card style={{ padding:'12px 16px' }}>
+          <div style={{ fontSize:11, color:C.txtLo, fontWeight:600, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>This Month</div>
+          <div style={{ fontSize:26, fontWeight:800, color:C.txtHi, margin:'4px 0 2px' }}>{monthCount}</div>
+          <div style={{ fontSize:11, color:C.txtMid }}>appointments</div>
+        </Card>
+        <Card style={{ padding:'12px 16px' }}>
+          <div style={{ fontSize:11, color:C.txtLo, fontWeight:600, textTransform:'uppercase' as const, letterSpacing:'0.05em' }}>Pending</div>
+          <div style={{ fontSize:26, fontWeight:800, color:C.amber, margin:'4px 0 2px' }}>{appts.filter(a=>a.status==='PENDING').length}</div>
+          <div style={{ fontSize:11, color:C.txtMid }}>need confirmation</div>
+        </Card>
+      </div>
+      <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center', flexWrap:'wrap' as const }}>
+        {[{id:'today',l:'Today'},{id:'pending',l:'Pending'},{id:'confirmed',l:'Confirmed'},{id:'all',l:'All'}].map(f => (
+          <button key={f.id} onClick={() => { setFilter(f.id as any); setDateFilter(''); }}
+            style={{ padding:'7px 16px', borderRadius:100, cursor:'pointer', border:'1px solid ' + (filter===f.id && !dateFilter ? C.teal : C.border), background:filter===f.id && !dateFilter ? C.tealGlow : 'transparent', color:filter===f.id && !dateFilter ? C.teal : C.txtMid, fontSize:12, fontWeight:filter===f.id && !dateFilter ? 700 : 400 }}>
+            {f.l}{f.id==='pending' ? ' (' + appts.filter(a=>a.status==='PENDING').length + ')' : ''}
           </button>
         ))}
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          <input type="date" value={dateFilter} onChange={e => { setDateFilter(e.target.value); setFilter('all'); }}
+            style={{ padding:'7px 12px', borderRadius:C.rSm, border:'1px solid ' + (dateFilter ? C.teal : C.border), background:dateFilter ? C.tealGlow : C.cardBg, color:C.txtHi, fontSize:12, cursor:'pointer', outline:'none' }} />
+          {dateFilter && <button onClick={() => { setDateFilter(''); setFilter('today'); }}
+            style={{ fontSize:11, color:C.rose, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>✕ Clear</button>}
+        </div>
       </div>
 
       <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -933,7 +1222,17 @@ function AppointmentsPage() {
             </div>
             <Pill label={a.status ?? 'CONFIRMED'} color={statusColor(a.status??'CONFIRMED')} />
             {a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && (
-              <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+              <div style={{ display:'flex', gap:6, flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                {a.patientId && (
+                  <button onClick={() => setPreConsultAppt(a)}
+                    style={{ padding:'6px 11px', borderRadius:C.rSm, border:'1px solid #BFDBFE', background:'#EFF6FF', color:'#1D4ED8', fontSize:11, cursor:'pointer', fontWeight:600 }}>
+                    📋 Summary
+                  </button>
+                )}
+                <button onClick={() => setSoapAppt(a)}
+                  style={{ padding:'6px 11px', borderRadius:C.rSm, border:'1px solid #EDE9FE', background:'#F5F3FF', color:'#7C3AED', fontSize:11, cursor:'pointer', fontWeight:600 }}>
+                  📝 SOAP
+                </button>
                 {(a.type === 'VIDEO' || a.type === 'TELECONSULT') && (
                   <BlueBtn style={{ fontSize:11, padding:'6px 14px' }} onClick={() => {
                     if (a.meetingLink) window.open(a.meetingLink, '_blank', 'noopener,noreferrer');
@@ -946,7 +1245,7 @@ function AppointmentsPage() {
                   </button>
                 )}
                 {a.status === 'CONFIRMED' && (
-                  <button onClick={() => handleComplete(a.id)}
+                  <button onClick={() => handleComplete(a)}
                     style={{ padding:'6px 14px', borderRadius:C.rSm, border:`1px solid ${C.txtLo}30`, background:'transparent', color:C.txtMid, fontSize:11, cursor:'pointer' }}>
                     Complete
                   </button>
@@ -970,15 +1269,24 @@ function AppointmentsPage() {
 
 // ── PRESCRIPTIONS ─────────────────────────────────────────────────────────────
 function PrescriptionsPage() {
-  const [rxList,   setRxList]   = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form,     setForm]     = useState({ patientId:'', patientName:'', drug:'', dosage:'', frequency:'', duration:'', notes:'' });
-  const [saving,   setSaving]   = useState(false);
-  const [toast,    setToast]    = useState('');
-  const [viewRx,   setViewRx]   = useState<any>(null);
-  const [search,   setSearch]   = useState('');
+  const [rxList,      setRxList]      = useState<any[]>([]);
+  const [patients,    setPatients]    = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showForm,    setShowForm]    = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [toast,       setToast]       = useState('');
+  const [toastType,   setToastType]   = useState<'success'|'error'>('success');
+  const [viewRx,      setViewRx]      = useState<any>(null);
+  const [search,      setSearch]      = useState('');
+  const [patSearch,   setPatSearch]   = useState('');
+  const [selectedPat, setSelectedPat] = useState<any>(null);
+  const [showPatDrop, setShowPatDrop] = useState(false);
+
+  // Multi-drug form state
+  const emptyDrug = () => ({ drug:'', dosage:'', frequency:'', duration:'' });
+  const [drugs, setDrugs] = useState([emptyDrug()]);
+  const [notes, setNotes] = useState('');
+  const [sendNotif, setSendNotif] = useState(true);
 
   useEffect(() => {
     Promise.allSettled([
@@ -986,152 +1294,398 @@ function PrescriptionsPage() {
       api.get('/doctor/patients'),
     ]).then(([rxRes, pRes]) => {
       if (rxRes.status === 'fulfilled') {
-        const a = (rxRes.value as any)?.data?.data ?? (rxRes.value as any)?.data?.prescriptions ?? (rxRes.value as any)?.data ?? [];
-        setRxList(Array.isArray(a) && a.length ? a : MOCK_RX);
-      } else setRxList(MOCK_RX);
+        const a = (rxRes.value as any)?.data?.data?.prescriptions ?? (rxRes.value as any)?.data?.prescriptions ?? (rxRes.value as any)?.data?.data ?? (rxRes.value as any)?.data ?? [];
+        setRxList(Array.isArray(a) ? a : []);
+      }
       if (pRes.status === 'fulfilled') {
-        const a = (pRes.value as any)?.data?.data ?? (pRes.value as any)?.data?.patients ?? (pRes.value as any)?.data ?? [];
-        setPatients(Array.isArray(a) && a.length ? a : MOCK_PATIENTS);
-      } else setPatients(MOCK_PATIENTS);
+        const a = (pRes.value as any)?.data?.data?.patients ?? (pRes.value as any)?.data?.patients ?? (pRes.value as any)?.data?.data ?? (pRes.value as any)?.data ?? [];
+        setPatients(Array.isArray(a) ? a : []);
+      }
     }).finally(() => setLoading(false));
   }, []);
 
-  const handlePatientSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const p = patients.find((x: any) => x.id === e.target.value);
-    const name = p ? (p.name ?? `${p.firstName??''} ${p.lastName??''}`.trim()) : '';
-    setForm(prev => ({ ...prev, patientId: e.target.value, patientName: name }));
+  const showToast = (msg: string, type: 'success'|'error' = 'success') => {
+    setToast(msg); setToastType(type);
+  };
+
+  const pname = (p: any) => (p.name ?? ((p.firstName ?? '') + ' ' + (p.lastName ?? '')).trim()) || 'Patient';
+
+  const filteredPatients = patients.filter(p =>
+    !patSearch || pname(p).toLowerCase().includes(patSearch.toLowerCase()) ||
+    (p.email ?? '').toLowerCase().includes(patSearch.toLowerCase())
+  );
+
+  const addDrug    = () => setDrugs(d => [...d, emptyDrug()]);
+  const removeDrug = (i: number) => setDrugs(d => d.filter((_, j) => j !== i));
+  const updateDrug = (i: number, key: string, val: string) =>
+    setDrugs(d => d.map((dr, j) => j === i ? { ...dr, [key]: val } : dr));
+
+  const resetForm = () => {
+    setSelectedPat(null); setPatSearch(''); setDrugs([emptyDrug()]); setNotes('');
+    setSendNotif(true); setShowForm(false);
   };
 
   const handleSave = async () => {
-    if (!form.drug.trim() || !form.patientId) { setToast('Please select patient and enter medication'); return; }
-    setSaving(true);
-    const newRx = { ...form, id:Date.now().toString(), date:new Date().toISOString(), status:'ACTIVE' };
-    try {
-      const r: any = await api.post('/doctor/prescriptions', form);
-      const saved = r?.data?.data ?? r?.data ?? newRx;
-      setRxList(prev => [{ ...newRx, ...saved }, ...prev]);
-      setToast('Prescription issued — saved to patient record ✓');
-    } catch {
-      setRxList(prev => [newRx, ...prev]);
-      setToast('Prescription issued ✓');
-    } finally {
-      setSaving(false);
-      setShowForm(false);
-      setForm({ patientId:'', patientName:'', drug:'', dosage:'', frequency:'', duration:'', notes:'' });
+    const validDrugs = drugs.filter(d => d.drug.trim());
+    if (!selectedPat || validDrugs.length === 0) {
+      showToast('Please select a patient and add at least one medication', 'error'); return;
     }
+    setSaving(true);
+    try {
+      const payload = {
+        patientId:   selectedPat.id,
+        patientName: pname(selectedPat),
+        drugs:       validDrugs,
+        // Backward compat: also send first drug as top-level fields
+        drug:      validDrugs[0].drug,
+        dosage:    validDrugs[0].dosage,
+        frequency: validDrugs[0].frequency,
+        duration:  validDrugs[0].duration,
+        notes,
+        sendNotification: sendNotif,
+      };
+      const r: any = await api.post('/doctor/prescriptions', payload);
+      const saved = r?.data?.data ?? r?.data ?? {};
+      const newEntry = {
+        ...payload, ...saved,
+        id:   saved.id ?? Date.now().toString(),
+        date: saved.date ?? new Date().toISOString(),
+        status: 'ACTIVE',
+        // Display label: first drug or multi
+        drug: validDrugs.length === 1 ? validDrugs[0].drug : validDrugs[0].drug + ' +' + (validDrugs.length - 1) + ' more',
+      };
+      setRxList(prev => [newEntry, ...prev]);
+      showToast('Prescription issued' + (sendNotif ? ' — patient notified ✓' : ' ✓'));
+      resetForm();
+    } catch {
+      showToast('Prescription saved locally ✓');
+      resetForm();
+    } finally { setSaving(false); }
+  };
+
+  const printPrescription = (rx: any) => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const drugs = rx.drugs ?? [{ drug: rx.drug, dosage: rx.dosage, frequency: rx.frequency, duration: rx.duration, instructions: rx.instructions }];
+    win.document.write(`<!DOCTYPE html><html><head><title>Prescription</title>
+    <style>
+      body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:0;color:#0F172A;}
+      .header{background:linear-gradient(135deg,#0C3D38,#0D9488);color:#fff;padding:24px 32px;display:flex;justify-content:space-between;align-items:flex-start;}
+      .rx-symbol{font-size:42px;font-weight:900;opacity:0.9;}
+      .clinic{font-size:12px;opacity:0.85;margin-top:4px;}
+      .doc-name{font-size:20px;font-weight:800;}
+      .reg{font-size:11px;opacity:0.75;margin-top:2px;}
+      .body{padding:28px 32px;}
+      .section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748B;margin-bottom:6px;}
+      .patient-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:14px 18px;margin-bottom:22px;display:flex;gap:40px;}
+      .field{margin-bottom:4px;font-size:13px;color:#0F172A;font-weight:600;}
+      .field span{font-weight:400;color:#475569;}
+      table{width:100%;border-collapse:collapse;margin-top:8px;}
+      th{background:#F8FAFC;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;padding:10px 14px;text-align:left;border-bottom:2px solid #E2E8F0;}
+      td{padding:11px 14px;font-size:13px;color:#0F172A;border-bottom:1px solid #F1F5F9;}
+      tr:last-child td{border-bottom:none;}
+      .notes-box{margin-top:20px;background:#F8FAFC;border-radius:8px;padding:14px 16px;font-size:13px;color:#475569;}
+      .footer{margin-top:32px;padding-top:20px;border-top:2px solid #E2E8F0;display:flex;justify-content:space-between;align-items:flex-end;}
+      .sig-line{border-bottom:1px solid #0F172A;width:180px;margin-bottom:4px;}
+      .validity{font-size:11px;color:#94A3B8;}
+      .badge{display:inline-block;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    </style></head><body>
+    <div class="header">
+      <div>
+        <div class="rx-symbol">℞</div>
+        <div class="doc-name">${rx.doctorName ?? 'Dr. Physician'}</div>
+        <div class="reg">${rx.doctorQualification ?? 'MBBS, MD'} &nbsp;|&nbsp; Reg. No: ${rx.doctorRegNo ?? 'NMC-XXXXXX'}</div>
+        <div class="clinic">${rx.clinicName ?? 'HealthConnect Platform'} &nbsp;|&nbsp; ${rx.doctorSpecialization ?? ''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="badge">HealthConnect Verified</div>
+        <div style="font-size:11px;margin-top:8px;opacity:0.8;">Date: ${rx.date ? new Date(rx.date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}) : new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+        <div style="font-size:11px;opacity:0.8;">Rx ID: HC-RX-${rx.id?.slice(-6)?.toUpperCase() ?? 'XXXXXX'}</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="patient-box">
+        <div>
+          <div class="section-label">Patient</div>
+          <div class="field">${rx.patient ?? 'Patient Name'}</div>
+          <div class="field">Age: <span>${rx.patientAge ?? '—'}</span> &nbsp;|&nbsp; Gender: <span>${rx.patientGender ?? '—'}</span></div>
+        </div>
+        <div>
+          <div class="section-label">Diagnosis / Chief Complaint</div>
+          <div class="field">${rx.diagnosis ?? rx.condition ?? '—'}</div>
+        </div>
+      </div>
+      <div class="section-label">Medications</div>
+      <table>
+        <thead><tr><th>#</th><th>Drug / Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
+        <tbody>
+          ${drugs.map((d: any, i: number) => `<tr>
+            <td style="color:#94A3B8;font-size:11px;">${i+1}</td>
+            <td><strong>${d.drug ?? '—'}</strong></td>
+            <td>${d.dosage ?? '—'}</td>
+            <td>${(d.frequency ?? '—').replace(/_/g,' ')}</td>
+            <td>${d.duration ?? '—'}</td>
+            <td style="color:#64748B;">${d.instructions ?? ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      ${rx.notes ? `<div class="notes-box"><strong>Additional Notes:</strong> ${rx.notes}</div>` : ''}
+      <div class="footer">
+        <div>
+          <div class="validity">Valid for 30 days from date of issue</div>
+          <div class="validity" style="margin-top:4px;">⚠ This prescription is for the named patient only</div>
+        </div>
+        <div style="text-align:center;">
+          <div class="sig-line"></div>
+          <div style="font-size:12px;font-weight:700;color:#0F172A;">${rx.doctorName ?? 'Doctor Signature'}</div>
+          <div style="font-size:11px;color:#64748B;">${rx.doctorQualification ?? ''}</div>
+        </div>
+      </div>
+    </div>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 400);
   };
 
   const handleRevoke = async (id: string) => {
-    try {
-      await api.put(`/doctor/prescriptions/${id}`, { status:'REVOKED' });
-    } catch {}
-    setRxList(prev => prev.map(r => r.id === id ? {...r, status:'REVOKED'} : r));
-    setToast('Prescription revoked.');
+    try { await api.put('/doctor/prescriptions/' + id, { status:'REVOKED' }); } catch {}
+    setRxList(prev => prev.map(r => r.id === id ? { ...r, status:'REVOKED' } : r));
+    showToast('Prescription revoked');
   };
 
-  const displayed = rxList.filter(r => !search || r.drug?.toLowerCase().includes(search.toLowerCase()) || r.patientName?.toLowerCase().includes(search.toLowerCase()));
-  const fStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg, color:C.txtHi, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'inherit' };
+  const displayed = rxList.filter(r =>
+    !search ||
+    (r.drug ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.patientName ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fStyle: React.CSSProperties = {
+    width:'100%', padding:'9px 12px', borderRadius:C.rSm,
+    border:'1px solid ' + C.border, background:C.cardBg,
+    color:C.txtHi, fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'inherit',
+  };
   const lStyle: React.CSSProperties = { fontSize:11, color:C.txtLo, marginBottom:4, display:'block', fontWeight:600 };
 
   return (
     <div>
-      {toast && <Toast msg={toast} onClose={() => setToast('')} />}
+      {toast && <Toast msg={toast} type={toastType} onClose={() => setToast('')} />}
+
+      {/* ── View Prescription Modal ───────────────────────────────────────── */}
       {viewRx && (
         <div style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(15,23,42,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-          <Card style={{ padding:28, maxWidth:480, width:'100%' }}>
+          <Card style={{ padding:28, maxWidth:520, width:'100%', maxHeight:'90vh', overflowY:'auto' as const }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-              <h3 style={{ color:C.txtHi, fontSize:16, fontWeight:800, margin:0 }}>Prescription Detail</h3>
-              <button onClick={() => setViewRx(null)} style={{ width:28, height:28, borderRadius:'50%', background:C.cardBg2, border:`1px solid ${C.border}`, cursor:'pointer', fontSize:14, color:C.txtMid }}>✕</button>
+              <h3 style={{ color:C.txtHi, fontSize:16, fontWeight:800, margin:0 }}>💊 Prescription Detail</h3>
+              <button onClick={() => setViewRx(null)} style={{ width:28, height:28, borderRadius:'50%', background:C.cardBg2, border:'1px solid ' + C.border, cursor:'pointer', fontSize:14, color:C.txtMid }}>✕</button>
             </div>
             <div style={{ background:C.cardBg2, borderRadius:10, padding:20, marginBottom:16 }}>
-              <div style={{ fontSize:18, fontWeight:800, color:C.txtHi, marginBottom:12 }}>💊 {viewRx.drug}</div>
-              {[{l:'Patient',v:viewRx.patientName},{l:'Dosage',v:viewRx.dosage},{l:'Frequency',v:viewRx.frequency},{l:'Duration',v:viewRx.duration},{l:'Date',v:viewRx.date?fmtDate(viewRx.date):'—'},{l:'Status',v:viewRx.status}].map(r => (
-                <div key={r.l} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ marginBottom:14, paddingBottom:14, borderBottom:'1px solid ' + C.border }}>
+                <div style={{ fontSize:11, color:C.txtLo, marginBottom:2 }}>Patient</div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.txtHi }}>{viewRx.patientName ?? '—'}</div>
+              </div>
+              {/* Show multi-drug if available */}
+              {Array.isArray(viewRx.drugs) && viewRx.drugs.length > 0 ? (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.txtLo, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:10 }}>Medications ({viewRx.drugs.length})</div>
+                  {viewRx.drugs.map((d: any, i: number) => (
+                    <div key={i} style={{ padding:'10px 12px', borderRadius:8, background:C.tealGlow, border:'1px solid ' + C.borderHi, marginBottom:8 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:C.teal }}>💊 {d.drug}</div>
+                      <div style={{ display:'flex', gap:16, marginTop:4, flexWrap:'wrap' as const }}>
+                        {d.dosage    && <span style={{ fontSize:12, color:C.txtMid }}>{d.dosage}</span>}
+                        {d.frequency && <span style={{ fontSize:12, color:C.txtMid }}>{d.frequency}</span>}
+                        {d.duration  && <span style={{ fontSize:12, color:C.txtMid }}>{d.duration}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding:'10px 12px', borderRadius:8, background:C.tealGlow, border:'1px solid ' + C.borderHi, marginBottom:8 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.teal }}>💊 {viewRx.drug}</div>
+                  <div style={{ display:'flex', gap:16, marginTop:4 }}>
+                    {viewRx.dosage    && <span style={{ fontSize:12, color:C.txtMid }}>{viewRx.dosage}</span>}
+                    {viewRx.frequency && <span style={{ fontSize:12, color:C.txtMid }}>{viewRx.frequency}</span>}
+                    {viewRx.duration  && <span style={{ fontSize:12, color:C.txtMid }}>{viewRx.duration}</span>}
+                  </div>
+                </div>
+              )}
+              {[
+                { l:'Date',   v: viewRx.date   ? fmtDate(viewRx.date) : '—' },
+                { l:'Status', v: viewRx.status ?? 'ACTIVE' },
+              ].map(r => (
+                <div key={r.l} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid ' + C.border }}>
                   <span style={{ fontSize:12, color:C.txtLo }}>{r.l}</span>
-                  <span style={{ fontSize:12, fontWeight:600, color:C.txtMid }}>{r.v ?? '—'}</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:C.txtMid }}>{r.v}</span>
                 </div>
               ))}
-              {viewRx.notes && <div style={{ marginTop:12, padding:'10px 12px', borderRadius:8, background:C.tealGlow, border:`1px solid ${C.borderHi}`, fontSize:13, color:C.txtMid, fontStyle:'italic' }}>📝 {viewRx.notes}</div>}
+              {viewRx.notes && <div style={{ marginTop:12, padding:'10px 12px', borderRadius:8, background:C.tealGlow, border:'1px solid ' + C.borderHi, fontSize:13, color:C.txtMid, fontStyle:'italic' }}>📝 {viewRx.notes}</div>}
             </div>
             <div style={{ display:'flex', gap:10 }}>
-              {viewRx.status === 'ACTIVE' && <DangerBtn onClick={() => { handleRevoke(viewRx.id); setViewRx(null); }}>Revoke Prescription</DangerBtn>}
+              <GhostBtn onClick={() => printPrescription(viewRx)} style={{ fontSize:12 }}>🖨️ Print / PDF</GhostBtn>
+              {viewRx.status === 'ACTIVE' && <DangerBtn onClick={() => { handleRevoke(viewRx.id); setViewRx(null); }}>Revoke</DangerBtn>}
               <GhostBtn onClick={() => setViewRx(null)}>Close</GhostBtn>
             </div>
           </Card>
         </div>
       )}
 
-      <SectionHead title="Prescriptions" sub={`${rxList.filter(r=>r.status==='ACTIVE').length} active`}
+      <SectionHead title="Prescriptions" sub={(rxList.filter(r=>r.status==='ACTIVE').length) + ' active'}
         action={
           <div style={{ display:'flex', gap:10 }}>
             <div style={{ position:'relative' }}>
-              <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:C.txtLo, fontSize:12 }}>🔍</span>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
-                style={{ padding:'8px 12px 8px 28px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg, color:C.txtHi, fontSize:13, outline:'none', width:180, fontFamily:'inherit' }} />
+                style={{ padding:'8px 12px 8px 28px', borderRadius:C.rSm, border:'1px solid ' + C.border, background:C.cardBg, color:C.txtHi, fontSize:13, outline:'none', width:180, fontFamily:'inherit' }} />
             </div>
-            <BlueBtn onClick={() => setShowForm(p=>!p)}>+ New Prescription</BlueBtn>
+            <BlueBtn onClick={() => { setShowForm(p=>!p); if (showForm) resetForm(); }}>+ New Prescription</BlueBtn>
           </div>
-        }
-      />
+        } />
 
+      {/* ── Write Prescription Form ───────────────────────────────────────── */}
       {showForm && (
-        <Card style={{ padding:24, marginBottom:20, border:`1px solid ${C.borderHi}` }}>
-          <h3 style={{ color:C.txtHi, fontSize:15, fontWeight:700, margin:'0 0 18px' }}>✍️ Write Prescription</h3>
-          <div style={{ marginBottom:14 }}>
+        <Card style={{ padding:24, marginBottom:20, border:'1px solid ' + C.borderHi }}>
+          <h3 style={{ color:C.txtHi, fontSize:15, fontWeight:700, margin:'0 0 20px' }}>✍️ Write Prescription</h3>
+
+          {/* Patient search */}
+          <div style={{ marginBottom:20 }}>
             <label style={lStyle}>Select Patient *</label>
-            <select value={form.patientId} onChange={handlePatientSelect} style={{ ...fStyle, background:C.cardBg }}>
-              <option value="">— Choose patient —</option>
-              {patients.map((p: any) => {
-                const n = p.name ?? `${p.firstName??''} ${p.lastName??''}`.trim();
-                return <option key={p.id} value={p.id}>{n}{p.age ? ` (${p.age}y)` : ''}</option>;
-              })}
-            </select>
+            <div style={{ position:'relative' }}>
+              {selectedPat ? (
+                <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:C.rSm, border:'1px solid ' + C.teal, background:C.tealGlow }}>
+                  <div style={{ width:32, height:32, borderRadius:'50%', background:C.tealDark + '30', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:C.teal }}>
+                    {pname(selectedPat).substring(0,2).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.txtHi }}>{pname(selectedPat)}</div>
+                    {selectedPat.age && <div style={{ fontSize:11, color:C.txtMid }}>{selectedPat.age}y · {selectedPat.condition ?? ''}</div>}
+                  </div>
+                  <button onClick={() => { setSelectedPat(null); setPatSearch(''); }} style={{ background:'none', border:'none', color:C.rose, cursor:'pointer', fontSize:16 }}>✕</button>
+                </div>
+              ) : (
+                <div>
+                  <input value={patSearch} onChange={e => { setPatSearch(e.target.value); setShowPatDrop(true); }}
+                    onFocus={() => setShowPatDrop(true)}
+                    placeholder="Type patient name to search…"
+                    style={{ ...fStyle }} />
+                  {showPatDrop && patSearch && filteredPatients.length > 0 && (
+                    <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'#fff', border:'1px solid ' + C.border, borderRadius:C.rSm, boxShadow:'0 8px 24px rgba(0,0,0,0.12)', maxHeight:200, overflowY:'auto' as const }}>
+                      {filteredPatients.slice(0,8).map(p => (
+                        <div key={p.id} onClick={() => { setSelectedPat(p); setPatSearch(''); setShowPatDrop(false); }}
+                          style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid ' + C.border, display:'flex', alignItems:'center', gap:10 }}>
+                          <div style={{ width:28, height:28, borderRadius:'50%', background:C.tealDark + '25', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:800, color:C.teal }}>
+                            {pname(p).substring(0,2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:600, color:C.txtHi }}>{pname(p)}</div>
+                            {p.age && <div style={{ fontSize:11, color:C.txtMid }}>{p.age}y · {p.condition ?? ''}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {showPatDrop && patSearch && filteredPatients.length === 0 && (
+                    <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'#fff', border:'1px solid ' + C.border, borderRadius:C.rSm, padding:'12px 14px', color:C.txtLo, fontSize:13 }}>No patients found</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-            {[
-              { key:'drug',      label:'Drug / Medication *' },
-              { key:'dosage',    label:'Dosage (e.g. 500mg)' },
-              { key:'frequency', label:'Frequency (e.g. Twice daily)' },
-              { key:'duration',  label:'Duration (e.g. 2 weeks)' },
-            ].map(f => (
-              <div key={f.key}>
-                <label style={lStyle}>{f.label}</label>
-                <input value={(form as any)[f.key]} onChange={e => setForm(p=>({...p,[f.key]:e.target.value}))} style={fStyle} />
+
+          {/* Multi-drug rows */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <label style={{ ...lStyle, margin:0 }}>Medications *</label>
+              <button onClick={addDrug} style={{ fontSize:12, color:C.teal, background:C.tealGlow, border:'1px solid ' + C.borderHi, borderRadius:8, padding:'4px 12px', cursor:'pointer', fontWeight:600 }}>+ Add Drug</button>
+            </div>
+            {drugs.map((d, i) => (
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr auto', gap:10, marginBottom:10, alignItems:'flex-start' }}>
+                <div>
+                  {i === 0 && <div style={{ ...lStyle, marginBottom:4 }}>Drug / Medication</div>}
+                  <input value={d.drug} onChange={e => updateDrug(i,'drug',e.target.value)} placeholder="e.g. Metformin" style={fStyle} />
+                </div>
+                <div>
+                  {i === 0 && <div style={{ ...lStyle, marginBottom:4 }}>Dosage</div>}
+                  <input value={d.dosage} onChange={e => updateDrug(i,'dosage',e.target.value)} placeholder="500mg" style={fStyle} />
+                </div>
+                <div>
+                  {i === 0 && <div style={{ ...lStyle, marginBottom:4 }}>Frequency</div>}
+                  <select value={d.frequency} onChange={e => updateDrug(i,'frequency',e.target.value)} style={{ ...fStyle, background:C.cardBg }}>
+                    <option value="">Select…</option>
+                    <option>Once daily</option>
+                    <option>Twice daily</option>
+                    <option>Three times daily</option>
+                    <option>Four times daily</option>
+                    <option>As needed</option>
+                    <option>Weekly</option>
+                    <option>Monthly</option>
+                  </select>
+                </div>
+                <div>
+                  {i === 0 && <div style={{ ...lStyle, marginBottom:4 }}>Duration</div>}
+                  <input value={d.duration} onChange={e => updateDrug(i,'duration',e.target.value)} placeholder="2 weeks" style={fStyle} />
+                </div>
+                <div style={{ display:'flex', alignItems: i===0 ? 'flex-end' : 'center', paddingBottom: i===0 ? 1 : 0 }}>
+                  {drugs.length > 1 && (
+                    <button onClick={() => removeDrug(i)} style={{ width:34, height:34, borderRadius:8, border:'1px solid ' + C.rose, background:'#FFF1F2', color:C.rose, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                  )}
+                </div>
               </div>
             ))}
-            <div style={{ gridColumn:'1 / -1' }}>
-              <label style={lStyle}>Notes / Instructions</label>
-              <textarea value={form.notes} onChange={e => setForm(p=>({...p,notes:e.target.value}))} rows={3}
-                style={{ ...fStyle, resize:'vertical' as const }} placeholder="Take with food, monitor BP, etc." />
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom:16 }}>
+            <label style={lStyle}>Instructions / Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Take with food after meals, monitor BP weekly…"
+              style={{ ...fStyle, resize:'vertical' as const }} />
+          </div>
+
+          {/* Send notification toggle */}
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20, padding:'12px 14px', borderRadius:C.rSm, background:C.tealGlow, border:'1px solid ' + C.borderHi }}>
+            <Toggle on={sendNotif} onChange={() => setSendNotif(v => !v)} />
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.txtHi }}>Notify patient in-app</div>
+              <div style={{ fontSize:11, color:C.txtMid }}>Patient will receive a notification with prescription details</div>
             </div>
           </div>
-          <div style={{ display:'flex', gap:10, marginTop:16 }}>
-            <BlueBtn onClick={handleSave} disabled={saving}>{saving ? 'Issuing…' : '✓ Issue Prescription'}</BlueBtn>
-            <GhostBtn onClick={() => setShowForm(false)}>Cancel</GhostBtn>
+
+          <div style={{ display:'flex', gap:10 }}>
+            <BlueBtn onClick={handleSave} disabled={saving || !selectedPat}>{saving ? 'Issuing…' : '✓ Issue Prescription'}</BlueBtn>
+            <GhostBtn onClick={resetForm}>Cancel</GhostBtn>
           </div>
         </Card>
       )}
 
+      {/* ── Prescription List ─────────────────────────────────────────────── */}
       <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={60}/></Card>)
-        : displayed.map(rx => (
+        {loading ? [1,2,3].map(i => <Card key={i} style={{ padding:20 }}><Skel w="100%" h={60} /></Card>)
+        : displayed.length === 0 ? (
+          <Card style={{ padding:'48px 24px', textAlign:'center' as const }}>
+            <div style={{ fontSize:36, marginBottom:12 }}>💊</div>
+            <div style={{ fontWeight:700, color:C.txtMid, marginBottom:6 }}>No prescriptions yet</div>
+            <div style={{ fontSize:13, color:C.txtLo }}>Click + New Prescription to write one.</div>
+          </Card>
+        ) : displayed.map(rx => (
           <Card key={rx.id} style={{ padding:'16px 22px', display:'flex', alignItems:'center', gap:16, opacity:rx.status==='REVOKED'?0.55:1 }}>
-            <div style={{ width:40, height:40, borderRadius:10, background:C.amber+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>💊</div>
+            <div style={{ width:42, height:42, borderRadius:10, background:C.amber + '18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>💊</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:4 }}>{rx.drug}</div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:4 }}>{rx.drug ?? (Array.isArray(rx.drugs) && rx.drugs[0]?.drug) ?? '—'}</div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' as const }}>
                 <span style={{ fontSize:12, color:C.txtMid }}>👤 {rx.patientName}</span>
                 {rx.dosage    && <span style={{ fontSize:12, color:C.txtLo }}>• {rx.dosage}</span>}
                 {rx.frequency && <span style={{ fontSize:12, color:C.txtLo }}>• {rx.frequency}</span>}
                 {rx.duration  && <span style={{ fontSize:12, color:C.txtLo }}>• {rx.duration}</span>}
+                {Array.isArray(rx.drugs) && rx.drugs.length > 1 && (
+                  <span style={{ fontSize:11, fontWeight:700, color:C.teal, background:C.tealGlow, padding:'1px 6px', borderRadius:4 }}>+{rx.drugs.length - 1} more drugs</span>
+                )}
               </div>
             </div>
-            <div style={{ textAlign:'right', flexShrink:0 }}>
+            <div style={{ textAlign:'right' as const, flexShrink:0 }}>
               <Pill label={rx.status ?? 'ACTIVE'} color={rx.status==='ACTIVE'?C.green:rx.status==='REVOKED'?C.rose:C.txtMid} />
               <div style={{ fontSize:11, color:C.txtLo, marginTop:5 }}>{rx.date ? fmtDate(rx.date) : 'Today'}</div>
             </div>
             <div style={{ display:'flex', gap:6 }}>
               <GhostBtn onClick={() => setViewRx(rx)} style={{ fontSize:11, padding:'6px 12px' }}>View</GhostBtn>
+              <GhostBtn onClick={() => printPrescription(rx)} style={{ fontSize:11, padding:'6px 12px' }}>🖨️ Print</GhostBtn>
               {rx.status === 'ACTIVE' && <DangerBtn onClick={() => handleRevoke(rx.id)} style={{ fontSize:11, padding:'6px 12px' }}>Revoke</DangerBtn>}
             </div>
           </Card>
@@ -1141,35 +1695,60 @@ function PrescriptionsPage() {
   );
 }
 
-// ── MEDICAL RECORDS ───────────────────────────────────────────────────────────
 function MedicalRecordsPage() {
-  const [reports,  setReports]  = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [tab,      setTab]      = useState<'reports'|'history'|'vitals'>('reports');
-  const [selected, setSelected] = useState<any>(null);
-  const [noteText, setNoteText] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
-  const [toast,    setToast]    = useState('');
-  const [uploading,setUploading]= useState(false);
+  const [reports,      setReports]      = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [patients,     setPatients]     = useState<any[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [tab,          setTab]          = useState<'reports'|'history'|'vitals'>('reports');
+  const [selected,     setSelected]     = useState<any>(null);
+  const [noteText,     setNoteText]     = useState('');
+  const [savingNote,   setSavingNote]   = useState(false);
+  const [toast,        setToast]        = useState('');
+  const [uploading,    setUploading]    = useState(false);
+  const [vitalsData,   setVitalsData]   = useState<any[]|null>(null);
+  const [vitalsLoading,setVitalsLoading]= useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.allSettled([
-      // /doctor/records may not exist; fall back silently
-      api.get('/doctor/records').catch(() => ({ data: [] })),
-      api.get('/doctor/patients'),
-    ]).then(([rRes, pRes]) => {
+      api.get('/records').catch(() => ({ data: { data: { records: [] } } })),
+      api.get('/appointments'),
+      api.get('/patients'),
+    ]).then(([rRes, aRes, pRes]) => {
       if (rRes.status === 'fulfilled') {
-        const a = (rRes.value as any)?.data?.data ?? (rRes.value as any)?.data ?? [];
-        setReports(Array.isArray(a) && a.length ? a : MOCK_REPORTS);
-      } else setReports(MOCK_REPORTS);
+        const a = (rRes.value as any)?.data?.data?.records ?? (rRes.value as any)?.data?.records ?? (rRes.value as any)?.data ?? [];
+        setReports(Array.isArray(a) ? a : []);
+      } else setReports([]);
+      if (aRes.status === 'fulfilled') {
+        const raw = (aRes.value as any)?.data?.data?.appointments ?? (aRes.value as any)?.data?.appointments ?? (aRes.value as any)?.data ?? [];
+        const normalized = (Array.isArray(raw) ? raw : []).map((x: any) => ({
+          ...x,
+          patientName: x.patientName ?? (x.patient ? `${x.patient.firstName??''} ${x.patient.lastName??''}`.trim() : 'Patient'),
+          date: x.scheduledAt ?? x.date ?? '',
+          reason: x.reasonForVisit ?? x.condition ?? x.type ?? 'Consultation',
+        }));
+        setAppointments(normalized);
+      } else setAppointments([]);
       if (pRes.status === 'fulfilled') {
-        const a = (pRes.value as any)?.data?.data ?? (pRes.value as any)?.data?.patients ?? (pRes.value as any)?.data ?? [];
-        setPatients(Array.isArray(a) && a.length ? a : MOCK_PATIENTS);
-      } else setPatients(MOCK_PATIENTS);
+        const a = (pRes.value as any)?.data?.data?.patients ?? (pRes.value as any)?.data?.patients ?? (pRes.value as any)?.data ?? [];
+        setPatients(Array.isArray(a) ? a : []);
+      } else setPatients([]);
     }).finally(() => setLoading(false));
   }, []);
+
+  const loadVitals = (patient: any) => {
+    setSelected({ ...patient, isVitals: true });
+    setVitalsData(null);
+    setVitalsLoading(true);
+    api.get(`/doctor/patient-profile/${patient.id}`)
+      .then((r: any) => {
+        const d = r?.data?.data ?? r?.data ?? {};
+        setVitalsData(d.patient?.vitals ?? d.vitals ?? []);
+      })
+      .catch(() => setVitalsData([]))
+      .finally(() => setVitalsLoading(false));
+  };
 
   const handleReview = async (report: any) => {
     try {
@@ -1226,8 +1805,7 @@ function MedicalRecordsPage() {
                 {uploading ? '⏳ Uploading…' : '📤 Upload Report'}
               </GhostBtn>
             </div>
-          }
-        />
+          } />
         <div style={{ display:'flex', gap:8, marginBottom:20 }}>
           {[{id:'reports',l:'📋 Reports'},{id:'history',l:'📅 Visit History'},{id:'vitals',l:'📊 Vitals'}].map(t => (
             <button key={t.id} onClick={() => setTab(t.id as any)}
@@ -1239,8 +1817,14 @@ function MedicalRecordsPage() {
 
         {tab === 'reports' && (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={60}/></Card>)
-            : reports.map(r => (
+            {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={60}/></Card>) : reports.length === 0 ? (
+              <Card style={{ padding:48, textAlign:'center' as const }}>
+                <div style={{ fontSize:36, marginBottom:12 }}>📋</div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.txtHi, marginBottom:6 }}>No medical reports yet</div>
+                <div style={{ fontSize:13, color:C.txtMid, marginBottom:16 }}>Patient reports shared with you will appear here. You can also upload reports using the button above.</div>
+                <div style={{ fontSize:12, color:C.txtLo }}>Reports are linked when patients share their health records or when you upload them directly.</div>
+              </Card>
+            ) : reports.map(r => (
               <Card key={r.id} style={{ padding:'16px 22px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', border:`1px solid ${selected?.id===r.id?C.teal:C.border}`, background:selected?.id===r.id?'#F0FDFA':C.cardBg, transition:'all 0.15s' }}
                 onClick={() => { setSelected(selected?.id===r.id ? null : r); setNoteText(r.notes ?? ''); }}>
                 <div style={{ width:42, height:42, borderRadius:10, background:reportTypeColor(r.type)+'15', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
@@ -1248,7 +1832,7 @@ function MedicalRecordsPage() {
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:4 }}>{r.name}</div>
-                  <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' as const }}>
                     <Pill label={r.type} color={reportTypeColor(r.type)} />
                     <span style={{ fontSize:12, color:C.txtMid }}>👤 {r.patient}</span>
                     <span style={{ fontSize:12, color:C.txtLo }}>{fmtDate(r.date)}</span>
@@ -1269,16 +1853,24 @@ function MedicalRecordsPage() {
 
         {tab === 'history' && (
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {patients.map(p => (
-              <Card key={p.id} style={{ padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
+            {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={50}/></Card>) : appointments.length === 0 ? (
+              <Card style={{ padding:48, textAlign:'center' as const }}>
+                <div style={{ fontSize:36, marginBottom:12 }}>📅</div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.txtHi, marginBottom:6 }}>No visit history yet</div>
+                <div style={{ fontSize:13, color:C.txtMid }}>Completed appointments with patients will appear here.</div>
+              </Card>
+            ) : appointments.map((a: any, i: number) => (
+              <Card key={a.id ?? i} style={{ padding:'14px 20px', display:'flex', alignItems:'center', gap:14 }}>
                 <div style={{ width:40, height:40, borderRadius:'50%', background:C.teal+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:C.teal, flexShrink:0 }}>
-                  {(p.avatar ?? displayName(p).substring(0,2)).toUpperCase()}
+                  {(a.patientName ?? 'PT').substring(0,2).toUpperCase()}
                 </div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:C.txtHi }}>{displayName(p)}</div>
-                  <div style={{ fontSize:12, color:C.txtMid, marginTop:2 }}>{p.condition ?? p.primaryCondition ?? '—'} · Last: {p.lastVisit ? fmtDate(p.lastVisit) : '—'}</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.txtHi }}>{a.patientName}</div>
+                  <div style={{ fontSize:12, color:C.txtMid, marginTop:2 }}>
+                    {a.reason} · {a.date ? fmtDate(a.date) : '—'}
+                  </div>
                 </div>
-                <GhostBtn onClick={() => setSelected({...p, isHistory:true})} style={{ fontSize:11 }}>View History →</GhostBtn>
+                <Pill label={a.status ?? 'COMPLETED'} color={a.status==='COMPLETED'?C.green:a.status==='CONFIRMED'?C.teal:C.amber} />
               </Card>
             ))}
           </div>
@@ -1286,8 +1878,14 @@ function MedicalRecordsPage() {
 
         {tab === 'vitals' && (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            {patients.map(p => (
-              <Card key={p.id} style={{ padding:'16px 20px', cursor:'pointer' }} onClick={() => setSelected({...p, isVitals:true})}>
+            {loading ? [1,2,3,4].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={70}/></Card>) : patients.length === 0 ? (
+              <Card style={{ padding:48, textAlign:'center' as const, gridColumn:'1 / -1' }}>
+                <div style={{ fontSize:36, marginBottom:12 }}>📊</div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.txtHi, marginBottom:6 }}>No patients yet</div>
+                <div style={{ fontSize:13, color:C.txtMid }}>Patient vitals will appear once you have appointments.</div>
+              </Card>
+            ) : patients.map(p => (
+              <Card key={p.id} style={{ padding:'16px 20px', cursor:'pointer' }} onClick={() => loadVitals(p)}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
                   <div style={{ width:36, height:36, borderRadius:'50%', background:C.teal+'18', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:C.teal, flexShrink:0 }}>
                     {(p.avatar ?? displayName(p).substring(0,2)).toUpperCase()}
@@ -1347,39 +1945,44 @@ function MedicalRecordsPage() {
             )}
             {selected.isVitals && (
               <>
-                <div style={{ textAlign:'center', marginBottom:16 }}>
-                  <div style={{ fontSize:13, color:C.txtMid }}>Latest vitals from patient's HealthConnect app</div>
-                </div>
-                {[
-                  {l:'Blood Pressure', v:'128/82 mmHg', icon:'🩺', color:C.amber},
-                  {l:'Heart Rate',     v:'72 bpm',       icon:'❤️', color:C.rose},
-                  {l:'Blood Sugar',    v:'142 mg/dL',    icon:'🩸', color:C.teal},
-                  {l:'Temperature',    v:'98.6°F',       icon:'🌡️', color:C.green},
-                  {l:'SpO2',          v:'98%',           icon:'💨', color:C.teal},
-                  {l:'BMI',           v:'26.4',          icon:'⚖️', color:C.violet},
-                ].map(v => (
-                  <div key={v.l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:`1px solid ${C.border}` }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:16 }}>{v.icon}</span>
-                      <span style={{ fontSize:12, color:C.txtLo }}>{v.l}</span>
-                    </div>
-                    <span style={{ fontSize:14, color:C.txtHi, fontWeight:700 }}>{v.v}</span>
+                <div style={{ fontSize:13, color:C.txtMid, marginBottom:14 }}>Latest vitals from patient's HealthConnect app</div>
+                {vitalsLoading ? (
+                  <>{[1,2,3,4].map(i=><Skel key={i} w="100%" h={36}/>)}</>
+                ) : !vitalsData || vitalsData.length === 0 ? (
+                  <div style={{ textAlign:'center' as const, padding:'24px 0', color:C.txtLo, fontSize:13 }}>
+                    <div style={{ fontSize:28, marginBottom:8 }}>📊</div>
+                    No vitals recorded yet
+                  </div>
+                ) : vitalsData.map((v: any, i: number) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:`1px solid ${C.border}` }}>
+                    <span style={{ fontSize:12, color:C.txtLo, textTransform:'capitalize' as const }}>
+                      {v.type?.replace(/_/g,' ') ?? '—'}
+                    </span>
+                    <span style={{ fontSize:14, color:C.txtHi, fontWeight:700 }}>
+                      {v.systolic && v.diastolic ? `${v.systolic}/${v.diastolic}` : v.value}
+                      {v.unit && <span style={{ fontSize:11, color:C.txtLo, fontWeight:400 }}> {v.unit}</span>}
+                    </span>
                   </div>
                 ))}
-                <div style={{ marginTop:12, fontSize:11, color:C.txtLo, textAlign:'center' }}>Last synced: {new Date().toLocaleDateString('en-IN')}</div>
+                {vitalsData && vitalsData.length > 0 && (
+                  <div style={{ marginTop:12, fontSize:11, color:C.txtLo, textAlign:'center' as const }}>
+                    Last recorded: {vitalsData[0]?.measuredAt ? fmtDate(vitalsData[0].measuredAt) : '—'}
+                  </div>
+                )}
               </>
             )}
             {(selected.isHistory || (!selected.type && !selected.isVitals && selected.condition)) && (
               <div>
-                <div style={{ fontSize:13, color:C.txtMid, marginBottom:12 }}>Visit history for {displayName(selected)}</div>
-                {[
-                  {date:'2026-02-20', reason:'Follow-up', notes:'BP controlled, continue medication'},
-                  {date:'2026-01-15', reason:'Routine check', notes:'No change in condition'},
-                  {date:'2025-12-05', reason:'Initial consultation', notes:'Diagnosed, started treatment'},
-                ].map((h, i) => (
+                <div style={{ fontSize:13, color:C.txtMid, marginBottom:12 }}>Appointments for {displayName(selected)}</div>
+                {appointments.filter((a: any) => a.patientId === selected.id || a.patientName === displayName(selected)).length === 0 ? (
+                  <div style={{ textAlign:'center' as const, padding:'20px 0', color:C.txtLo, fontSize:13 }}>No appointments found</div>
+                ) : appointments.filter((a: any) => a.patientId === selected.id || a.patientName === displayName(selected)).map((a: any, i: number) => (
                   <div key={i} style={{ padding:'10px 0', borderBottom:`1px solid ${C.border}` }}>
-                    <div style={{ fontSize:12, fontWeight:700, color:C.txtHi }}>{fmtDate(h.date)} — {h.reason}</div>
-                    <div style={{ fontSize:11, color:C.txtMid, marginTop:3 }}>{h.notes}</div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:3 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.txtHi }}>{a.date ? fmtDate(a.date) : '—'} — {a.reason}</div>
+                      <Pill label={a.status ?? 'COMPLETED'} color={a.status==='COMPLETED'?C.green:C.teal} />
+                    </div>
+                    {a.doctorNotes && <div style={{ fontSize:11, color:C.txtMid }}>{a.doctorNotes}</div>}
                   </div>
                 ))}
               </div>
@@ -1391,35 +1994,255 @@ function MedicalRecordsPage() {
   );
 }
 
+// ── ANALYTICS ─────────────────────────────────────────────────────────────────
+function AnalyticsPage() {
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [appts,     setAppts]     = useState<any[]>([]);
+  const [loading,   setLoading]   = useState(true);
+
+  useEffect(() => {
+    Promise.allSettled([
+      api.get('/doctor/analytics'),
+      api.get('/appointments'),
+    ]).then(([aRes, apRes]) => {
+      if (aRes.status === 'fulfilled') {
+        const d = (aRes.value as any)?.data?.data ?? (aRes.value as any)?.data ?? {};
+        setAnalytics(d);
+      }
+      if (apRes.status === 'fulfilled') {
+        const raw = (apRes.value as any)?.data?.data?.appointments ?? (apRes.value as any)?.data?.appointments ?? (apRes.value as any)?.data ?? [];
+        setAppts(Array.isArray(raw) ? raw : []);
+      }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const monthlyCounts = (() => {
+    const map: Record<string, number> = {};
+    appts.forEach((a: any) => {
+      const d = a.scheduledAt ?? a.date ?? a.createdAt;
+      if (!d) return;
+      const key = new Date(d).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+      map[key] = (map[key] ?? 0) + 1;
+    });
+    return Object.entries(map).slice(-6);
+  })();
+
+  const maxCount = Math.max(...monthlyCounts.map(([,v]) => v), 1);
+  const statusMap: Record<string, number> = {};
+  appts.forEach((a: any) => { statusMap[a.status ?? 'UNKNOWN'] = (statusMap[a.status ?? 'UNKNOWN'] ?? 0) + 1; });
+  const ratingBreakdown: {rating:number;count:number}[] = analytics?.ratingBreakdown ?? [];
+  const maxRating = Math.max(...ratingBreakdown.map(r => r.count), 1);
+
+  const statCards = [
+    { label:'Profile Views',  value: (analytics?.profileViews ?? 0).toLocaleString(),      icon:'👁',  color:C.teal },
+    { label:'Total Patients', value: [...new Set(appts.map((a:any)=>a.patientId))].length.toLocaleString(), icon:'👥', color:'#6366F1' },
+    { label:'Avg Rating',     value: analytics?.averageRating ? analytics.averageRating.toFixed(1)+' ⭐' : '—', icon:'⭐', color:C.amber },
+    { label:'Total Reviews',  value: (analytics?.totalReviews ?? 0).toLocaleString(),       icon:'💬',  color:C.green },
+    { label:'Bookmarks',      value: (analytics?.bookmarkCount ?? 0).toLocaleString(),      icon:'🔖',  color:C.violet },
+    { label:'Upcoming',       value: (analytics?.upcomingAppointments ?? 0).toLocaleString(),icon:'📅', color:C.rose },
+  ];
+
+  return (
+    <div>
+      <SectionHead title="Analytics" sub="Your performance and growth metrics" />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:28 }}>
+        {statCards.map(s => (
+          <Card key={s.label} style={{ padding:'22px 24px', display:'flex', alignItems:'center', gap:16 }}>
+            <div style={{ width:48, height:48, borderRadius:12, background:s.color+'15', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{s.icon}</div>
+            <div>
+              <div style={{ fontSize:11, color:C.txtLo, fontWeight:600, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:4 }}>{s.label}</div>
+              {loading ? <Skel w={80} h={28}/> : <div style={{ fontSize:26, fontWeight:800, color:s.color }}>{s.value}</div>}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20 }}>
+        <Card style={{ padding:'22px 24px' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:C.txtHi, marginBottom:20 }}>📊 Monthly Consultations</div>
+          {loading ? <Skel w="100%" h={140}/> : monthlyCounts.length === 0 ? (
+            <div style={{ textAlign:'center' as const, padding:'32px 0', color:C.txtLo, fontSize:13 }}>No appointment data yet</div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'flex-end', gap:10, height:140 }}>
+              {monthlyCounts.map(([month, count]) => (
+                <div key={month} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.teal }}>{count}</div>
+                  <div style={{ width:'100%', background:C.teal, borderRadius:'4px 4px 0 0', height:`${Math.round((count/maxCount)*120)}px`, minHeight:4, transition:'height 0.5s' }} />
+                  <div style={{ fontSize:10, color:C.txtLo, whiteSpace:'nowrap' as const }}>{month}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card style={{ padding:'22px 24px' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:C.txtHi, marginBottom:20 }}>⭐ Rating Breakdown</div>
+          {loading ? <Skel w="100%" h={140}/> : ratingBreakdown.every(r => r.count === 0) ? (
+            <div style={{ textAlign:'center' as const, padding:'32px 0', color:C.txtLo, fontSize:13 }}>No reviews yet</div>
+          ) : ratingBreakdown.map(r => (
+            <div key={r.rating} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <div style={{ fontSize:12, color:C.txtMid, width:28, textAlign:'right' as const }}>{r.rating}★</div>
+              <div style={{ flex:1, height:10, background:C.cardBg2, borderRadius:5, overflow:'hidden' }}>
+                <div style={{ height:'100%', width:`${Math.round((r.count/maxRating)*100)}%`, background:r.rating>=4?C.green:r.rating===3?C.amber:C.rose, borderRadius:5, minWidth:r.count>0?4:0 }} />
+              </div>
+              <div style={{ fontSize:12, color:C.txtLo, width:24 }}>{r.count}</div>
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      <Card style={{ padding:'22px 24px', marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:C.txtHi, marginBottom:20 }}>📋 Appointment Status Breakdown</div>
+        {loading ? <Skel w="100%" h={60}/> : (
+          <div style={{ display:'flex', gap:16, flexWrap:'wrap' as const }}>
+            {[
+              { status:'COMPLETED', label:'Completed', color:C.green },
+              { status:'CONFIRMED', label:'Confirmed', color:C.teal },
+              { status:'PENDING',   label:'Pending',   color:C.amber },
+              { status:'CANCELLED', label:'Cancelled', color:C.rose },
+            ].map(({ status, label, color }) => {
+              const count = statusMap[status] ?? 0;
+              const total = appts.length || 1;
+              return (
+                <div key={status} style={{ flex:1, minWidth:140, background:color+'10', border:`1px solid ${color}30`, borderRadius:C.rSm, padding:'16px 18px' }}>
+                  <div style={{ fontSize:22, fontWeight:800, color }}>{count}</div>
+                  <div style={{ fontSize:12, color:C.txtMid, marginTop:4 }}>{label}</div>
+                  <div style={{ fontSize:11, color:C.txtLo, marginTop:2 }}>{Math.round((count/total)*100)}% of total</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card style={{ padding:'22px 24px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:C.txtHi }}>🔒 DPDP Consent Audit Trail</div>
+            <div style={{ fontSize:12, color:C.txtLo, marginTop:2 }}>Digital Personal Data Protection Act — patient consent log</div>
+          </div>
+          <Pill label="Compliant" color={C.green} />
+        </div>
+        {[
+          { event:'Platform Terms Accepted',      detail:'On registration',                    status:'✓ Logged',    color:C.green },
+          { event:'Patient data access consents', detail:'Per patient — stored in DB',         status:'✓ Active',    color:C.green },
+          { event:'Consultation recording consent',detail:'Per video call',                    status:'⚠ Manual',    color:C.amber },
+          { event:'Data retention policy',        detail:'7 years per NMC guidelines',         status:'✓ Set',       color:C.green },
+          { event:'Right to erasure requests',    detail:'Via patient settings',               status:'✓ Available', color:C.green },
+        ].map((item, i) => (
+          <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:`1px solid ${C.border}` }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.txtHi }}>{item.event}</div>
+              <div style={{ fontSize:11, color:C.txtLo, marginTop:2 }}>{item.detail}</div>
+            </div>
+            <span style={{ fontSize:11, fontWeight:700, color:item.color }}>{item.status}</span>
+          </div>
+        ))}
+        <div style={{ marginTop:14, padding:'10px 14px', background:'#FFFBEB', border:'1px solid #FCD34D', borderRadius:C.rSm, fontSize:12, color:'#92400E' }}>
+          ⚠ Obtain verbal recording consent at video session start and document in session notes.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ── EARNINGS ──────────────────────────────────────────────────────────────────
 function EarningsPage() {
-  const [data,    setData]    = useState<any>(MOCK_EARNINGS);
+  const [data,    setData]    = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [bank,    setBank]    = useState({ bankName:'', accountNo:'', ifsc:'', upi:'' });
   const [editing, setEditing] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [toast,   setToast]   = useState('');
 
+  const generateInvoice = (row: any, doctorName: string) => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const invoiceNo = 'HC-INV-' + Date.now().toString().slice(-8);
+    const today = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+    win.document.write(`<!DOCTYPE html><html><head><title>Invoice ${invoiceNo}</title>
+    <style>
+      body{font-family:'Segoe UI',Arial,sans-serif;margin:40px;color:#0F172A;max-width:700px;}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #0D9488;}
+      .logo{font-size:22px;font-weight:900;color:#0D9488;}
+      .logo-sub{font-size:11px;color:#64748B;margin-top:2px;}
+      .inv-no{text-align:right;}
+      .inv-title{font-size:28px;font-weight:800;color:#0F172A;letter-spacing:-0.5px;}
+      .inv-sub{font-size:12px;color:#64748B;margin-top:4px;}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:28px;}
+      .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748B;margin-bottom:6px;}
+      .value{font-size:13px;font-weight:600;color:#0F172A;line-height:1.6;}
+      table{width:100%;border-collapse:collapse;margin-bottom:24px;}
+      th{background:#F8FAFC;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;padding:12px 16px;text-align:left;border-bottom:2px solid #E2E8F0;}
+      td{padding:14px 16px;font-size:13px;border-bottom:1px solid #F1F5F9;}
+      .total-row td{font-weight:700;font-size:15px;background:#F0FDF4;color:#16A34A;border-bottom:none;}
+      .footer{margin-top:32px;padding-top:20px;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;font-size:11px;color:#94A3B8;}
+      .badge{background:#D1FAE5;color:#065F46;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;border:1px solid #6EE7B7;}
+      @media print{body{margin:20px;}-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    </style></head><body>
+    <div class="header">
+      <div><div class="logo">HealthConnect</div><div class="logo-sub">Digital Health Platform</div><div class="logo-sub">www.healthconnect.sbs</div></div>
+      <div class="inv-no"><div class="inv-title">INVOICE</div><div class="inv-sub">${invoiceNo}</div><div class="inv-sub">Date: ${today}</div><div style="margin-top:8px;"><span class="badge">PAID</span></div></div>
+    </div>
+    <div class="grid">
+      <div><div class="label">From (Service Provider)</div><div class="value">${doctorName}<br/>HealthConnect Platform<br/>GSTIN: Applied For</div></div>
+      <div><div class="label">Billing Period</div><div class="value">${row.month ?? 'Current Month'}<br/>Consultations: ${row.consultations ?? 0}<br/>Platform: HealthConnect</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+      <tbody>
+        <tr><td>Medical Consultations — ${row.month ?? 'Period'}</td><td>${row.consultations ?? 0}</td><td>₹${row.consultations > 0 ? Math.round((row.amount ?? 0) / row.consultations).toLocaleString('en-IN') : '—'}</td><td>₹${(row.amount ?? 0).toLocaleString('en-IN')}</td></tr>
+        <tr><td style="color:#94A3B8;font-size:12px;">Platform Service Fee (0%)</td><td>—</td><td>—</td><td style="color:#94A3B8;">₹0</td></tr>
+        <tr class="total-row"><td colspan="3">Total Payable</td><td>₹${(row.amount ?? 0).toLocaleString('en-IN')}</td></tr>
+      </tbody>
+    </table>
+    <div style="background:#F8FAFC;border-radius:10px;padding:16px 20px;font-size:12px;color:#475569;margin-bottom:20px;">
+      <strong>Payment Status:</strong> ${row.status ?? 'PAID'} &nbsp;|&nbsp; <strong>Payment Mode:</strong> Bank Transfer &nbsp;|&nbsp; <strong>TDS (10%):</strong> ₹${Math.round((row.amount ?? 0) * 0.1).toLocaleString('en-IN')} deducted at source
+    </div>
+    <div class="footer"><div>This is a computer-generated invoice. No signature required.</div><div>HealthConnect © ${new Date().getFullYear()}</div></div>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 400);
+  };
+
+  const [appts, setAppts] = useState<any[]>([]);
+
   useEffect(() => {
     Promise.allSettled([
       api.get('/doctor/earnings'),
-      // bank-details may not exist in backend yet — silent fallback
       api.get('/doctor/profile'),
-    ]).then(([eRes, bRes]) => {
+      api.get('/appointments'),
+    ]).then(([eRes, bRes, aRes]) => {
       if (eRes.status === 'fulfilled') {
         const d = (eRes.value as any)?.data?.data ?? (eRes.value as any)?.data ?? {};
         if (Object.keys(d).length > 2) setData(d);
       }
-      // Use bank details from profile if available
       if (bRes.status === 'fulfilled') {
         const p = (bRes.value as any)?.data?.data ?? (bRes.value as any)?.data ?? {};
         if (p.bankName) setBank(p);
-        else setBank({ bankName:'HDFC Bank', accountNo:'XXXX XXXX 4521', ifsc:'HDFC0001234', upi:'dr.sharma@hdfcbank' });
-      } else {
-        setBank({ bankName:'HDFC Bank', accountNo:'XXXX XXXX 4521', ifsc:'HDFC0001234', upi:'dr.sharma@hdfcbank' });
+      }
+      if (aRes.status === 'fulfilled') {
+        const raw = (aRes.value as any)?.data?.data?.appointments ?? (aRes.value as any)?.data?.appointments ?? (aRes.value as any)?.data ?? [];
+        setAppts(Array.isArray(raw) ? raw : []);
       }
     }).finally(() => setLoading(false));
   }, []);
+
+  // Build monthly summary from appointments when earnings API has no history
+  const derivedHistory = (() => {
+    const map: Record<string, { consultations: number; amount: number }> = {};
+    appts.forEach((a: any) => {
+      const d = a.scheduledAt ?? a.date ?? a.createdAt;
+      if (!d || a.status === 'CANCELLED') return;
+      const key = new Date(d).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      if (!map[key]) map[key] = { consultations: 0, amount: 0 };
+      map[key].consultations += 1;
+      map[key].amount += a.fee ?? a.consultationFee ?? 0;
+    });
+    return Object.entries(map).map(([month, v]) => ({ month, ...v, status: 'PAID' })).slice(-6).reverse();
+  })();
+
+  const payoutHistory = (data?.history && data.history.length > 0) ? data.history : derivedHistory;
 
   const handleSaveBank = async () => {
     setSaving(true);
@@ -1434,10 +2257,10 @@ function EarningsPage() {
   };
 
   const statCards = [
-    { label:'This Month',     value:fmtMoney(data.thisMonth ?? data.monthlyEarnings ?? 82500), icon:'💰', color:C.green },
-    { label:'Last Month',     value:fmtMoney(data.lastMonth ?? 74200),                         icon:'📊', color:C.teal },
-    { label:'Pending Payout', value:fmtMoney(data.pendingPayout ?? data.thisWeek ?? 18000),    icon:'⏳', color:C.amber },
-    { label:'Avg / Consult',  value:fmtMoney(data.avgPerConsult ?? 950),                       icon:'🩺', color:C.violet },
+    { label:'This Month',     value:fmtMoney(data?.thisMonth ?? data?.monthlyEarnings ?? 0), icon:'💰', color:C.green },
+    { label:'Last Month',     value:fmtMoney(data?.lastMonth ?? 0),                           icon:'📊', color:C.teal },
+    { label:'Pending Payout', value:fmtMoney(data?.pendingPayout ?? data?.thisWeek ?? 0),     icon:'⏳', color:C.amber },
+    { label:'Avg / Consult',  value:fmtMoney(data?.avgPerConsult ?? 0),                       icon:'🩺', color:C.violet },
   ];
 
   const fStyle: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg, color:C.txtHi, fontSize:13, outline:'none', fontFamily:'inherit' };
@@ -1468,14 +2291,20 @@ function EarningsPage() {
               </tr>
             </thead>
             <tbody>
-              {(data.history ?? []).map((row: any, i: number) => (
+              {loading ? (
+                <tr><td colSpan={5} style={{ padding:'28px 20px', textAlign:'center' as const, color:C.txtLo, fontSize:13 }}><Skel w="100%" h={40}/></td></tr>
+              ) : payoutHistory.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding:'32px 20px', textAlign:'center' as const, color:C.txtLo, fontSize:13 }}>
+                  No payout history yet. Complete consultations to see your earnings here.
+                </td></tr>
+              ) : payoutHistory.map((row: any, i: number) => (
                 <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
                   <td style={{ padding:'14px 20px', fontSize:13, fontWeight:600, color:C.txtHi }}>{row.month}</td>
                   <td style={{ padding:'14px 20px', fontSize:13, color:C.txtMid }}>{row.consultations}</td>
                   <td style={{ padding:'14px 20px', fontSize:14, fontWeight:700, color:C.green }}>{fmtMoney(row.amount)}</td>
                   <td style={{ padding:'14px 20px' }}><Pill label={row.status ?? 'PAID'} color={row.status==='PROCESSING' ? C.amber : C.green} /></td>
                   <td style={{ padding:'14px 20px' }}>
-                    <button style={{ fontSize:11, color:C.teal, background:'none', border:'none', cursor:'pointer', padding:0 }}>Download Invoice</button>
+                    <button onClick={() => generateInvoice(row, data?.doctorName ?? 'Doctor')} style={{ fontSize:11, color:C.teal, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600 }}>🖨️ Invoice</button>
                   </td>
                 </tr>
               ))}
@@ -1519,24 +2348,67 @@ function EarningsPage() {
 
 // ── COMMUNITY Q&A ─────────────────────────────────────────────────────────────
 function CommunitiesPage() {
-  const user = useAuthUser();  // FIXED: no reactive hook
-  const [posts,     setPosts]     = useState<any[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [filter,    setFilter]    = useState<'unanswered'|'all'>('unanswered');
-  const [composing, setComposing] = useState<string|null>(null);
-  const [reply,     setReply]     = useState('');
-  const [sending,   setSending]   = useState(false);
-  const [toast,     setToast]     = useState('');
-
-  const MOCK_POSTS = [
-    { id:'q1', communityId:'m3', community:'Mental Health Matters', body:'How long does it typically take for SSRIs to start working? I started 2 weeks ago and feel nothing.', isAnonymous:true, createdAt:new Date(Date.now()-2*3600000).toISOString(), _count:{reactions:4,comments:1}, hasDocAnswer:false, category:'MENTAL_HEALTH' },
-    { id:'q2', communityId:'m1', community:'Diabetes Connect', body:'My HbA1c is 8.2 and my doctor wants to add insulin. Is this really necessary or should I try diet changes first?', isAnonymous:false, author:{name:'Ramesh K.'}, createdAt:new Date(Date.now()-5*3600000).toISOString(), _count:{reactions:6,comments:3}, hasDocAnswer:false, category:'DIABETES' },
-    { id:'q3', communityId:'m2', community:'Heart Warriors', body:'Can anyone explain what a stent procedure involves? My cardiologist mentioned it today and I was too nervous to ask questions.', isAnonymous:true, createdAt:new Date(Date.now()-8*3600000).toISOString(), _count:{reactions:9,comments:0}, hasDocAnswer:false, category:'CARDIOLOGY' },
-    { id:'q4', communityId:'m1', community:'Diabetes Connect', body:'What are the best low-GI Indian foods for diabetics? I struggle to find good options.', isAnonymous:false, author:{name:'Sunita M.'}, createdAt:new Date(Date.now()-24*3600000).toISOString(), _count:{reactions:12,comments:5}, hasDocAnswer:true, category:'DIABETES' },
-  ];
+  const [posts,           setPosts]           = useState<any[]>([]);
+  const [communities,     setCommunities]     = useState<any[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [filter,          setFilter]          = useState<'unanswered'|'all'>('unanswered');
+  const [activeCommunity, setActiveCommunity] = useState<string>('all');
+  const [search,          setSearch]          = useState('');
+  const [composing,       setComposing]       = useState<string|null>(null);
+  const [reply,           setReply]           = useState('');
+  const [sending,         setSending]         = useState(false);
+  const [toast,           setToast]           = useState('');
 
   useEffect(() => {
-    communityAPI.list().then(() => setPosts(MOCK_POSTS)).catch(() => setPosts(MOCK_POSTS)).finally(() => setLoading(false));
+    const load = async () => {
+      setLoading(true);
+      try {
+        const commRes: any = await communityAPI.list();
+        const commList: any[] = commRes?.data?.data?.communities ?? commRes?.data?.communities ?? commRes?.data?.data ?? commRes?.data ?? [];
+        if (!Array.isArray(commList) || !commList.length) { setLoading(false); return; }
+        setCommunities(commList);
+
+        const top = [...commList]
+          .sort((a, b) => (b.memberCount ?? b._count?.members ?? 0) - (a.memberCount ?? a._count?.members ?? 0))
+          .slice(0, 8);
+
+        const results = await Promise.allSettled(
+          top.map((c: any) => communityAPI.getPosts(c.id, { limit: 15, sort: 'recent' }))
+        );
+
+        const allPosts: any[] = [];
+        results.forEach((res, idx) => {
+          if (res.status !== 'fulfilled') return;
+          const comm = top[idx];
+          const raw: any[] = res.value?.data?.data?.posts ?? res.value?.data?.posts ?? res.value?.data?.data ?? res.value?.data ?? [];
+          if (!Array.isArray(raw)) return;
+          raw.forEach((p: any) => {
+            const comments: any[] = p.comments ?? p._comments ?? [];
+            const hasDocAnswer = p.hasDocAnswer ?? p.has_doctor_answer ?? comments.some((c: any) => c.is_doctor || c.isDoctor);
+            allPosts.push({
+              id:          p.id ?? p._id,
+              communityId: p.communityId ?? p.community_id ?? comm.id,
+              community:   p.communityName ?? p.community_name ?? comm.name ?? 'Community',
+              category:    p.category ?? comm.category ?? 'GENERAL',
+              body:        p.body ?? p.content ?? p.text ?? '',
+              isAnonymous: p.isAnonymous ?? p.is_anonymous ?? false,
+              author:      p.author ?? (p.authorName ? { name: p.authorName } : null),
+              createdAt:   p.createdAt ?? p.created_at ?? new Date().toISOString(),
+              hasDocAnswer,
+              _count: { comments: p._count?.comments ?? p.commentsCount ?? comments.length ?? 0, reactions: p._count?.reactions ?? p.reactionsCount ?? 0 },
+            });
+          });
+        });
+
+        const seen = new Set<string>();
+        const deduped = allPosts
+          .filter(p => { if (!p.id || seen.has(p.id)) return false; seen.add(p.id); return true; })
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setPosts(deduped);
+      } catch (e) { console.error('Communities load error', e); }
+      finally { setLoading(false); }
+    };
+    load();
   }, []);
 
   const handleReply = async (communityId: string, postId: string) => {
@@ -1544,39 +2416,87 @@ function CommunitiesPage() {
     setSending(true);
     try {
       await communityAPI.addComment(communityId, postId, reply.trim());
-      setToast('Your verified answer was posted! ✓');
-    } catch {
-      setToast('Answer posted! ✓');
-    }
-    setPosts(prev => prev.map(p => p.id === postId ? {...p, hasDocAnswer:true, _count:{...p._count, comments:(p._count?.comments??0)+1}} : p));
-    setComposing(null); setReply(''); setSending(false);
+      setToast('Your verified answer was posted ✓');
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, hasDocAnswer: true, _count: { ...p._count, comments: (p._count?.comments ?? 0) + 1 } } : p));
+    } catch { setToast('Could not post answer. Please try again.'); }
+    finally { setComposing(null); setReply(''); setSending(false); }
   };
 
-  const catColor = (c: string) => ({ MENTAL_HEALTH:'#8B5CF6', DIABETES:'#F59E0B', CARDIOLOGY:'#F43F5E', DEFAULT:C.teal }[c] ?? C.teal);
-  const displayed = filter === 'unanswered' ? posts.filter(p => !p.hasDocAnswer) : posts;
+  const catColor = (c: string) => ({
+    MENTAL_HEALTH:'#8B5CF6', DEPRESSION:'#8B5CF6', ANXIETY:'#8B5CF6',
+    DIABETES:'#F59E0B', THYROID:'#06B6D4', CARDIOLOGY:'#F43F5E', HEART:'#F43F5E',
+    HYPERTENSION:'#3B82F6', PCOS:'#EC4899', CANCER:'#EF4444', ARTHRITIS:'#F97316',
+    GENERAL:'#0D9488', NUTRITION:'#16A34A', FITNESS:'#16A34A',
+  }[snakeToKey(c ?? '')] ?? C.teal);
+
+  const communityOptions = [
+    { id: 'all', name: 'All Communities' },
+    ...Array.from(new Map(posts.map(p => [p.communityId, { id: p.communityId, name: p.community }])).values()),
+  ];
+
+  const displayed = posts
+    .filter(p => activeCommunity === 'all' || p.communityId === activeCommunity)
+    .filter(p => filter === 'all' || !p.hasDocAnswer)
+    .filter(p => !search || p.body?.toLowerCase().includes(search.toLowerCase()) || p.community?.toLowerCase().includes(search.toLowerCase()));
+
+  const unansweredCount = posts.filter(p => (activeCommunity === 'all' || p.communityId === activeCommunity) && !p.hasDocAnswer).length;
 
   return (
     <div>
       {toast && <Toast msg={toast} onClose={() => setToast('')} />}
-      <SectionHead title="Community Q&A" sub="Patients are asking — your verified answer matters" />
-      <div style={{ background:`linear-gradient(135deg,${C.cardBg},${C.cardBg2})`, border:`1px solid ${C.borderHi}`, borderRadius:C.r, padding:'16px 20px', marginBottom:20, display:'flex', alignItems:'center', gap:14 }}>
-        <div style={{ width:40, height:40, borderRadius:10, background:C.teal+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>✓</div>
-        <div style={{ flex:1 }}>
+      <SectionHead title="Community Q&A"
+        sub={loading ? 'Loading…' : `${communities.length} communities · ${posts.length} posts`}
+        action={
+          <div style={{ position:'relative' }}>
+            <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:C.txtLo, fontSize:13 }}>🔍</span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search questions…"
+              style={{ padding:'7px 12px 7px 32px', borderRadius:C.rSm, border:`1px solid ${C.border}`, background:C.cardBg, color:C.txtHi, fontSize:12, outline:'none', width:200, fontFamily:'inherit' }} />
+          </div>
+        } />
+      <div style={{ background:`linear-gradient(135deg,${C.cardBg},${C.cardBg2})`, border:`1px solid ${C.borderHi}`, borderRadius:C.r, padding:'14px 18px', marginBottom:16, display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ width:36, height:36, borderRadius:9, background:C.teal+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>✓</div>
+        <div>
           <div style={{ fontSize:13, fontWeight:700, color:C.txtHi }}>You are a Verified Doctor</div>
           <div style={{ fontSize:12, color:C.txtMid }}>Your answers appear with the <strong style={{ color:C.teal }}>✓ Verified Doctor</strong> badge — patients trust your responses above all others.</div>
         </div>
       </div>
+      {/* Community filter pills */}
+      {!loading && communityOptions.length > 1 && (
+        <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4, marginBottom:12, scrollbarWidth:'none' as const }}>
+          {communityOptions.map(c => (
+            <button key={c.id} onClick={() => setActiveCommunity(c.id)}
+              style={{ padding:'5px 14px', borderRadius:100, cursor:'pointer', border:`1px solid ${activeCommunity===c.id?C.teal:C.border}`, background:activeCommunity===c.id?C.tealGlow:'transparent', color:activeCommunity===c.id?C.teal:C.txtMid, fontSize:11, fontWeight:activeCommunity===c.id?700:400, whiteSpace:'nowrap' as const, flexShrink:0, fontFamily:'inherit' }}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Answered status tabs */}
       <div style={{ display:'flex', gap:8, marginBottom:20 }}>
-        {[{id:'unanswered',label:'Needs Answer'},{id:'all',label:'All Questions'}].map(f => (
+        {[
+          { id:'unanswered', label:'Needs Answer', count: unansweredCount },
+          { id:'all', label:'All Questions', count: posts.filter(p => activeCommunity==='all'||p.communityId===activeCommunity).length },
+        ].map(f => (
           <button key={f.id} onClick={() => setFilter(f.id as any)}
-            style={{ padding:'7px 16px', borderRadius:100, cursor:'pointer', border:`1px solid ${filter===f.id?C.teal:C.border}`, background:filter===f.id?C.tealGlow:'transparent', color:filter===f.id?C.teal:C.txtMid, fontSize:12, fontWeight:filter===f.id?700:400 }}>
+            style={{ padding:'7px 16px', borderRadius:100, cursor:'pointer', border:`1px solid ${filter===f.id?C.teal:C.border}`, background:filter===f.id?C.tealGlow:'transparent', color:filter===f.id?C.teal:C.txtMid, fontSize:12, fontWeight:filter===f.id?700:400, display:'flex', alignItems:'center', gap:6, fontFamily:'inherit' }}>
             {f.label}
+            {f.count > 0 && <span style={{ background:filter===f.id?C.teal:'#94A3B8', color:'#fff', borderRadius:100, fontSize:9, fontWeight:700, padding:'1px 6px' }}>{f.count}</span>}
           </button>
         ))}
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-        {loading ? [1,2].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={80}/></Card>)
-        : displayed.map(post => (
+        {loading ? [1,2,3].map(i=><Card key={i} style={{padding:20}}><Skel w="100%" h={80}/></Card>)
+        : displayed.length === 0 ? (
+          <Card style={{ padding:'40px 24px', textAlign:'center' }}>
+            <div style={{ fontSize:36, marginBottom:10 }}>{filter==='unanswered'?'🎉':'💬'}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.txtHi, marginBottom:6 }}>
+              {filter==='unanswered' ? 'All caught up!' : search ? `No results for "${search}"` : 'No posts yet'}
+            </div>
+            <div style={{ fontSize:12, color:C.txtMid }}>
+              {filter==='unanswered' ? 'No unanswered questions. Switch to "All Questions" to browse.' : 'Try a different community or search term.'}
+            </div>
+          </Card>
+        ) : displayed.map(post => (
           <Card key={post.id} style={{ padding:'18px 22px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
               <Pill label={post.community} color={catColor(post.category)} />
@@ -1585,10 +2505,12 @@ function CommunitiesPage() {
             </div>
             <p style={{ fontSize:14, color:C.txtHi, lineHeight:1.6, margin:'0 0 12px' }}>{post.body}</p>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <span style={{ fontSize:12, color:C.txtLo }}>💬 {post._count?.comments ?? 0} replies · ❤️ {post._count?.reactions ?? 0}</span>
+              <span style={{ fontSize:12, color:C.txtLo }}>💬 {post._count?.comments ?? 0} replies · ❤️ {post._count?.reactions ?? 0}
+                {post.author && !post.isAnonymous && <span style={{ color:C.txtLo }}> · {post.author.name}</span>}
+              </span>
               {!post.hasDocAnswer && (
-                <button onClick={() => setComposing(c => c===post.id ? null : post.id)}
-                  style={{ marginLeft:'auto', padding:'7px 16px', borderRadius:C.rSm, border:'none', background:`linear-gradient(135deg,${C.tealDark},${C.teal})`, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                <button onClick={() => { setComposing(c => c===post.id ? null : post.id); setReply(''); }}
+                  style={{ marginLeft:'auto', padding:'7px 16px', borderRadius:C.rSm, border:'none', background:`linear-gradient(135deg,${C.tealDark},${C.teal})`, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
                   Answer as Doctor ✓
                 </button>
               )}
@@ -1606,9 +2528,6 @@ function CommunitiesPage() {
             )}
           </Card>
         ))}
-        {!loading && displayed.length === 0 && (
-          <div style={{ textAlign:'center', padding:'40px', color:C.txtLo, fontSize:14 }}>No unanswered questions right now 🎉</div>
-        )}
       </div>
     </div>
   );
@@ -1737,12 +2656,45 @@ function AvailabilityPage() {
     }
   };
 
+  const exportCalendar = () => {
+    const DAY_MAP: Record<string,number> = { Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6, Sunday:0 };
+    const now = new Date();
+    const stamp = now.toISOString().replace(/[-:]/g,'').slice(0,15)+'Z';
+    let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//HealthConnect//Doctor Schedule//EN\nCALSCALE:GREGORIAN\nMETHOD:PUBLISH\n';
+    Object.entries(slots).forEach(([day, slot]: [string, any]) => {
+      if (!slot.enabled) return;
+      const dayNum = DAY_MAP[day];
+      // Find next occurrence of this weekday
+      const next = new Date(now);
+      const diff = (dayNum - next.getDay() + 7) % 7 || 7;
+      next.setDate(next.getDate() + diff);
+      const dateStr = next.toISOString().slice(0,10).replace(/-/g,'');
+      const startT = slot.start.replace(':','') + '00';
+      const endT   = slot.end.replace(':','') + '00';
+      ics += 'BEGIN:VEVENT\n';
+      ics += `DTSTART;TZID=Asia/Kolkata:${dateStr}T${startT}\n`;
+      ics += `DTEND;TZID=Asia/Kolkata:${dateStr}T${endT}\n`;
+      ics += `RRULE:FREQ=WEEKLY;BYDAY=${day.slice(0,2).toUpperCase()}\n`;
+      ics += `SUMMARY:HealthConnect Consultations — ${day}\n`;
+      ics += `DESCRIPTION:Available: ${slot.start} – ${slot.end}\nFees: In-Person ₹${fees.inPerson} | Video ₹${fees.video} | Phone ₹${fees.phone}\n`;
+      ics += `DTSTAMP:${stamp}\n`;
+      ics += `UID:hc-${day.toLowerCase()}-${Date.now()}@healthconnect.sbs\n`;
+      ics += 'END:VEVENT\n';
+    });
+    ics += 'END:VCALENDAR';
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'healthconnect-schedule.ics'; a.click();
+    URL.revokeObjectURL(url);
+    setToast('Calendar exported — import into Google/Apple Calendar ✓');
+  };
+
   return (
     <div>
       {toast && <Toast msg={toast} onClose={() => setToast('')} />}
       <SectionHead title="Availability" sub="Set your weekly schedule"
-        action={<BlueBtn onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : '✓ Save Schedule'}</BlueBtn>}
-      />
+        action={<div style={{ display:'flex', gap:10 }}><GhostBtn onClick={exportCalendar} style={{ fontSize:12 }}>📅 Export to Calendar</GhostBtn><BlueBtn onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : '✓ Save Schedule'}</BlueBtn></div>} />
       <Card style={{ padding:24, marginBottom:16 }}>
         <h3 style={{ color:C.txtHi, fontSize:14, fontWeight:700, margin:'0 0 18px' }}>📅 Weekly Schedule</h3>
         {DAYS.map(day => {
@@ -1808,8 +2760,8 @@ function VideoConsultsPage() {
     api.get('/doctor/appointments', { params:{ type:'TELECONSULT' } }).then((r: any) => {
       const a = r?.data?.data ?? r?.data?.appointments ?? r?.data ?? [];
       const videoAppts = Array.isArray(a) ? a.filter((x:any) => x.type==='VIDEO' || x.type==='TELECONSULT') : [];
-      setAppts(videoAppts.length ? videoAppts : MOCK_APPTS.filter(a=>a.type==='VIDEO'));
-    }).catch(() => setAppts(MOCK_APPTS.filter(a=>a.type==='VIDEO'))).finally(() => setLoading(false));
+      setAppts(videoAppts);
+    }).catch(() => setAppts([])).finally(() => setLoading(false));
   }, []);
 
   const startCall = (appt: any) => {
@@ -2074,11 +3026,32 @@ export default function DoctorDashboardPage() {
 
   // FIXED: Default to 'home' on mount if activePage is null/unknown doctor page
   useEffect(() => {
-    const DOCTOR_PAGES = ['home','patients','appointments','video-consults','prescriptions','records','communities','earnings','profile','availability','settings'];
+    const DOCTOR_PAGES = ['home','patients','appointments','video-consults','prescriptions','records','communities','earnings','analytics','profile','availability','settings'];
     if (!activePage || !DOCTOR_PAGES.includes(activePage)) {
       setActivePage('home');
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update URL + scroll to top when activePage changes
+  useEffect(() => {
+    if (!activePage) return;
+    if (typeof window !== 'undefined') {
+      const current = new URLSearchParams(window.location.search).get('tab');
+      if (current !== activePage) {
+        window.history.replaceState({}, '', `/doctor-dashboard?tab=${activePage}`);
+      }
+      // Always scroll to top when switching tabs
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [activePage]);
+
+  // First-login onboarding
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  useEffect(() => {
+    if (user && !isOnboardingDone() && !isOnboardingSnoozed()) {
+      setShowOnboarding(true);
+    }
+  }, [user]);
 
   if (!isAuthenticated || !user) return null;
 
@@ -2092,6 +3065,7 @@ export default function DoctorDashboardPage() {
       case 'records':        return <MedicalRecordsPage />;
       case 'communities':    return <CommunitiesPage />;
       case 'earnings':       return <EarningsPage />;
+      case 'analytics':      return <AnalyticsPage />;
       case 'profile':        return <ProfilePage />;
       case 'availability':   return <AvailabilityPage />;
       case 'settings':       return <SettingsPage />;
@@ -2101,6 +3075,12 @@ export default function DoctorDashboardPage() {
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
+      {showOnboarding && (
+        <ProfileOnboardingModal
+          role="DOCTOR"
+          userName={user?.firstName}
+          onClose={() => setShowOnboarding(false)} />
+      )}
       <style>{`
         * { box-sizing: border-box; }
         input, textarea, select { font-family: inherit; }

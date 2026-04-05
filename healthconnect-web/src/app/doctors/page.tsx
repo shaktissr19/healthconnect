@@ -1,4 +1,5 @@
 'use client';
+import PublicNavbar from '@/components/PublicNavbar';
 // src/app/doctors/page.tsx
 // ══════════════════════════════════════════════════════════════════════════
 // Doctor Dictionary — Full search, filter, tile/list view, doctor profiles
@@ -254,7 +255,7 @@ function normalizeDoctor(d: any, idx: number) {
     featuredPatientName:   d.featuredPatientName ?? '',
     recentReviews:         Array.isArray(d.recentReviews) ? d.recentReviews : [],
     isVerified:            d.isVerified !== false,
-    gender:                d.gender ?? '',
+    gender:                (d.gender ?? d.doctorProfile?.gender ?? d.profile?.gender ?? '').toUpperCase(),
     licenseNumber:         d.medicalLicenseNumber ?? d.licenseNumber ?? '',
     gradIndex:             idx % GRAD_COLORS.length,
   };
@@ -286,7 +287,7 @@ const FALLBACK: Doctor[] = ([
   { id:'f10', name:'Dr. Anita Reddy',      initials:'AR', hcId:'HC-D-S010', specialization:'Endocrinologist',    subSpecializations:['Thyroid','Diabetes','Obesity'],            qualification:['MBBS','MD Endocrinology','DM'],                hospital:'Hormone Health Clinic',        clinicAddress:'Banjara Hills',                city:'Hyderabad',        state:'Telangana',    pincode:'500034', experience:8,  languages:['Telugu','English','Hindi'],   rating:4.7, reviews:221, totalPatients:1680, isAvailable:true,  fee:850,  teleconsultFee:550,  about:'Endocrinologist managing thyroid disorders, diabetes, adrenal conditions and metabolic obesity.', isVerified:true, gender:'Female', licenseNumber:'TS-ENDO-2016', gradIndex:9 },
   { id:'f11', name:'Dr. Geeta Pandey',     initials:'GP', hcId:'HC-D-S024', specialization:'Nutritionist',       subSpecializations:['Weight Management','Diabetes Diet'],       qualification:['MSc Clinical Nutrition','RD','PhD'],           hospital:'Nourish Diet Clinic',          clinicAddress:'Hazratganj',                   city:'Lucknow',          state:'Uttar Pradesh',pincode:'226001', experience:11, languages:['Hindi','English'],            rating:4.8, reviews:423, totalPatients:3600, isAvailable:true,  fee:450,  teleconsultFee:300,  about:'Registered dietitian with expertise in therapeutic nutrition for diabetes, PCOS, and thyroid disorders.', isVerified:true, gender:'Female', licenseNumber:'UP-NUTR-2013', gradIndex:0 },
   { id:'f12', name:'Dr. Vikram Bhat',      initials:'VB', hcId:'HC-D-S005', specialization:'Orthopaedic Surgeon',subSpecializations:['Joint Replacement','Sports Medicine'],     qualification:['MBBS','MS Orthopaedics','Fellowship Sports Medicine'],hospital:'BoneJoint Clinic',          clinicAddress:'Malleshwaram',                 city:'Bengaluru',        state:'Karnataka',    pincode:'560003', experience:16, languages:['Kannada','English','Hindi'],  rating:4.8, reviews:189, totalPatients:1480, isAvailable:false, fee:1100, teleconsultFee:0,    about:'Orthopaedic surgeon with extensive experience in knee and hip replacement. Sports medicine consultant.', isVerified:true, gender:'Male',   licenseNumber:'KA-ORTHO-2008',gradIndex:1 },
-] as any[]).map((d: any) => ({ ...FB_DEFAULTS, ...d })) as Doctor[];
+] as any[]).map((d: any) => ({ ...FB_DEFAULTS, ...d, gender: (d.gender ?? '').toUpperCase() })) as Doctor[];
 
 // ── Doctor Spotlight cards — rotating in carousel ──────────────────────────
 // 6 cards: healthcare facts, doctor insights, patient success stories,
@@ -1025,8 +1026,8 @@ interface SidebarProps {
   feeRange: string;  setFeeRange: (v: string) => void;
   expRange: string;  setExpRange: (v: string) => void;
   language: string;  setLanguage: (v: string) => void;
-  available: boolean; setAvailable: (fn: (v: boolean) => boolean) => void;
-  verified: boolean;  setVerified:  (fn: (v: boolean) => boolean) => void;
+  available: boolean; setAvailable: React.Dispatch<React.SetStateAction<boolean>>;
+  verified: boolean;  setVerified:  React.Dispatch<React.SetStateAction<boolean>>;
   gender: string;    setGender: (v: string) => void;
   onClear: () => void; hasFilters: boolean;
 }
@@ -1306,8 +1307,8 @@ export default function DoctorsPage() {
     if (pincode.trim()) fb = fb.filter((d: Doctor) => d.pincode.startsWith(pincode.trim()));
     // Language
     if (language) fb = fb.filter((d: Doctor) => d.languages.some((l: string) => l.toLowerCase() === language.toLowerCase()));
-    // Gender
-    if (gender) fb = fb.filter((d: Doctor) => d.gender.toUpperCase() === gender.toUpperCase());
+    // Gender — normalizeDoctor stores gender as uppercase (MALE/FEMALE), gender state is also uppercase
+    if (gender) fb = fb.filter((d: Doctor) => d.gender === gender);
     // Available
     if (available) fb = fb.filter((d: Doctor) => d.isAvailable);
     // Verified
@@ -1423,8 +1424,8 @@ export default function DoctorsPage() {
   const onlineCount = allDoctors.filter((d: Doctor) => d.isAvailable).length;
 
   return (
-    <div style={{ background: '#F0F4FF', minHeight: '100vh', fontFamily: 'var(--font-body)' }}>
-
+    <>
+      <PublicNavbar />
       {/* ── INTRO SPLASH — 6s, position:absolute inside hero ──────────────── */}
       <style>{`
         @keyframes diFadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
@@ -1436,32 +1437,7 @@ export default function DoctorsPage() {
         .di-bar{animation:diBarGrow 6000ms linear 0.1s both}
         .di-dot{display:inline-block;animation:diDotPulse 2s ease infinite;margin:0 9px;color:#1A6BB5}
       `}</style>
-
-      {/* ── Navbar — white, matches landing page ──────────────────────────── */}
-      <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: '#ffffff', borderBottom: '1px solid #E8EDF8', padding: '0 48px', height: 68, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 12px rgba(12,26,58,0.07)' }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#0D9488,#14B8A6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontWeight: 900, fontSize: 18, color: '#fff', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}>H</div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, color: '#0A1628', lineHeight: 1 }}>HealthConnect India</div>
-            <div style={{ fontSize: 10, color: '#0D9488', letterSpacing: '0.04em', marginTop: 2 }}>Unified Healthcare Platform</div>
-          </div>
-        </a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[['Home','/'],['Doctors','/doctors'],['Communities','/communities'],['Hospitals','#'],['Learn Hub','#']].map(([label, href]) => (
-            <a key={label} href={href} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: href === '/doctors' ? 700 : 500, color: href === '/doctors' ? '#1A6BB5' : '#374151', textDecoration: 'none', background: href === '/doctors' ? '#EBF4FF' : 'transparent', border: href === '/doctors' ? '1px solid #BFDBFE' : '1px solid transparent', transition: 'all 0.2s' }}>{label}</a>
-          ))}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isAuth ? (
-            <button onClick={() => router.push(getDashboardRoute(authUser?.role))} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#0D9488,#14B8A6)', color: '#fff', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>My Dashboard →</button>
-          ) : (
-            <>
-              <button onClick={() => { setAuthPendingDoctor(null); setShowAuth(true); }} style={{ padding: '8px 18px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: '#374151', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Sign In</button>
-              <button onClick={() => { setAuthPendingDoctor(null); setShowAuth(true); }} style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#0D9488,#14B8A6)', color: '#fff', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(13,148,136,0.3)' }}>Sign Up Free</button>
-            </>
-          )}
-        </div>
-      </nav>
+      <div style={{ background: '#F0F4FF', minHeight: '100vh', fontFamily: 'var(--font-body)', paddingTop: 64 }}>
 
       {/* ── Hero section — dark navy card with rounded corners, floating on white ── */}
       <div style={{ padding: '20px 48px 0', background: '#F0F4FF' }}>
@@ -1470,13 +1446,13 @@ export default function DoctorsPage() {
         {/* INTRO SPLASH — absolute inside hero */}
         {showIntro && (
           <div style={{ position:'absolute', inset:0, zIndex:20, overflow:'hidden', borderRadius:20, opacity: introFading ? 0 : 1, transition:'opacity 0.7s ease', pointerEvents: introFading ? 'none' : 'auto' }}>
+            {/* Background image */}
             <div style={{ position:'absolute', inset:0, backgroundImage:'url(/images/doctors-intro.png)', backgroundSize:'cover', backgroundPosition:'center top' }} />
-            <div style={{ position:'absolute', top:'18%', left:'50%', transform:'translate(-50%,-50%)', width:'min(640px,82%)', textAlign:'center' }}>
-              {/* Subtle dark backdrop behind text for readability */}
-              <div style={{ position:'absolute', inset:'-18px -28px', background:'rgba(255,255,255,0.22)', backdropFilter:'blur(8px)', borderRadius:16, zIndex:-1 }} />
-              <div className="di-b di-d2" style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.4rem,2.6vw,2.2rem)', fontWeight:900, color:'#071428', lineHeight:1.08, letterSpacing:'-0.025em', marginBottom:5, textShadow:'0 1px 8px rgba(255,255,255,0.5)' }}>Find Your Doctor</div>
-              <div className="di-b di-d3" style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.1rem,2vw,1.75rem)', fontWeight:800, color:'#1A4A8A', lineHeight:1.1, letterSpacing:'-0.015em', whiteSpace:'nowrap', marginBottom:16, textShadow:'0 1px 8px rgba(255,255,255,0.5)' }}>in Minutes — Free, Always</div>
-              <div className="di-b di-d4" style={{ display:'flex', alignItems:'center', justifyContent:'center', flexWrap:'nowrap', gap:0, fontFamily:"'DM Sans',sans-serif", fontSize:'clamp(0.82rem,1.3vw,1.05rem)', fontWeight:700, color:'#0A0F1A', textShadow:'0 1px 6px rgba(255,255,255,0.6)' }}>
+            {/* Text block — NO white box, positioned on the RIGHT side over the empty space */}
+            <div style={{ position:'absolute', top:'50%', right:'6%', transform:'translateY(-50%)', width:'min(380px,42%)', textAlign:'right' }}>
+              <div className="di-b di-d2" style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.4rem,2.6vw,2.2rem)', fontWeight:900, color:'#28174f', lineHeight:1.08, letterSpacing:'-0.025em', marginBottom:5, textShadow:'0 2px 16px rgba(0,0,0,0.6)' }}>Find Your Doctor</div>
+              <div className="di-b di-d3" style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.1rem,2vw,1.75rem)', fontWeight:800, color:'#06241f', lineHeight:1.1, letterSpacing:'-0.015em', whiteSpace:'nowrap', marginBottom:16, textShadow:'0 2px 12px rgba(0,0,0,0.5)' }}>in Minutes — Free, Always</div>
+              <div className="di-b di-d4" style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', flexWrap:'nowrap', gap:0, fontFamily:"'DM Sans',sans-serif", fontSize:'clamp(0.82rem,1.3vw,1.05rem)', fontWeight:700, color:'rgba(23, 13, 37, 0.9)', textShadow:'0 1px 8px rgba(0,0,0,0.5)' }}>
                 {['Verified Specialists','Available Now','Cities'].map((item, i, arr) => (
                   <span key={i} style={{ display:'flex', alignItems:'center', whiteSpace:'nowrap' }}>
                     <span>{item}</span>
@@ -1903,5 +1879,6 @@ export default function DoctorsPage() {
         }
       `}</style>
     </div>
+    </>
   );
 }

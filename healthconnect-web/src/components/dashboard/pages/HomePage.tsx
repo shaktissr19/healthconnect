@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { patientAPI } from '@/lib/api';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
+import ProfileOnboardingModal, { isOnboardingDone, isOnboardingSnoozed } from '@/components/onboarding/ProfileOnboardingModal';
+import { ProfileCompletenessBanner, useProfileScore } from '@/components/onboarding/ProfileCompleteness';
 
 const C = {
   bg:'#E8F4FD',
@@ -26,12 +28,12 @@ function scoreColor(s: number) { return s >= 80 ? '#15803D' : s >= 60 ? '#B45309
 
 function KpiCard({ icon, label, value, sub, color, onClick }: any) {
   return (
-    <div onClick={onClick} style={{ background:'#FFFFFF', border:'1px solid #C8DFF0', borderRadius:16, padding:'20px 22px', cursor:onClick?'pointer':'default', boxShadow:'0 2px 8px rgba(27,59,111,0.08)', transition:'all 0.2s' }}
+    <div onClick={onClick} style={{ background:'#FDFCFB', border:'1px solid #E8E6DF', borderRadius:14, padding:'20px 22px', cursor:onClick?'pointer':'default', boxShadow:'0 1px 4px rgba(0,0,0,0.05)', transition:'all 0.2s' }}
       onMouseEnter={e=>onClick&&((e.currentTarget as HTMLDivElement).style.boxShadow='0 6px 20px rgba(27,59,111,0.15)')}
       onMouseLeave={e=>((e.currentTarget as HTMLDivElement).style.boxShadow='0 2px 8px rgba(27,59,111,0.08)')}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
         <span style={{ fontSize:22 }}>{icon}</span>
-        {sub && <span style={{ fontSize:11, color:'#1A4A7A', background:'#DBEAFE', padding:'2px 8px', borderRadius:100, border:'1px solid #C8DFF0' }}>{sub}</span>}
+        {sub && <span style={{ fontSize:11, color:'#64748B', background:'#F1F0EB', padding:'2px 8px', borderRadius:100, border:'1px solid #E8E6DF' }}>{sub}</span>}
       </div>
       <div style={{ fontSize:28, fontWeight:800, color:color??'#1A6BB5', lineHeight:1, marginBottom:4 }}>{value}</div>
       <div style={{ fontSize:12, color:'#2C4A6E', fontWeight:500 }}>{label}</div>
@@ -42,8 +44,20 @@ function KpiCard({ icon, label, value, sub, color, onClick }: any) {
 export default function HomePage() {
   const uiStore   = useUIStore() as any;
   const user      = (useAuthStore.getState() as any).user;
-  const [data,    setData]    = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data,        setData]        = useState<any>(null);
+  const [fullProfile, setFullProfile] = useState<any>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Profile completeness — uses fullProfile (from getProfile) for accurate score, same as Sidebar
+  const { score: profileScore, sections: profileSections } = useProfileScore(fullProfile ?? data?.profile ?? {}, 'PATIENT');
+
+  // Show onboarding modal on first login
+  useEffect(() => {
+    if (user && !isOnboardingDone() && !isOnboardingSnoozed()) {
+      setShowOnboarding(true);
+    }
+  }, [user]);
 
   const firstName = user?.firstName ?? data?.profile?.firstName ?? 'there';
   const hour = new Date().getHours();
@@ -54,9 +68,18 @@ export default function HomePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await patientAPI.dashboard();
-      const d = (r as any)?.data?.data ?? (r as any)?.data ?? {};
-      setData(d);
+      const [dashRes, profRes] = await Promise.allSettled([
+        patientAPI.dashboard(),
+        (patientAPI as any).getProfile(),
+      ]);
+      if (dashRes.status === 'fulfilled') {
+        const d = (dashRes.value as any)?.data?.data ?? (dashRes.value as any)?.data ?? {};
+        setData(d);
+      }
+      if (profRes.status === 'fulfilled') {
+        const p = (profRes.value as any)?.data?.data ?? (profRes.value as any)?.data ?? {};
+        setFullProfile(p);
+      }
     } finally { setLoading(false); }
   }, []);
 
@@ -87,29 +110,38 @@ export default function HomePage() {
 
   return (
     <>
+      {/* First-login onboarding modal */}
+      {showOnboarding && (
+        <ProfileOnboardingModal
+          role="PATIENT"
+          userName={user?.firstName}
+          onClose={() => setShowOnboarding(false)}
+        />
+      )}
+
       <style>{`
-        .hp-skel { border-radius:12px; background:linear-gradient(90deg,#D4E9F7 25%,#E8F4FD 50%,#D4E9F7 75%); background-size:200% 100%; animation:hp-sh 1.5s infinite; }
+        .hp-skel { border-radius:12px; background:linear-gradient(90deg,#E8E6DF 25%,#EFEDE6 50%,#E8E6DF 75%); background-size:200% 100%; animation:hp-sh 1.5s infinite; }
         @keyframes hp-sh { 0%{background-position:200% 0}100%{background-position:-200% 0} }
         @keyframes hp-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-        .hp-qa { display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 10px; background:#FFFFFF; border:1px solid #C8DFF0; border-radius:14px; cursor:pointer; transition:all 0.2s; }
-        .hp-qa:hover { background:rgba(46,134,212,0.08); border-color:#2E86D4; transform:translateY(-2px); box-shadow:0 4px 14px rgba(27,59,111,0.12); }
+        .hp-qa { display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 10px; background:#FDFCFB; border:1px solid #E8E6DF; border-radius:14px; cursor:pointer; transition:all 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+        .hp-qa:hover { background:#F5F4F0; border-color:#D3D1C7; transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.08); }
       `}</style>
 
       <div style={{ maxWidth:1100 }}>
 
         {/* Hero */}
-        <div style={{ background:`linear-gradient(135deg, #0D3349 0%, #0F4C6B 60%, #1A3A6B 100%)`, borderRadius:20, padding:'24px 32px', marginBottom:20, boxShadow:'0 8px 32px rgba(13,51,73,0.3)' }}>
-          <h1 style={{ color:'#FFFFFF', fontSize:22, fontWeight:800, margin:'0 0 5px' }}>
+        <div style={{ background:'#FDFCFB', borderRadius:16, padding:'24px 28px', marginBottom:20, boxShadow:'0 2px 8px rgba(0,0,0,0.06)', border:'1px solid #E8E6DF' }}>
+          <h1 style={{ color:'#1E293B', fontSize:22, fontWeight:800, margin:'0 0 5px' }}>
             {greeting}, {firstName} {greetEmoji}
           </h1>
-          <p style={{ color:'rgba(168,200,255,0.75)', fontSize:12, margin:'0 0 10px' }}>{today}</p>
+          <p style={{ color:'#94A3B8', fontSize:12, margin:'0 0 10px' }}>{today}</p>
           {aiInsight ? (
-            <p style={{ color:'rgba(200,225,255,0.9)', fontSize:13, margin:0, maxWidth:720, lineHeight:1.6, background:'rgba(255,255,255,0.07)', padding:'8px 14px', borderRadius:10, border:'1px solid rgba(255,255,255,0.1)' }}>
+            <p style={{ color:'#374151', fontSize:13, margin:0, maxWidth:720, lineHeight:1.6, background:'#F5F4F0', padding:'8px 14px', borderRadius:10, border:'1px solid #E8E6DF' }}>
               💡 {aiInsight}
             </p>
           ) : (
-            <p style={{ color:'rgba(200,225,255,0.85)', fontSize:13, margin:0, maxWidth:720, lineHeight:1.6 }}>
-              🩺 <strong style={{ color:'#FFFFFF' }}>HealthConnect</strong> unifies your health records, appointments, medications, vitals and doctor consultations — all in one secure place. Your doctors always have the right information when they need it.
+            <p style={{ color:'#64748B', fontSize:13, margin:0, maxWidth:720, lineHeight:1.6 }}>
+              🩺 <strong style={{ color:'#1E293B' }}>HealthConnect</strong> unifies your health records, appointments, medications, vitals and doctor consultations — all in one secure place. Your doctors always have the right information when they need it.
             </p>
           )}
         </div>
@@ -122,6 +154,14 @@ export default function HomePage() {
             <span style={{ marginLeft:'auto', color:'#B45309', fontSize:12 }}>View →</span>
           </div>
         )}
+
+        {/* Profile completeness banner — shows when under 80%, dismissible */}
+        <ProfileCompletenessBanner
+          score={profileScore}
+          role="PATIENT"
+          sections={profileSections}
+          onGoToProfile={() => uiStore.setActivePage('profile')}
+        />
 
         {/* KPI cards */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:24 }}>
@@ -136,10 +176,10 @@ export default function HomePage() {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:24 }}>
 
           {/* Next appointment */}
-          <div style={{ background:'#FFFFFF', border:'1px solid #C8DFF0', borderRadius:16, padding:'14px 18px', boxShadow:'0 2px 8px rgba(27,59,111,0.08)' }}>
+          <div style={{ background:'#FDFCFB', border:'1px solid #E8E6DF', borderRadius:14, padding:'14px 18px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <span style={{ fontSize:13, fontWeight:700, color:'#0A1628', textTransform:'uppercase', letterSpacing:'0.06em' }}>📅 Next Appointment</span>
-              <button onClick={()=>uiStore.setActivePage('appointments')} style={{ fontSize:12, color:'#1A6BB5', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>View all →</button>
+              <button onClick={()=>uiStore.setActivePage('appointments')} style={{ fontSize:12, color:'#64748B', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>View all →</button>
             </div>
             {loading ? <div className="hp-skel" style={{ height:56 }}/> : nextAppt ? (
               <div style={{ display:'flex', gap:14, alignItems:'center' }}>
@@ -171,10 +211,10 @@ export default function HomePage() {
           </div>
 
           {/* Today's medication schedule */}
-          <div style={{ background:'#FFFFFF', border:'1px solid #C8DFF0', borderRadius:16, padding:'14px 18px', boxShadow:'0 2px 8px rgba(27,59,111,0.08)' }}>
+          <div style={{ background:'#FDFCFB', border:'1px solid #E8E6DF', borderRadius:14, padding:'14px 18px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <span style={{ fontSize:13, fontWeight:700, color:'#0A1628', textTransform:'uppercase', letterSpacing:'0.06em' }}>💊 Today's Schedule</span>
-              <button onClick={()=>uiStore.setActivePage('medications')} style={{ fontSize:12, color:'#1A6BB5', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>View all →</button>
+              <button onClick={()=>uiStore.setActivePage('medications')} style={{ fontSize:12, color:'#64748B', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>View all →</button>
             </div>
             {loading ? <div className="hp-skel" style={{ height:56 }}/> : activeMeds.length===0 ? (
               <div style={{ textAlign:'center', padding:'20px 0', color:'#5A7A9B', fontSize:13 }}>
@@ -235,7 +275,7 @@ export default function HomePage() {
         </div>
 
         {/* Quick Actions */}
-        <div style={{ background:'#FFFFFF', border:'1px solid #C8DFF0', borderRadius:16, padding:'20px 22px', marginBottom:24, boxShadow:'0 2px 8px rgba(27,59,111,0.08)' }}>
+        <div style={{ background:'#FDFCFB', border:'1px solid #E8E6DF', borderRadius:14, padding:'20px 22px', marginBottom:24, boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
           <div style={{ fontSize:13, fontWeight:700, color:'#0A1628', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>⚡ Quick Actions</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10 }}>
             {QUICK_ACTIONS.map(a => (
@@ -251,10 +291,10 @@ export default function HomePage() {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
 
           {/* Recent vitals — uses measuredAt */}
-          <div style={{ background:'#FFFFFF', border:'1px solid #C8DFF0', borderRadius:16, padding:'14px 18px', boxShadow:'0 2px 8px rgba(27,59,111,0.08)' }}>
+          <div style={{ background:'#FDFCFB', border:'1px solid #E8E6DF', borderRadius:14, padding:'14px 18px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <span style={{ fontSize:13, fontWeight:700, color:'#0A1628', textTransform:'uppercase', letterSpacing:'0.06em' }}>📊 Recent Vitals</span>
-              <button onClick={()=>uiStore.setActivePage('vitals')} style={{ fontSize:12, color:'#1A6BB5', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Log →</button>
+              <button onClick={()=>uiStore.setActivePage('vitals')} style={{ fontSize:12, color:'#64748B', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Log →</button>
             </div>
             {loading ? <div className="hp-skel" style={{ height:60 }}/> : recentVitals.length===0 ? (
               <div style={{ textAlign:'center', padding:'16px 0', color:'#5A7A9B', fontSize:13 }}>
@@ -267,7 +307,7 @@ export default function HomePage() {
                 {recentVitals.slice(0,6).map((v:any,i:number) => {
                   const val = v.type==='BLOOD_PRESSURE' ? `${v.systolic}/${v.diastolic}` : (v.value??'—');
                   return (
-                    <div key={v.id??i} style={{ background:'#F8FCFC', border:'1px solid #C8DFF0', borderRadius:10, padding:'10px 12px' }}>
+                    <div key={v.id??i} style={{ background:'#F5F4F0', border:'1px solid #E8E6DF', borderRadius:10, padding:'10px 12px' }}>
                       <div style={{ fontSize:10, color:'#5A7A9B', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:3 }}>{v.type?.replace(/_/g,' ')}</div>
                       <div style={{ fontSize:18, fontWeight:800, color:'#1A6BB5' }}>{val}<span style={{ fontSize:10, color:'#5A7A9B', fontWeight:400, marginLeft:2 }}>{v.unit}</span></div>
                       <div style={{ fontSize:10, color:'#5A7A9B', marginTop:2 }}>{v.measuredAt ? new Date(v.measuredAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : ''}</div>
@@ -279,10 +319,10 @@ export default function HomePage() {
           </div>
 
           {/* Recent symptoms */}
-          <div style={{ background:'#FFFFFF', border:'1px solid #C8DFF0', borderRadius:16, padding:'14px 18px', boxShadow:'0 2px 8px rgba(27,59,111,0.08)' }}>
+          <div style={{ background:'#FDFCFB', border:'1px solid #E8E6DF', borderRadius:14, padding:'14px 18px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <span style={{ fontSize:13, fontWeight:700, color:'#0A1628', textTransform:'uppercase', letterSpacing:'0.06em' }}>🤒 Recent Symptoms</span>
-              <button onClick={()=>uiStore.setActivePage('symptoms')} style={{ fontSize:12, color:'#1A6BB5', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Log →</button>
+              <button onClick={()=>uiStore.setActivePage('symptoms')} style={{ fontSize:12, color:'#64748B', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Log →</button>
             </div>
             {loading ? <div className="hp-skel" style={{ height:60 }}/> : recentSymptoms.length===0 ? (
               <div style={{ textAlign:'center', padding:'16px 0', color:'#5A7A9B', fontSize:13 }}>
@@ -294,7 +334,7 @@ export default function HomePage() {
                 {recentSymptoms.slice(0,5).map((s:any,i:number) => {
                   const sevColor = s.severity>=4?C.rose:s.severity>=3?C.amber:C.green;
                   return (
-                    <div key={s.id??i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'#F8FCFC', borderRadius:8, border:'1px solid #C8DFF0' }}>
+                    <div key={s.id??i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'#F5F4F0', borderRadius:8, border:'1px solid #E8E6DF' }}>
                       <span style={{ width:8, height:8, borderRadius:'50%', background:sevColor, flexShrink:0, display:'inline-block' }}/>
                       <span style={{ flex:1, fontSize:13, color:'#0D1F3C', fontWeight:500 }}>{s.name}</span>
                       <span style={{ fontSize:11, fontWeight:700, color:sevColor }}>{s.severity}/5</span>

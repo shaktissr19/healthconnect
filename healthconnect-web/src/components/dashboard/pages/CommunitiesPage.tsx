@@ -8,21 +8,21 @@ import { patientAPI, communityAPI } from '@/lib/api';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const T = {
-  teal:       '#4db6a0',
-  tealLight:  '#e6f4f1',
-  tealMid:    '#c8e8e2',
-  tealDark:   '#2e9e86',
-  tealBorder: '#b8ddd7',
-  bg:         '#f0f9f7',
-  cardBg:     '#eaf4f1',
-  white:      '#ffffff',
-  text:       '#1a3c35',
-  textMid:    '#3d6b62',
-  textSub:    '#5f8f86',
-  textMuted:  '#8ab3ad',
-  border:     '#cce4df',
-  shadow:     '0 2px 12px rgba(77,182,160,0.10)',
-  shadowHover:'0 8px 28px rgba(77,182,160,0.18)',
+  teal:       '#0D9488',   // community accent — muted teal
+  tealLight:  '#F5F4F0',   // warm grey backgrounds
+  tealMid:    '#E8E6DF',   // tab bar bg
+  tealDark:   '#0F766E',   // hover / active states
+  tealBorder: '#D3D1C7',   // warm neutral borders
+  bg:         '#F5F4F0',   // page background — matches dashboard
+  cardBg:     '#FDFCFB',   // card surface
+  white:      '#FDFCFB',   // all white surfaces
+  text:       '#1E293B',   // primary text
+  textMid:    '#374151',   // body text
+  textSub:    '#64748B',   // secondary text
+  textMuted:  '#94A3B8',   // muted text
+  border:     '#D3D1C7',   // warm neutral border
+  shadow:     '0 1px 4px rgba(0,0,0,0.06)',
+  shadowHover:'0 4px 16px rgba(0,0,0,0.10)',
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -504,8 +504,9 @@ const CommunityPanel: React.FC<{
   onLeave: (id: string) => void;
   userName: string;
   userInitial: string;
+  userId?: string;
   defaultComposerOpen?: boolean;
-}> = ({ community, onClose, onLeave, userName, userInitial, defaultComposerOpen = false }) => {
+}> = ({ community, onClose, onLeave, userName, userInitial, userId, defaultComposerOpen = false }) => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<'newest' | 'trending'>('newest');
@@ -518,6 +519,42 @@ const CommunityPanel: React.FC<{
   const [votingPoll, setVotingPoll] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  const [myPosts, setMyPosts] = useState<Post[]>([]);
+  const [myPostsLoading, setMyPostsLoading] = useState(false);
+
+  // Fetch my posts separately — uses authorId filter
+  const loadMyPosts = useCallback(async () => {
+    if (!userId) return;
+    setMyPostsLoading(true);
+    try {
+      const res = await communityAPI.getPosts(community.id, { sort: 'newest', limit: 50, authorId: userId } as any);
+      const d = res?.data;
+      const raw = d?.data?.posts ?? d?.posts ?? d?.data ?? d ?? [];
+      setMyPosts(Array.isArray(raw) ? raw.map((p: any) => ({
+        id: p.id ?? p._id ?? `r-${Math.random()}`,
+        title: p.title, body: p.body ?? p.content ?? '',
+        author: p.isAnonymous
+          ? (p.anonymousAlias ?? 'Anonymous Member')
+          : (p.author?.name ?? (p.author?.firstName ? `${p.author.firstName} ${p.author.lastName ?? ''}`.trim() : null) ?? userName),
+        authorInitial: p.isAnonymous ? '?' : (userName[0]?.toUpperCase() ?? 'M'),
+        isAnonymous: !!p.isAnonymous,
+        isDoctor: p.author?.role === 'DOCTOR' || p.is_doctor === true,
+        timeAgo: fmtTime(p.createdAt), tags: p.tags ?? [], postType: p.postType ?? 'normal', isPinned: !!p.isPinned,
+        reactions: {
+          like:    { type: 'like',    count: p.reactions?.like    ?? p.reactions?.LIKE    ?? 0, userReacted: p.user_reaction === 'like'    || p.userReaction === 'like' },
+          support: { type: 'support', count: p.reactions?.support ?? p.reactions?.SUPPORT ?? 0, userReacted: p.user_reaction === 'support' || p.userReaction === 'support' },
+          helpful: { type: 'helpful', count: p.reactions?.helpful ?? p.reactions?.HELPFUL ?? 0, userReacted: p.user_reaction === 'helpful' || p.userReaction === 'helpful' },
+        },
+        comments: [], commentsExpanded: false,
+        commentCount: p.commentCount ?? p.comment_count ?? 0,
+        isBookmarked: !!p.isBookmarked,
+      })) : []);
+    } catch { setMyPosts([]); }
+    finally { setMyPostsLoading(false); }
+  }, [community.id, userId, userName]);
+
+  useEffect(() => { if (feedTab === 'my-posts') loadMyPosts(); }, [feedTab, loadMyPosts]);
+
   const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
@@ -527,26 +564,35 @@ const CommunityPanel: React.FC<{
       const fetched: Post[] = Array.isArray(raw) ? raw.map((p: any) => ({
         id: p.id ?? p._id ?? `r-${Math.random()}`,
         title: p.title, body: p.body ?? p.content ?? '',
-        author: p.isAnonymous ? 'Anonymous' : (p.author?.name ?? p.authorName ?? 'Member'),
-        authorInitial: p.isAnonymous ? '?' : ((p.author?.firstName ?? p.authorName ?? 'M')[0].toUpperCase()),
-        isAnonymous: !!p.isAnonymous, isDoctor: p.author?.role === 'doctor',
+        author: p.isAnonymous
+          ? (p.anonymousAlias ?? 'Anonymous Member')
+          : (p.author?.name
+              ?? (p.author?.firstName ? `${p.author.firstName} ${p.author.lastName ?? ''}`.trim() : null)
+              ?? p.author_name ?? p.authorName ?? 'Member'),
+        authorInitial: p.isAnonymous
+          ? '?'
+          : ((p.author?.firstName ?? p.author?.name ?? p.author_name ?? p.authorName ?? 'M')[0].toUpperCase()),
+        isAnonymous: !!p.isAnonymous,
+        isDoctor: p.author?.role === 'DOCTOR' || p.is_doctor === true,
         timeAgo: fmtTime(p.createdAt), tags: p.tags ?? [], postType: p.postType ?? 'normal', isPinned: !!p.isPinned,
         reactions: {
-          like: { type: 'like', count: p.reactions?.like ?? 0, userReacted: p.userReaction === 'like' },
-          support: { type: 'support', count: p.reactions?.support ?? 0, userReacted: p.userReaction === 'support' },
-          helpful: { type: 'helpful', count: p.reactions?.helpful ?? 0, userReacted: p.userReaction === 'helpful' },
+          like:    { type: 'like',    count: p.reactions?.like    ?? p.reactions?.LIKE    ?? 0, userReacted: p.user_reaction === 'like'    || p.userReaction === 'like' },
+          support: { type: 'support', count: p.reactions?.support ?? p.reactions?.SUPPORT ?? 0, userReacted: p.user_reaction === 'support' || p.userReaction === 'support' },
+          helpful: { type: 'helpful', count: p.reactions?.helpful ?? p.reactions?.HELPFUL ?? 0, userReacted: p.user_reaction === 'helpful' || p.userReaction === 'helpful' },
         },
         comments: (p.comments ?? []).map((c: any) => ({
-          id: c.id ?? c._id, author: c.isAnonymous ? 'Anonymous' : (c.author?.name ?? 'Member'),
-          authorInitial: c.isAnonymous ? '?' : ((c.author?.firstName ?? 'M')[0].toUpperCase()),
-          isDoctor: c.author?.role === 'doctor', body: c.body ?? '', timeAgo: fmtTime(c.createdAt),
+          id: c.id ?? c._id,
+          author: c.isAnonymous
+            ? (c.anonymousAlias ?? 'Anonymous Member')
+            : (c.author?.name ?? (c.author?.firstName ? `${c.author.firstName} ${c.author.lastName ?? ''}`.trim() : null) ?? c.author_name ?? 'Member'),
+          authorInitial: c.isAnonymous ? '?' : ((c.author?.firstName ?? c.author?.name ?? 'M')[0].toUpperCase()),
+          isDoctor: c.author?.role === 'DOCTOR', body: c.body ?? '', timeAgo: fmtTime(c.createdAt),
         })),
         commentsExpanded: false, commentCount: p.commentCount ?? p.comments?.length ?? 0, isBookmarked: !!p.isBookmarked,
       })) : [];
-      setPosts(fetched.length > 0 ? fetched : generateMockPosts(community.id));
-    } catch {
-      setPosts(generateMockPosts(community.id));
-    } finally { setLoading(false); }
+      setPosts(fetched);
+    } catch { setPosts([]); }
+    finally { setLoading(false); }
   }, [community.id, sort]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
@@ -637,7 +683,7 @@ const CommunityPanel: React.FC<{
     !searchFeed || p.body.toLowerCase().includes(searchFeed.toLowerCase()) || (p.title ?? '').toLowerCase().includes(searchFeed.toLowerCase())
   );
   const bookmarkedPosts = posts.filter(p => p.isBookmarked);
-  const displayPosts = feedTab === 'bookmarks' ? bookmarkedPosts : feedTab === 'my-posts' ? [] : [...pinnedPosts, ...filteredFeed];
+  const displayPosts = feedTab === 'bookmarks' ? bookmarkedPosts : feedTab === 'my-posts' ? myPosts : [...pinnedPosts, ...filteredFeed];
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,30,26,0.5)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-end' }}>
@@ -831,6 +877,19 @@ function fmtTime(iso?: string) {
   } catch { return ''; }
 }
 
+const normalizeCategory = (raw: string): string => {
+  if (!raw) return 'General';
+  const map: Record<string, string> = {
+    'diabetes': 'Diabetes', 'heart health': 'Heart Health', 'heart_health': 'Heart Health',
+    'cardiac': 'Heart Health', 'mental wellness': 'Mental Wellness', 'mental health': 'Mental Wellness',
+    'pcos/pcod': 'PCOS/PCOD', 'pcos': 'PCOS/PCOD', 'cancer support': 'Cancer Support',
+    'thyroid': 'Thyroid', 'arthritis': 'Arthritis', 'hypertension': 'Hypertension',
+    'kidney health': 'Kidney Health', 'respiratory': 'Respiratory',
+    'nutrition & diet': 'Nutrition & Diet', 'senior care': 'Senior Care', 'general': 'General',
+  };
+  return map[raw.toLowerCase()] ?? raw;
+};
+
 const CAT_COLORS: Record<string, string> = {
   'Chronic Condition': '#ef4444', 'Cardiac Care': '#f97316', 'Mental Health': '#8b5cf6',
   'Oncology': '#ec4899', 'Hormonal': '#06b6d4', 'Musculoskeletal': '#10b981',
@@ -875,8 +934,9 @@ const CommunitiesPage: React.FC = () => {
       joined = (d?.data ?? d?.communities ?? d?.data?.communities ?? d ?? []).map((c: any) => ({
         id: c.id ?? c._id ?? c.communityId, name: c.name ?? 'Community', slug: c.slug,
         description: c.description ?? '',
-        category: c.category ?? 'General', memberCount: c.memberCount ?? 0, isJoined: true,
-        icon: c.icon, color: CAT_COLORS[c.category] ?? T.teal,
+        category: normalizeCategory(c.category ?? 'General'),
+        memberCount: c.memberCount ?? c.member_count ?? 0, isJoined: true,
+        icon: c.emoji ?? c.icon, color: CAT_COLORS[normalizeCategory(c.category ?? 'General')] ?? T.teal,
         postsToday: c.postsToday ?? 0, activeMembersToday: c.activeMembersToday ?? 0,
         isTrending: c.isTrending ?? false, recentMembers: c.recentMembers ?? [],
         latestPostSnippet: c.latestPostSnippet, latestPostTime: c.latestPostTime, unreadCount: c.unreadCount ?? 0,
@@ -889,8 +949,10 @@ const CommunitiesPage: React.FC = () => {
       all = (d?.data?.communities ?? d?.communities ?? d?.data ?? d ?? []).map((c: any) => ({
         id: c.id ?? c._id, name: c.name ?? 'Community', slug: c.slug,
         description: c.description ?? '',
-        category: c.category ?? 'General', memberCount: c.memberCount ?? 0, isJoined: c.isJoined ?? false,
-        icon: c.icon, color: CAT_COLORS[c.category] ?? T.teal,
+        category: normalizeCategory(c.category ?? 'General'),
+        memberCount: c.memberCount ?? c.member_count ?? 0,
+        isJoined: c.isJoined ?? c.is_joined ?? false,
+        icon: c.emoji ?? c.icon, color: CAT_COLORS[normalizeCategory(c.category ?? 'General')] ?? T.teal,
         postsToday: c.postsToday ?? 0, activeMembersToday: c.activeMembersToday ?? 0,
         isTrending: c.isTrending ?? false, recentMembers: c.recentMembers ?? [],
         latestPostSnippet: c.latestPostSnippet, latestPostTime: c.latestPostTime, unreadCount: c.unreadCount ?? 0,
@@ -905,7 +967,7 @@ const CommunitiesPage: React.FC = () => {
       if (all.length > 0) all = all.map(c => ({ ...c, isJoined: c.isJoined || bridge.includes(c.id) }));
       else if (joined.length === 0) joined = MOCK_COMMUNITIES.filter(c => bridge.includes(c.id));
     }
-    if (all.length === 0) all = MOCK_COMMUNITIES.map(c => ({ ...c, isJoined: bridge.includes(c.id) || (c.isJoined ?? false) }));
+    // No mock fallback — show empty state if API returns nothing
 
     const jIds2 = new Set([...joined.map(j => j.id), ...bridge]);
     setCommunities(all.map(c => ({ ...c, isJoined: jIds2.has(c.id) })));
@@ -918,6 +980,15 @@ const CommunitiesPage: React.FC = () => {
     const h = () => { if (document.visibilityState === 'visible') loadCommunities(); };
     document.addEventListener('visibilitychange', h);
     return () => document.removeEventListener('visibilitychange', h);
+  }, [loadCommunities]);
+
+  // Sync joins from public /communities page via localStorage bridge
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === 'hc_joined_communities') loadCommunities();
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
   }, [loadCommunities]);
 
   // Fetch community health scores for joined communities
@@ -954,13 +1025,22 @@ const CommunitiesPage: React.FC = () => {
     try {
       const b: string[] = JSON.parse(localStorage.getItem('hc_joined_communities') ?? '[]');
       localStorage.setItem('hc_joined_communities', JSON.stringify(joined ? [...new Set([...b, id])] : b.filter(i => i !== id)));
-    } catch { /**/ }
+    } catch {
+      // Revert on failure
+      setCommunities(prev => prev.map(c => c.id === id ? { ...c, isJoined: false, memberCount: Math.max(0, c.memberCount - 1) } : c));
+      writeBridge(id, false);
+    }
   };
 
   const handleJoin = async (id: string) => {
+    // Optimistic update
     setCommunities(prev => prev.map(c => c.id === id ? { ...c, isJoined: true, memberCount: c.memberCount + 1 } : c));
     writeBridge(id, true);
-    try { await communityAPI.join(id); } catch { /**/ }
+    try {
+      await communityAPI.join(id);
+      // Refetch after join to get real member count from backend
+      setTimeout(() => loadCommunities(), 800);
+    } catch { /**/ }
   };
 
   const handleLeave = async (id: string) => {
@@ -1126,7 +1206,7 @@ const CommunitiesPage: React.FC = () => {
                     {/* ── Row 2: Latest post snippet ── */}
                     {c.latestPostSnippet ? (
                       <div style={{ background: T.bg, borderRadius: 9, padding: '8px 10px', marginBottom: 10, border: `1px solid ${T.border}`, cursor: 'pointer' }}
-                        onClick={() => { setActiveCommunity(c); setOpenComposerFor(null); }}>
+                        onClick={() => { window.location.href = `/communities/${c.slug ?? c.id}`; }}>
                         <div style={{ fontSize: 9, color: T.textMuted, marginBottom: 3, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span>💬</span>
                           <span>Latest · {c.latestPostTime}</span>
@@ -1175,7 +1255,7 @@ const CommunitiesPage: React.FC = () => {
                     {/* ── Row 4: Action buttons ── */}
                     <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
                       <button
-                        onClick={() => { setActiveCommunity(c); setOpenComposerFor(null); }}
+                        onClick={() => { window.location.href = `/communities/${c.slug ?? c.id}`; }}
                         style={{ flex: 2, padding: '8px 0', borderRadius: 9, fontSize: 11, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, boxShadow: `0 2px 8px ${T.teal}40` }}>
                         📰 Open Feed
                         {hasUnread && <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: 100, padding: '0px 5px', fontSize: 9 }}>{c.unreadCount}</span>}
@@ -1237,10 +1317,10 @@ const CommunitiesPage: React.FC = () => {
                 {c.isJoined ? (
                   <div style={{ display: 'flex', gap: 5 }}>
                     <button onClick={() => handleLeave(c.id)} style={{ padding: '5px 8px', borderRadius: 7, fontSize: 10, fontWeight: 700, border: '1.5px solid #fca5a5', background: '#fff5f5', color: '#ef4444', cursor: 'pointer' }}>Leave</button>
-                    <button onClick={() => setActiveCommunity(c)} style={{ flex: 1, padding: '5px 0', borderRadius: 7, fontSize: 10, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer' }}>View Feed →</button>
+                    <button onClick={() => { window.location.href = `/communities/${c.slug ?? c.id}`; }} style={{ flex: 1, padding: '5px 0', borderRadius: 7, fontSize: 10, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer' }}>View Feed →</button>
                   </div>
                 ) : (
-                  <button onClick={() => handleJoin(c.id)} style={{ width: '100%', padding: '7px 0', borderRadius: 7, fontSize: 11, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer', boxShadow: `0 3px 10px ${T.teal}40` }}>+ Join Community</button>
+                  <button onClick={async () => { await handleJoin(c.id); setActiveTab('joined'); }} style={{ width: '100%', padding: '7px 0', borderRadius: 7, fontSize: 11, fontWeight: 700, border: 'none', background: `linear-gradient(135deg,${T.teal},${T.tealDark})`, color: '#fff', cursor: 'pointer', boxShadow: `0 3px 10px ${T.teal}40` }}>+ Join Community</button>
                 )}
               </div>
             ))}
@@ -1269,6 +1349,7 @@ const CommunitiesPage: React.FC = () => {
           onLeave={handleLeave}
           userName={userName}
           userInitial={userInitial}
+          userId={effectiveUser?.id ?? effectiveUser?.userId}
           defaultComposerOpen={openComposerFor === activeCommunity.id}
         />
       )}

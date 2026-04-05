@@ -1,4 +1,5 @@
 'use client';
+import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import dynamic from 'next/dynamic';
 
@@ -18,7 +19,23 @@ const SubscriptionPage     = dynamic(() => import('@/components/dashboard/pages/
 const ComingSoon           = dynamic(() => import('@/components/dashboard/pages/ComingSoon'),               { ssr: false });
 
 export default function DashboardPage() {
-  const activePage = (useUIStore() as any).activePage ?? 'home';
+  const { activePage, setActivePage } = useUIStore() as any;
+  const currentPage = activePage ?? 'home';
+
+  // Read ?tab= from URL on mount — allows direct linking to pages
+  // e.g. /dashboard?tab=profile from navbar Profile click
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    const validPages = ['home','my-health','vitals','symptoms','medications',
+      'therapies','appointments','find-doctors','communities',
+      'profile','settings','consents','subscription'];
+    if (tab && validPages.includes(tab)) {
+      setActivePage(tab);
+      // Clean the URL without triggering a navigation
+      window.history.replaceState({}, '', '/dashboard');
+    }
+  }, []);
 
   const pages: Record<string, React.ReactNode> = {
     'home':         <HomePage />,
@@ -36,5 +53,5 @@ export default function DashboardPage() {
     'subscription': <SubscriptionPage />,
   };
 
-  return <>{pages[activePage] ?? <ComingSoon title="Coming Soon" />}</>;
+  return <>{pages[currentPage] ?? <ComingSoon title="Coming Soon" />}</>;
 }

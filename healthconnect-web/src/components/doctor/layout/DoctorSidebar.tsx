@@ -29,7 +29,7 @@ const I = {
 
 const NAV_SECTIONS = [
   { key:'today',   label:'TODAY',    items:[
-    { id:'home',          label:'Today\'s Schedule',  icon:'home' },
+    { id:'home',          label:'My Home',              icon:'home' },
   ]},
   { key:'patients', label:'PATIENTS', items:[
     { id:'patients',      label:'My Patients',        icon:'patients',      badgeKey:'patientCount' },
@@ -103,11 +103,11 @@ export default function DoctorSidebar() {
     <>
       <style>{`
         .dr-sb {
-          width: ${W}px; height: 100vh;
+          width: ${W}px; height: calc(100vh - 64px);
           background: #0C3D38;
           border-right: 1px solid rgba(255,255,255,0.08);
           display: flex; flex-direction: column;
-          position: fixed; top: 0; left: 0; z-index: 200;
+          position: fixed; top: 64px; left: 0; z-index: 100;
           overflow-y: auto; overflow-x: hidden;
           scrollbar-width: thin;
           scrollbar-color: rgba(255,255,255,0.1) transparent;
@@ -116,13 +116,7 @@ export default function DoctorSidebar() {
         .dr-sb::-webkit-scrollbar { width: 3px; }
         .dr-sb::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 
-        .dr-sb-logo {
-          padding: ${collapsed ? '14px 0' : '16px 18px'};
-          border-bottom: 1px solid rgba(255,255,255,0.08);
-          display: flex; align-items: center; gap: 10px;
-          flex-shrink: 0; min-height: 64px;
-          justify-content: ${collapsed ? 'center' : 'flex-start'};
-        }
+        .dr-sb-logo { display: none; }
         .dr-sb-logo-icon {
           width: 34px; height: 34px; border-radius: 9px;
           background: linear-gradient(135deg, #0D9488, #14B8A6);

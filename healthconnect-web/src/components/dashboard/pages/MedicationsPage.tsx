@@ -21,16 +21,17 @@ type Med = {
 type Log = { id: string; takenAt?: string; scheduledTime?: string; status: 'TAKEN' | 'MISSED' | 'SKIPPED'; };
 
 export default function MedicationsPage() {
-  const [meds,        setMeds]        = useState<Med[]>([]);
-  const [logs,        setLogs]        = useState<Record<string, Log[]>>({});
-  const [loading,     setLoading]     = useState(true);
-  const [filter,      setFilter]      = useState<'Active' | 'All' | 'Discontinued'>('Active');
-  const [showAdd,     setShowAdd]     = useState(false);
-  const [expandedLog, setExpandedLog] = useState<string | null>(null);
-  const [toastMsg,    setToastMsg]    = useState('');
-  const [toastErr,    setToastErr]    = useState(false);
-  const [actioning,   setActioning]   = useState<string | null>(null); // medId being actioned
-  const [kpis,        setKpis]        = useState({ activeMeds: 0, avgAdherence: 0, refillAlerts: 0, todayDoses: 0, todayTaken: 0 });
+  const [meds,           setMeds]           = useState<Med[]>([]);
+  const [logs,           setLogs]           = useState<Record<string, Log[]>>({});
+  const [loading,        setLoading]        = useState(true);
+  const [filter,         setFilter]         = useState<'Active' | 'All' | 'Discontinued'>('Active');
+  const [showAdd,        setShowAdd]        = useState(false);
+  const [expandedLog,    setExpandedLog]    = useState<string | null>(null);
+  const [toastMsg,       setToastMsg]       = useState('');
+  const [toastErr,       setToastErr]       = useState(false);
+  const [actioning,      setActioning]      = useState<string | null>(null);
+  const [kpis,           setKpis]           = useState({ activeMeds: 0, avgAdherence: 0, refillAlerts: 0, todayDoses: 0, todayTaken: 0 });
+  const [docPrescriptions, setDocPrescriptions] = useState<any[]>([]);
 
   const toast = (msg: string, err = false) => {
     setToastMsg(msg); setToastErr(err);
@@ -68,6 +69,12 @@ export default function MedicationsPage() {
       });
       setLogs(newLogs);
       setKpis({ activeMeds: active.length, avgAdherence: avgAdh, refillAlerts: refills, todayDoses: todayTotal, todayTaken });
+      // Fetch doctor-issued prescriptions
+      try {
+        const rxRes: any = await api.get('/doctor/patient/prescriptions');
+        const rxData = rxRes?.data?.data?.prescriptions ?? rxRes?.data?.prescriptions ?? rxRes?.data ?? [];
+        setDocPrescriptions(Array.isArray(rxData) ? rxData : []);
+      } catch { setDocPrescriptions([]); }
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.response?.status ?? e?.message ?? 'Unknown error';
       console.error('MedicationsPage loadData error:', e?.response?.status, msg, e);
@@ -153,11 +160,11 @@ export default function MedicationsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#fff', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 10 }}>💊 Medications</h1>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, margin: 0 }}>Track prescriptions, log doses and monitor adherence</p>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0F2D2A', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 10 }}>💊 Medications</h1>
+          <p style={{ color: '#4B6E6A', fontSize: 14, margin: 0 }}>Track prescriptions, log doses and monitor adherence</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={loadData} style={{ padding: '10px 18px', borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>↺ Refresh</button>
+          <button onClick={loadData} style={{ padding: '10px 18px', borderRadius: 10, border: '1.5px solid #E2EEF0', background: '#fff', color: '#4B6E6A', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>↺ Refresh</button>
           <button onClick={() => setShowAdd(true)} style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg,${C.teal},${C.tealLight})`, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(13,148,136,0.35)' }}>+ Add Medication</button>
         </div>
       </div>
@@ -337,6 +344,97 @@ export default function MedicationsPage() {
       </div>
 
       {showAdd && <AddMedModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); loadData(); toast('✓ Medication added'); }} />}
+
+      {/* ── Doctor-issued Prescriptions ──────────────────────────────────── */}
+      {docPrescriptions.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+            <h3 style={{ fontSize:16, fontWeight:700, color:C.text, margin:0 }}>💊 Prescribed by Your Doctors</h3>
+            <span style={{ fontSize:11, padding:'2px 8px', borderRadius:100, background:'rgba(99,102,241,0.1)', color:'#6366F1', border:'1px solid rgba(99,102,241,0.2)', fontWeight:700 }}>
+              {docPrescriptions.length} prescription{docPrescriptions.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            {docPrescriptions.map((rx: any, i: number) => {
+              const drugs = rx.drugs ?? (rx.drug ? [{ drug: rx.drug, dosage: rx.dosage, frequency: rx.frequency, duration: rx.duration }] : []);
+              const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '—';
+              return (
+                <div key={rx.id ?? i} style={{ background:'#FFFFFF', border:'1px solid #E2EEF0', borderRadius:14, overflow:'hidden', boxShadow:'0 2px 8px rgba(99,102,241,0.08)' }}>
+                  <div style={{ height:3, background:'linear-gradient(90deg,#6366F1,#818CF8)' }} />
+                  <div style={{ padding:'16px 20px' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:3 }}>
+                          Rx from {rx.doctorName ?? rx.doctor?.firstName ? `Dr. ${rx.doctor?.firstName} ${rx.doctor?.lastName}` : 'Your Doctor'}
+                        </div>
+                        <div style={{ fontSize:12, color:'#6366F1', fontWeight:600 }}>
+                          {rx.doctor?.specialization ?? rx.doctorSpec ?? 'General Medicine'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:'right' }}>
+                        <span style={{ fontSize:10, padding:'3px 10px', borderRadius:100, background: rx.status === 'ACTIVE' ? 'rgba(22,163,74,0.1)' : 'rgba(100,116,139,0.1)', color: rx.status === 'ACTIVE' ? C.green : C.text3, border:`1px solid ${rx.status === 'ACTIVE' ? 'rgba(22,163,74,0.25)' : 'rgba(100,116,139,0.25)'}`, fontWeight:700 }}>
+                          {rx.status ?? 'ACTIVE'}
+                        </span>
+                        <div style={{ fontSize:11, color:C.text3, marginTop:4 }}>{fmtDate(rx.date ?? rx.createdAt)}</div>
+                      </div>
+                    </div>
+
+                    {/* Drug list */}
+                    <div style={{ background:'#F8FAFC', borderRadius:10, padding:'12px 14px', marginBottom:12 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:C.text3, textTransform:'uppercase' as const, letterSpacing:'0.06em', marginBottom:8 }}>Medications</div>
+                      {drugs.length === 0 ? (
+                        <div style={{ fontSize:13, color:C.text3 }}>No drugs listed</div>
+                      ) : drugs.map((d: any, j: number) => (
+                        <div key={j} style={{ display:'flex', alignItems:'flex-start', gap:10, paddingBottom:8, marginBottom:8, borderBottom: j < drugs.length - 1 ? '1px solid #E2EEF0' : 'none' }}>
+                          <span style={{ fontSize:16, flexShrink:0 }}>💊</span>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{d.drug ?? d.name ?? '—'}</div>
+                            <div style={{ fontSize:12, color:C.text2, marginTop:2 }}>
+                              {d.dosage && <span>{d.dosage}</span>}
+                              {d.frequency && <span> · {(d.frequency ?? '').replace(/_/g,' ')}</span>}
+                              {d.duration && <span> · {d.duration}</span>}
+                            </div>
+                            {d.instructions && <div style={{ fontSize:11, color:C.text3, fontStyle:'italic', marginTop:2 }}>{d.instructions}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Notes */}
+                    {rx.notes && (
+                      <div style={{ fontSize:12, color:C.text2, padding:'8px 12px', background:'rgba(99,102,241,0.06)', borderRadius:8, border:'1px solid rgba(99,102,241,0.15)', marginBottom:12, fontStyle:'italic' }}>
+                        📝 {rx.notes}
+                      </div>
+                    )}
+
+                    {/* Action: add to my medications */}
+                    <button
+                      onClick={async () => {
+                        // Add each drug as a medication entry for the patient
+                        for (const d of drugs) {
+                          try {
+                            await api.post('/patient/medications', {
+                              name: d.drug ?? d.name,
+                              dosage: d.dosage ?? '',
+                              frequency: d.frequency ?? 'ONCE_DAILY',
+                              prescribedBy: rx.doctorName ?? 'Doctor',
+                              status: 'ACTIVE',
+                            });
+                          } catch {}
+                        }
+                        await loadData();
+                        toast('✓ Added to My Medications');
+                      }}
+                      style={{ fontSize:12, padding:'7px 16px', borderRadius:8, border:`1px solid rgba(99,102,241,0.3)`, background:'rgba(99,102,241,0.06)', color:'#6366F1', cursor:'pointer', fontWeight:600 }}>
+                      + Add to My Medications
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

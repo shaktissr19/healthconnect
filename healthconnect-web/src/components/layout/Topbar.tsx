@@ -118,11 +118,11 @@ export default function Topbar() {
   const fetchNotifications = useCallback(async (isPolling = false) => {
     try {
       const r: any = await api.get('/notifications');
-      const arr = r?.data?.data ?? r?.data ?? [];
+      const arr = r?.data?.data?.notifications ?? r?.data?.notifications ?? r?.data ?? [];
       if (Array.isArray(arr) && arr.length > 0) {
         const fresh = arr.slice(0, 10);
         setNotifications(fresh);
-        const unread = fresh.filter((n: any) => !n.isRead).length;
+        const unread = fresh.filter((n: any) => !n.isRead && !n.read).length;
         setUnreadCount(unread);
         if (isPolling && lastSeenId.current) {
           const newestId = fresh[0]?.id;
@@ -144,7 +144,7 @@ export default function Topbar() {
     }).catch(() => {});
 
     fetchNotifications(false);
-    pollRef.current = setInterval(() => fetchNotifications(true), 60_000);
+    pollRef.current = setInterval(() => fetchNotifications(true), 15_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchNotifications]);
 
@@ -176,116 +176,48 @@ export default function Topbar() {
   }, [router]);
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, read: true })));
     setUnreadCount(0);
     api.put('/notifications/read-all').catch(() => {});
   };
 
-  const notifIcon = (type: string) =>
-    ({ APPOINTMENT: '📅', MEDICATION: '💊', VITAL: '📊', COMMUNITY: '💬', ALERT: '🔔' }[type] ?? '🔔');
+  const notifIcon = (type: string, data?: any) => {
+    if (type === 'SYSTEM' && data?.requestType === 'DOCTOR_ACCESS_REQUEST') return '👨‍⚕️';
+    return ({ APPOINTMENT: '📅', MEDICATION: '💊', VITAL: '📊', COMMUNITY: '💬', ALERT: '🔔', SYSTEM: '🔔' }[type] ?? '🔔');
+  };
+
+  // Approve/Reject doctor access request
+  const [consentLoading, setConsentLoading] = useState<string | null>(null);
+
+  const [consentToast, setConsentToast] = useState('');
+
+  const handleConsentAction = async (notifId: string, notifData: any, action: 'approve' | 'reject') => {
+    setConsentLoading(notifId + action);
+    try {
+      // Route is in doctor.routes.ts mounted at /doctor → full path is /doctor/patient/consent/:action
+      await api.post(`/doctor/patient/consent/${action}`, { notificationId: notifId, doctorId: notifData.doctorId });
+      // Remove from notification list
+      setNotifications(prev => prev.filter(n => n.id !== notifId));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      // Show feedback toast
+      setConsentToast(action === 'approve'
+        ? `✓ Access granted to ${notifData.doctorName ?? 'doctor'}`
+        : `Access request from ${notifData.doctorName ?? 'doctor'} declined`
+      );
+      setTimeout(() => setConsentToast(''), 4000);
+      fetchNotifications(false);
+    } catch (e: any) {
+      setConsentToast('Failed to process request. Please try again.');
+      setTimeout(() => setConsentToast(''), 3000);
+    }
+    setConsentLoading(null);
+  };
 
   const scoreColor = (s: number | null) =>
     !s ? '#64748B' : s >= 80 ? '#16A34A' : s >= 60 ? '#D97706' : '#DC2626';
 
   return (
     <>
-      <style>{`
-        /* ── LIGHT THEME TOPBAR ──────────────────────────────────────── */
-        .hc-tb {
-          position: fixed; top: 0; left: ${sidebarW}px; right: 0; height: ${TOPBAR_H}px;
-          z-index: 100; background: #FFFFFF;
-          border-bottom: 1px solid rgba(14,165,151,0.12);
-          display: flex; align-items: center; padding: 0 20px; gap: 14px;
-          transition: left 0.25s cubic-bezier(.4,0,.2,1);
-          box-shadow: 0 1px 8px rgba(0,0,0,0.06);
-        }
-        .hc-tb-hamburger {
-          background: none; border: none; cursor: pointer;
-          color: #94A3B8; display: flex; align-items: center;
-          padding: 6px; border-radius: 8px; transition: all 0.2s;
-        }
-        .hc-tb-hamburger:hover { background: #F0F9F8; color: #0D9488; }
-
-        .hc-tb-breadcrumb { display: flex; align-items: center; gap: 8px; flex: 1; }
-        .hc-tb-breadcrumb-home { font-size: 12px; color: #94A3B8; cursor: pointer; transition: color 0.15s; }
-        .hc-tb-breadcrumb-home:hover { color: #0D9488; }
-        .hc-tb-breadcrumb-sep { color: #CBD5E1; font-size: 12px; }
-        .hc-tb-breadcrumb-cur { font-size: 13px; font-weight: 700; color: #0F2D2A; }
-
-        .hc-tb-chip {
-          display: flex; align-items: center; gap: 6px;
-          padding: 5px 12px; border-radius: 100px;
-          font-size: 12px; font-weight: 700; white-space: nowrap;
-          cursor: default;
-        }
-        .hc-tb-chip-score {
-          background: #F0FDF9;
-          border: 1px solid rgba(13,148,136,0.2);
-          cursor: pointer; transition: background 0.2s;
-        }
-        .hc-tb-chip-score:hover { background: #CCFBF1; }
-
-        .hc-tb-icon-btn {
-          position: relative; background: none; border: none; cursor: pointer;
-          color: #94A3B8; padding: 8px; border-radius: 9px;
-          display: flex; align-items: center; transition: all 0.2s;
-        }
-        .hc-tb-icon-btn:hover { background: #F0F9F8; color: #0D9488; }
-
-        .hc-tb-badge {
-          position: absolute; top: 3px; right: 3px;
-          min-width: 16px; height: 16px; border-radius: 100px;
-          background: #F43F5E; color: #fff; font-size: 9px; font-weight: 700;
-          display: flex; align-items: center; justify-content: center;
-          padding: 0 3px; border: 2px solid #FFFFFF;
-        }
-        .hc-tb-badge-pulse { animation: tbBadgePop 0.4s ease forwards, tbBadgeRing 1.5s ease 0.4s; }
-        @keyframes tbBadgePop { 0%{transform:scale(1)} 40%{transform:scale(1.6)} 70%{transform:scale(0.9)} 100%{transform:scale(1)} }
-        @keyframes tbBadgeRing { 0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,0.5)} 50%{box-shadow:0 0 0 5px rgba(244,63,94,0)} }
-        @keyframes tbLivePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
-
-        .hc-tb-user-btn {
-          display: flex; align-items: center; gap: 8px;
-          background: none; border: 1px solid #E2EEF0;
-          border-radius: 10px; padding: 5px 10px 5px 7px;
-          cursor: pointer; transition: all 0.2s;
-        }
-        .hc-tb-user-btn:hover { background: #F0F9F8; border-color: rgba(13,148,136,0.3); }
-
-        .hc-tb-avatar {
-          width: 28px; height: 28px; border-radius: 50%;
-          background: linear-gradient(135deg,#0D9488,#14B8A6);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 10px; font-weight: 800; color: #fff; flex-shrink: 0;
-          letter-spacing: 0.5px;
-        }
-
-        /* Dropdowns — stay dark for contrast/readability */
-        .hc-tb-dropdown {
-          position: absolute; right: 0; top: 48px;
-          background: #FFFFFF; border: 1px solid #E2EEF0;
-          border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-          z-index: 9999; overflow: hidden;
-        }
-        .hc-tb-dropdown-hd {
-          padding: 13px 16px; border-bottom: 1px solid #F1F5F9;
-          display: flex; align-items: center; justify-content: space-between;
-        }
-        .hc-tb-notif-item {
-          display: flex; gap: 12px; padding: 12px 16px;
-          border-bottom: 1px solid #F8FAFC;
-          cursor: pointer; transition: background 0.15s;
-        }
-        .hc-tb-notif-item:hover { background: #F8FFFE; }
-        .hc-tb-menu-item {
-          width: 100%; padding: 10px 16px; background: none; border: none;
-          cursor: pointer; display: flex; align-items: center; gap: 10px;
-          font-size: 13px; color: #4B6E6A; text-align: left;
-          transition: all 0.15s; font-family: inherit;
-        }
-        .hc-tb-menu-item:hover { background: #F0F9F8; color: #0D9488; }
-      `}</style>
-
       <header className="hc-tb">
         {/* Hamburger */}
         <button className="hc-tb-hamburger" onClick={toggleSidebar} title="Toggle sidebar">
@@ -297,9 +229,9 @@ export default function Topbar() {
         </button>
 
         {/* HealthConnect home link — opens in new tab so dashboard session is preserved */}
-        <a href="https://healthconnect.sbs/?home=1" title="Go to HealthConnect home (opens in new tab)" style={{ display:'flex', alignItems:'center', gap:6, textDecoration:'none', padding:'4px 10px', borderRadius:8, border:'1px solid #E2EEF0', background:'#F8FBFF', transition:'all 0.2s', flexShrink:0 }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor='#1A6BB5'; (e.currentTarget as HTMLElement).style.background='#EBF4FF'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#E2EEF0'; (e.currentTarget as HTMLElement).style.background='#F8FBFF'; }}>
+        <a href="https://healthconnect.sbs/?home=1" title="Go to HealthConnect home (opens in new tab)" style={{ display:'flex', alignItems:'center', gap:6, textDecoration:'none', padding:'4px 10px', borderRadius:8, border:'1px solid #E2EEF0', background:'#FDFCFB', transition:'all 0.2s', flexShrink:0 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor='#2563EB'; (e.currentTarget as HTMLElement).style.background='#EFF4FF'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#D3D1C7'; (e.currentTarget as HTMLElement).style.background='#FDFCFB'; }}>
           <span style={{ fontSize:14 }}>🏥</span>
           <span style={{ fontSize:11, fontWeight:700, color:'#1A365D' }}>HealthConnect Home</span>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -310,18 +242,18 @@ export default function Topbar() {
           <span className="hc-tb-breadcrumb-home" onClick={() => setActivePage('home')}>Dashboard</span>
           <span className="hc-tb-breadcrumb-sep">›</span>
           <span className="hc-tb-breadcrumb-cur">
-            {activePage === 'home'          ? '🏠 Home'
-            : activePage === 'my-health'    ? '❤️ My Health'
-            : activePage === 'vitals'       ? '📊 Vitals'
-            : activePage === 'medications'  ? '💊 Medications'
-            : activePage === 'appointments' ? '📅 Appointments'
-            : activePage === 'communities'  ? '💬 Communities'
-            : activePage === 'find-doctors' ? '🩺 Find Doctors'
-            : activePage === 'profile'      ? '👤 Profile'
+            {activePage === 'home'          ? 'Home'
+            : activePage === 'my-health'    ? 'My Health'
+            : activePage === 'vitals'       ? 'Vitals'
+            : activePage === 'medications'  ? 'Medications'
+            : activePage === 'appointments' ? 'Appointments'
+            : activePage === 'communities'  ? 'Communities'
+            : activePage === 'find-doctors' ? 'Find Doctors'
+            : activePage === 'profile'      ? 'Profile'
             : activePage === 'settings'     ? '⚙️ Settings'
             : activePage === 'symptoms'     ? '🤒 Symptoms'
             : activePage === 'therapies'    ? '🧬 Therapies'
-            : activePage === 'vitals'       ? '📊 Vitals'
+            : activePage === 'vitals'       ? 'Vitals'
             : activePage === 'consents'     ? '🔐 Data Consents'
             : activePage === 'subscription' ? '⭐ Subscription'
             : 'Dashboard'}
@@ -338,7 +270,7 @@ export default function Topbar() {
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span style={{ flex:1, textAlign:'left', fontSize:12 }}>Search…</span>
-            <span style={{ fontSize:10, padding:'1px 5px', borderRadius:4, background:'#E2EEF0', color:'#94A3B8', fontFamily:'monospace' }}>⌘K</span>
+            <span style={{ fontSize:10, padding:'1px 5px', borderRadius:4, background:'#EAE8E2', color:'#64748B', fontFamily:'monospace' }}>⌘K</span>
           </button>
 
           {showSearch && (
@@ -363,7 +295,7 @@ export default function Topbar() {
                           <div style={{ padding:'8px 14px 4px', fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.08em' }}>{labels[type]}</div>
                           {items.map(item => (
                             <button key={item.id} onClick={item.action} style={{ width:'100%', padding:'9px 14px', display:'flex', alignItems:'center', gap:10, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit', transition:'background 0.1s' }}
-                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F7FD'}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#EFF4FF'}
                               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
                               <span style={{ fontSize:18, flexShrink:0 }}>{item.icon}</span>
                               <div style={{ flex:1, minWidth:0 }}>
@@ -389,10 +321,10 @@ export default function Topbar() {
                       { icon:'🩺', label:'Find Doctors', action: () => { setActivePage('find-doctors'); setShowSearch(false); } },
                     ].map(item => (
                       <button key={item.label} onClick={item.action} style={{ width:'100%', padding:'7px 10px', display:'flex', alignItems:'center', gap:10, background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit', borderRadius:8, transition:'background 0.1s' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F7FD'}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#EFF4FF'}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
                         <span style={{ fontSize:16 }}>{item.icon}</span>
-                        <span style={{ fontSize:13, color:'#1A365D', fontWeight:500 }}>{item.label}</span>
+                        <span style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{item.label}</span>
                       </button>
                     ))}
                   </div>
@@ -442,7 +374,7 @@ export default function Topbar() {
                   </span>
                 </div>
                 {unreadCount > 0 && (
-                  <button onClick={markAllRead} style={{ background:'none', border:'none', cursor:'pointer', color:'#0D9488', fontSize:12 }}>
+                  <button onClick={markAllRead} style={{ background:'none', border:'none', cursor:'pointer', color:'#2563EB', fontSize:12 }}>
                     Mark all read
                   </button>
                 )}
@@ -452,35 +384,59 @@ export default function Topbar() {
                   <div style={{ padding:'32px 16px', textAlign:'center', color:'#94A3B8', fontSize:13 }}>
                     No notifications yet
                   </div>
-                ) : notifications.map(n => (
+                ) : notifications.map(n => {
+                  const nData = (n as any).data ?? {};
+                  const isDoctorRequest = n.type === 'SYSTEM' && nData.requestType === 'DOCTOR_ACCESS_REQUEST';
+                  return (
                   <div
                     key={n.id}
                     className="hc-tb-notif-item"
                     style={{
-                      background: n.isRead ? 'transparent' : '#F0FDF9',
-                      borderLeft: n.isRead ? 'none' : '3px solid #0D9488',
+                      background: isDoctorRequest ? 'rgba(99,102,241,0.06)' : n.isRead ? 'transparent' : '#EFF4FF',
+                      borderLeft: isDoctorRequest ? '3px solid #6366F1' : n.isRead ? 'none' : '3px solid #2563EB',
+                      cursor: isDoctorRequest ? 'default' : 'pointer',
                     }}
                     onClick={() => {
-                      if (!n.isRead) {
+                      if (!isDoctorRequest && !n.isRead) {
                         setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
                         setUnreadCount(prev => Math.max(0, prev - 1));
                         api.put(`/notifications/${n.id}/read`).catch(() => {});
                       }
                     }}
                   >
-                    <span style={{ fontSize: 18, flexShrink: 0 }}>{notifIcon(n.type)}</span>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{notifIcon(n.type, nData)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
-                        <span style={{ color: n.isRead ? '#94A3B8' : '#0F2D2A', fontSize:13, fontWeight: n.isRead ? 400 : 600 }}>
+                        <span style={{ color: n.isRead && !isDoctorRequest ? '#94A3B8' : '#0F2D2A', fontSize:13, fontWeight: n.isRead && !isDoctorRequest ? 400 : 600 }}>
                           {n.title}
                         </span>
-                        {!n.isRead && <span style={{ width:6, height:6, borderRadius:'50%', background:'#14B8A6', flexShrink:0 }}/>}
+                        {!n.isRead && !isDoctorRequest && <span style={{ width:6, height:6, borderRadius:'50%', background:'#2563EB', flexShrink:0 }}/>}
+                        {isDoctorRequest && nData.isVerified && <span style={{ fontSize:9, padding:'1px 6px', borderRadius:100, background:'rgba(22,163,74,0.1)', color:'#16A34A', border:'1px solid rgba(22,163,74,0.25)', fontWeight:700 }}>✓ Verified</span>}
                       </div>
-                      <p style={{ color:'#64748B', fontSize:12, margin:0, lineHeight:1.5 }}>{n.body}</p>
-                      <span style={{ color:'#94A3B8', fontSize:11, marginTop:4, display:'block' }}>{timeAgo(n.createdAt)}</span>
+                      <p style={{ color:'#64748B', fontSize:12, margin:'0 0 8px', lineHeight:1.5 }}>{n.body}</p>
+                      {isDoctorRequest ? (
+                        <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleConsentAction(n.id, nData, 'approve'); }}
+                            disabled={consentLoading === n.id + 'approve' || consentLoading === n.id + 'reject'}
+                            style={{ flex:1, padding:'7px 0', borderRadius:8, border:'none', background:'linear-gradient(135deg,#0D9488,#14B8A6)', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                            {consentLoading === n.id + 'approve' ? '…' : '✓ Approve'}
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleConsentAction(n.id, nData, 'reject'); }}
+                            disabled={consentLoading === n.id + 'approve' || consentLoading === n.id + 'reject'}
+                            style={{ flex:1, padding:'7px 0', borderRadius:8, border:'1px solid rgba(244,63,94,0.3)', background:'rgba(244,63,94,0.06)', color:'#F43F5E', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                            {consentLoading === n.id + 'reject' ? '…' : '✕ Decline'}
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ color:'#94A3B8', fontSize:11, marginTop:4, display:'block' }}>{timeAgo(n.createdAt)}</span>
+                      )}
+                      {isDoctorRequest && <span style={{ color:'#94A3B8', fontSize:10, marginTop:4, display:'block' }}>{timeAgo(n.createdAt)}</span>}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -490,7 +446,7 @@ export default function Topbar() {
         <div ref={userRef} style={{ position: 'relative' }}>
           <button className="hc-tb-user-btn" onClick={() => { setShowUserMenu(p => !p); setShowNotif(false); }}>
             <div className="hc-tb-avatar">{initials}</div>
-            <span style={{ fontSize:12, fontWeight:600, color:'#4B6E6A', maxWidth:90, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            <span style={{ fontSize:12, fontWeight:600, color:'#374151', maxWidth:90, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {firstName || 'Account'}
             </span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"
@@ -502,7 +458,7 @@ export default function Topbar() {
           {showUserMenu && (
             <div className="hc-tb-dropdown" style={{ width: 220, top: 48 }}>
               <div style={{ padding:'16px', borderBottom:'1px solid #F1F5F9', textAlign:'center' }}>
-                <div style={{ width:44, height:44, borderRadius:'50%', background:'linear-gradient(135deg,#0D9488,#14B8A6)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:15, fontWeight:800, margin:'0 auto 8px', letterSpacing:'0.5px' }}>{initials}</div>
+                <div style={{ width:44, height:44, borderRadius:'50%', background:'linear-gradient(135deg,#1849A9,#2563EB)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:15, fontWeight:800, margin:'0 auto 8px', letterSpacing:'0.5px' }}>{initials}</div>
                 <div style={{ color:'#0F2D2A', fontSize:14, fontWeight:700 }}>{firstName} {lastName}</div>
                 <div style={{ color:'#94A3B8', fontSize:11, marginTop:2 }}>{user?.email ?? ''}</div>
               </div>
@@ -527,6 +483,13 @@ export default function Topbar() {
           )}
         </div>
       </header>
+
+      {/* Consent action toast */}
+      {consentToast && (
+        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', zIndex:99999, background: consentToast.startsWith('✓') ? '#0D9488' : '#0F172A', color:'#fff', padding:'12px 24px', borderRadius:12, fontSize:13, fontWeight:600, boxShadow:'0 8px 24px rgba(0,0,0,0.25)', whiteSpace:'nowrap' as const }}>
+          {consentToast}
+        </div>
+      )}
     </>
   );
 }

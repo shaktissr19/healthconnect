@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import DoctorSidebar from '@/components/doctor/layout/DoctorSidebar';
 import DoctorTopbar  from '@/components/doctor/layout/DoctorTopbar';
+import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
 const SIDEBAR_W      = 268;
 const SIDEBAR_W_MINI = 72;
@@ -15,7 +16,29 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
   const uiStore = useUIStore() as any;
   const collapsed = uiStore.sidebarOpen === false;
   const [authChecked, setAuthChecked] = useState(false);
+  const [sessionToast, setSessionToast] = useState(false);
   const hasRun = useRef(false);
+
+  // Read ?session=expired and ?tab= on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('session') === 'expired') {
+      setSessionToast(true);
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => setSessionToast(false), 6000);
+    }
+    // Read ?tab= param — set active page
+    const tab = params.get('tab');
+    const validPages = ['home','patients','appointments','video-consults',
+      'prescriptions','records','communities','earnings','profile','availability','settings'];
+    if (tab && validPages.includes(tab)) {
+      import('@/store/uiStore').then(({ useUIStore }) => {
+        (useUIStore.getState() as any).setActivePage?.(tab);
+        window.history.replaceState({}, '', '/doctor-dashboard');
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (hasRun.current) return;
@@ -73,10 +96,25 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:'#E3EDEC' }}>
-      <DoctorSidebar />
+    <div style={{ minHeight:'100vh', background:'#F5F4F0' }}>
+      <SessionTimeoutManager />
+
+      {/* Session expired toast */}
+      {sessionToast && (
+        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:'#1E293B', color:'#fff', borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:600, zIndex:9999, whiteSpace:'nowrap', boxShadow:'0 4px 20px rgba(0,0,0,0.25)', display:'flex', alignItems:'center', gap:10 }}>
+          <span>⏱️</span>
+          <span>You were signed out due to inactivity.</span>
+          <button onClick={() => setSessionToast(false)} style={{ background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:16, padding:0, marginLeft:4 }}>✕</button>
+        </div>
+      )}
+
+      {/* Topbar — full width, z-index above sidebar */}
       <DoctorTopbar />
-      <div style={{ marginLeft:sidebarW, paddingTop:TOPBAR_H, minHeight:'100vh', background:'#E3EDEC', overflowX:'hidden', transition:'margin-left 0.25s cubic-bezier(.4,0,.2,1)' }}>
+
+      {/* Sidebar — starts below topbar */}
+      <DoctorSidebar />
+
+      <div style={{ marginLeft:sidebarW, paddingTop:TOPBAR_H, minHeight:'100vh', background:'#F5F4F0', overflowX:'hidden', transition:'margin-left 0.25s cubic-bezier(.4,0,.2,1)' }}>
         <main style={{ padding:24 }}>{children}</main>
       </div>
     </div>
