@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
+    "@sendgrid/mail": "^8.1.6",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
@@ -31,7 +32,6 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.9",
     "razorpay": "^2.9.2",
     "uuid": "^9.0.1",
     "winston": "^3.11.0",
@@ -46,7 +46,6 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^1.4.13",
     "@types/node": "^20.11.5",
-    "@types/nodemailer": "^6.4.14",
     "@types/uuid": "^9.0.7",
     "nodemon": "^3.0.3",
     "prisma": "^5.10.0",

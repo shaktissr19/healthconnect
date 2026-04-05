@@ -182,6 +182,8 @@ enum NotificationType {
   APPOINTMENT_REMINDER
   MEDICATION_REMINDER
   COMMUNITY_ACTIVITY
+  COMMUNITY_REQUEST
+  COMMUNITY_REQUEST_UPDATE
   HEALTH_ALERT
   REPORT_SHARED
   SYSTEM
@@ -226,6 +228,12 @@ enum ReportStatus {
   PENDING
   RESOLVED
   DISMISSED
+}
+
+enum CommunityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum ReportReason {
@@ -281,6 +289,8 @@ model User {
   refreshToken         String?
   passwordResetToken   String?
   passwordResetExpiry  DateTime?
+  emailVerifyToken     String?
+  emailVerifyExpiry    DateTime?
   lastLoginAt          DateTime?
   deletionRequestedAt  DateTime?
   createdAt            DateTime  @default(now())
@@ -300,6 +310,8 @@ model User {
   communityReportsFiledBy     CommunityReport[]        @relation("ReportFiledBy")
   communityReportsResolvedBy  CommunityReport[]        @relation("ReportResolvedBy")
   communityModerationLogs     CommunityModerationLog[] @relation("ModeratorActions")
+  communityRequests           CommunityRequest[]       @relation("RequestedBy")
+  reviewedCommunityRequests   CommunityRequest[]       @relation("ReviewedBy")
 
   @@index([email])
   @@index([role])
@@ -1396,6 +1408,31 @@ model CommunityModerationLog {
   @@index([createdAt])
   @@map("community_moderation_logs")
 }
+// ============================================================
+// TABLE 45: community_requests  — NEW
+// ============================================================
+model CommunityRequest {
+  id            String                 @id @default(uuid())
+  communityName String
+  category      String?
+  reason        String
+  requestedBy   String?                // userId — nullable so guests can request too
+  status        CommunityRequestStatus @default(PENDING)
+  adminNote     String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  requester     User?   @relation("RequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
+  reviewer      User?   @relation("ReviewedBy",  fields: [reviewedBy],  references: [id], onDelete: SetNull)
+
+  @@index([requestedBy])
+  @@index([status])
+  @@index([createdAt])
+  @@map("community_requests")
+}
+
 model Testimonial {
   id          String   @id @default(uuid())
   name        String   @unique

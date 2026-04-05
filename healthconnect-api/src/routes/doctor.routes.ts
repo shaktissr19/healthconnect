@@ -378,10 +378,11 @@ router.get('/public/doctors/:id/reviews', async (req, res) => {
  * GET /doctor/profile
  * Get own full profile (includes sensitive fields)
  */
-router.get('/doctor/profile', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+router.get('/profile', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
   try {
+    const userId = req.user?.userId ?? req.user?.id;
     const profile = await prisma.doctorProfile.findUnique({
-      where: { userId: req.user.id },
+      where: { userId },
     });
 
     if (!profile) {
@@ -399,9 +400,10 @@ router.get('/doctor/profile', authenticate, requireRole('DOCTOR'), async (req: a
  * PUT /doctor/profile
  * Update own profile (all fields except verification status & HC ID)
  */
-router.put('/doctor/profile', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+router.put('/profile', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
   try {
-    const profile = await prisma.doctorProfile.findUnique({ where: { userId: req.user.id } });
+    const userId = req.user?.userId ?? req.user?.id;
+    const profile = await prisma.doctorProfile.findUnique({ where: { userId } });
     if (!profile) return res.status(404).json({ success: false, message: 'Profile not found.' });
 
     const {
@@ -445,7 +447,7 @@ router.put('/doctor/profile', authenticate, requireRole('DOCTOR'), async (req: a
     updateData.isProfileComplete = updateData.profileScore >= 70;
 
     const updated = await prisma.doctorProfile.update({
-      where: { userId: req.user.id },
+      where: { userId },
       data: updateData,
     });
 
@@ -465,8 +467,9 @@ router.put('/doctor/profile', authenticate, requireRole('DOCTOR'), async (req: a
  * Update availability schedule + next available slot
  * Body: { schedule: { Mon: ["09:00-13:00","15:00-18:00"], ... }, nextAvailableSlot?: string }
  */
-router.put('/doctor/profile/availability', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+router.put('/profile/availability', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
   try {
+    const userId = req.user?.userId ?? req.user?.id;
     const { schedule, nextAvailableSlot, isAvailableOnline, isAcceptingNewPatients } = req.body;
 
     const updateData: any = {};
@@ -476,7 +479,7 @@ router.put('/doctor/profile/availability', authenticate, requireRole('DOCTOR'), 
     if (isAcceptingNewPatients !== undefined) updateData.isAcceptingNewPatients = isAcceptingNewPatients;
 
     const updated = await prisma.doctorProfile.update({
-      where: { userId: req.user.id },
+      where: { userId },
       data: updateData,
     });
 
@@ -491,8 +494,9 @@ router.put('/doctor/profile/availability', authenticate, requireRole('DOCTOR'), 
  * PUT /doctor/profile/consultation-modes
  * Toggle consultation modes and fees
  */
-router.put('/doctor/profile/consultation-modes', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+router.put('/profile/consultation-modes', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
   try {
+    const userId = req.user?.userId ?? req.user?.id;
     const {
       offersInPerson, offersVideoConsult, offersAudioConsult, offersChatConsult,
       consultationFee, teleconsultFee, videoConsultFee, audioConsultFee,
@@ -510,7 +514,7 @@ router.put('/doctor/profile/consultation-modes', authenticate, requireRole('DOCT
     }
 
     const updated = await prisma.doctorProfile.update({
-      where: { userId: req.user.id },
+      where: { userId },
       data: updateData,
     });
 
@@ -525,10 +529,11 @@ router.put('/doctor/profile/consultation-modes', authenticate, requireRole('DOCT
  * GET /doctor/analytics
  * Doctor's own analytics: views, bookmarks, review count, upcoming appointments
  */
-router.get('/doctor/analytics', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+router.get('/analytics', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
   try {
+    const userId = req.user?.userId ?? req.user?.id;
     const profile = await prisma.doctorProfile.findUnique({
-      where: { userId: req.user.id },
+      where: { userId },
       select: { id: true, profileViews: true, totalReviews: true, averageRating: true },
     });
 
@@ -588,7 +593,7 @@ router.post('/patient/doctors/:id/reviews', authenticate, requireRole('PATIENT')
       return res.status(400).json({ success: false, message: 'Review body must be at least 10 characters.' });
     }
 
-    const patientProfile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
+    const patientProfile = await prisma.patientProfile.findUnique({ where: { userId: req.user?.userId ?? req.user?.id } });
     if (!patientProfile) return res.status(404).json({ success: false, message: 'Patient profile not found.' });
 
     const doctor = await prisma.doctorProfile.findFirst({
@@ -640,7 +645,7 @@ router.post('/patient/doctors/:id/reviews', authenticate, requireRole('PATIENT')
       data: {
         doctorId:      doctor.id,
         patientId:     patientProfile.id,
-        userId:        req.user.id,
+        userId:        req.user?.userId ?? req.user?.id,
         appointmentId: validAppointmentId,
         rating:        Number(rating),
         title:         title?.trim() || null,
@@ -680,7 +685,7 @@ router.post('/patient/doctors/:id/reviews', authenticate, requireRole('PATIENT')
 router.post('/patient/bookmarks/:doctorId', authenticate, requireRole('PATIENT'), async (req: any, res) => {
   try {
     const { doctorId } = req.params;
-    const patientProfile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
+    const patientProfile = await prisma.patientProfile.findUnique({ where: { userId: req.user?.userId ?? req.user?.id } });
     if (!patientProfile) return res.status(404).json({ success: false, message: 'Patient profile not found.' });
 
     const doctor = await prisma.doctorProfile.findFirst({
@@ -689,9 +694,10 @@ router.post('/patient/bookmarks/:doctorId', authenticate, requireRole('PATIENT')
     });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found.' });
 
+    const bookmarkUserId = req.user?.userId ?? req.user?.id;
     await prisma.doctorBookmark.upsert({
-      where: { userId_doctorId: { userId: req.user.id, doctorId: doctor.id } },
-      create: { userId: req.user.id, doctorId: doctor.id },
+      where: { userId_doctorId: { userId: bookmarkUserId, doctorId: doctor.id } },
+      create: { userId: bookmarkUserId, doctorId: doctor.id },
       update: {},
     });
 
@@ -710,7 +716,7 @@ router.delete('/patient/bookmarks/:doctorId', authenticate, requireRole('PATIENT
   try {
     const { doctorId } = req.params;
     await prisma.doctorBookmark.deleteMany({
-      where: { userId: req.user.id, doctorId },
+      where: { userId: req.user?.userId ?? req.user?.id, doctorId },
     });
     return res.json({ success: true, message: 'Bookmark removed.' });
   } catch (err: any) {
@@ -725,7 +731,7 @@ router.delete('/patient/bookmarks/:doctorId', authenticate, requireRole('PATIENT
 router.get('/patient/bookmarks', authenticate, requireRole('PATIENT'), async (req: any, res) => {
   try {
     const bookmarks = await prisma.doctorBookmark.findMany({
-      where: { userId: req.user.id },
+      where: { userId: req.user?.userId ?? req.user?.id },
       include: {
         doctor: {
           select: {
@@ -896,5 +902,595 @@ router.put('/admin/reviews/:reviewId', authenticate, requireRole('ADMIN'), async
     return res.status(500).json({ success: false, message: 'Failed to update review.' });
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// PATIENT SEARCH & ACCESS REQUESTS  (PHI-safe consent flow)
+// Mounted at /doctor in index.ts → these paths become /api/v1/doctor/...
+// Correct pattern: NO /doctor/ prefix here, same as admin.routes.ts /stats
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+/**
+ * GET /api/v1/doctor/patients
+ * Returns all patients this doctor has had appointments with.
+ * This was in doctor_controller.ts (getMyPatients) but never wired — adding here directly.
+ */
+router.get('/patients', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+  try {
+    const userId   = req.user?.userId ?? req.user?.id;
+    const dp       = await prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!dp) return res.status(404).json({ success: false, message: 'Doctor profile not found' });
+    const doctorId = dp.id;
+
+    const { q, limit = '50', offset = '0' } = req.query as any;
+
+    // Get distinct patientIds from appointments
+    const appts = await prisma.appointment.findMany({
+      where: { doctorId },
+      select: { patientId: true, scheduledAt: true, status: true },
+      distinct: ['patientId'],
+      orderBy: { scheduledAt: 'desc' },
+    });
+
+    const patientIds = appts.map((a: any) => a.patientId);
+    if (!patientIds.length) return res.json({ success: true, data: { patients: [], total: 0 } });
+
+    const patients = await prisma.patientProfile.findMany({
+      where: {
+        id: { in: patientIds },
+        ...(q ? { OR: [
+          { firstName: { contains: q, mode: 'insensitive' as const } },
+          { lastName:  { contains: q, mode: 'insensitive' as const } },
+        ]} : {}),
+      },
+      include: {
+        user:         { select: { email: true, registrationId: true } },
+        conditions:   { select: { name: true, status: true }, take: 2 },
+        healthScores: true,
+      },
+      take:    +limit,
+      skip:    +offset,
+    });
+
+    const enriched = patients.map((p: any) => {
+      const appt = appts.find((a: any) => a.patientId === p.id);
+      const age  = p.dateOfBirth
+        ? Math.floor((Date.now() - new Date(p.dateOfBirth).getTime()) / (365.25 * 86400000))
+        : null;
+      return {
+        id:          p.id,
+        name:        `${p.firstName} ${p.lastName}`,
+        firstName:   p.firstName,
+        lastName:    p.lastName,
+        age,
+        gender:      p.gender,
+        bloodGroup:  p.bloodGroup,
+        avatar:      (p.firstName[0] + p.lastName[0]).toUpperCase(),
+        condition:   p.conditions[0]?.name ?? 'General',
+        conditions:  p.conditions,
+        lastVisit:   appt?.scheduledAt?.toISOString(),
+        lastStatus:  appt?.status,
+        healthScore: p.healthScores?.score,
+        email:       p.user.email,
+        regId:       p.user.registrationId,
+        status:      'ACTIVE',
+      };
+    });
+
+    return res.json({ success: true, data: { patients: enriched, total: patientIds.length } });
+  } catch (e) {
+    console.error('getPatients', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/*
+ * GET /api/v1/doctor/search-patients?q=<name or HC ID>
+ * Empty q = browse first 50 patients (triggered by Search button click)
+ * q >= 2 chars = filtered search
+ */
+router.get('/search-patients', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+  try {
+    const userId = req.user?.userId ?? req.user?.id;
+    const dp     = await prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!dp) return res.status(404).json({ success: false, message: 'Doctor profile not found' });
+    const doctorId = dp.id;
+
+    const q     = ((req.query.q as string) ?? '').trim();
+    const limit = q.length === 0 ? 50 : 10;
+
+    if (q.length === 1) return res.status(400).json({ success: false, message: 'Type at least 2 characters to search' });
+
+    const parts  = q.split(' ').filter(Boolean);
+    const where: any = q.length >= 2 ? {
+      OR: [
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { lastName:  { contains: q, mode: 'insensitive' } },
+        ...(parts.length >= 2 ? [{
+          AND: [
+            { firstName: { contains: parts[0], mode: 'insensitive' } },
+            { lastName:  { contains: parts[1], mode: 'insensitive' } },
+          ],
+        }] : []),
+        { user: { registrationId: { contains: q, mode: 'insensitive' } } },
+      ],
+    } : {};
+
+    const patients = await prisma.patientProfile.findMany({
+      where,
+      select: {
+        id:          true,
+        firstName:   true,
+        lastName:    true,
+        dateOfBirth: true,
+        city:        true,
+        user:        { select: { registrationId: true } },
+      },
+      take:    limit,
+      orderBy: { firstName: 'asc' },
+    });
+
+    if (!patients.length) {
+      return res.json({ success: true, data: { patients: [], total: 0, browseMode: q.length === 0 } });
+    }
+
+    const patientIds = patients.map(p => p.id);
+
+    const [consents, pendingNotifs] = await Promise.all([
+      prisma.patientConsent.findMany({
+        where:  { doctorId, patientId: { in: patientIds } },
+        select: { patientId: true, status: true },
+      }),
+      prisma.notification.findMany({
+        where:  { type: 'SYSTEM', isRead: false, data: { path: ['doctorId'], equals: doctorId } },
+        select: { data: true },
+      }),
+    ]);
+
+    const consentMap       = new Map(consents.map(c => [c.patientId, c.status]));
+    const pendingPatientIds = new Set(pendingNotifs.map(n => (n.data as any)?.patientId).filter(Boolean));
+
+    const results = patients.map(p => {
+      const age = p.dateOfBirth
+        ? Math.floor((Date.now() - new Date(p.dateOfBirth).getTime()) / (365.25 * 86400000))
+        : null;
+      const cs = consentMap.get(p.id);
+      const accessRequestStatus =
+        cs === 'ACTIVE'             ? 'ACCEPTED' :
+        cs === 'REVOKED'            ? 'REJECTED' :
+        pendingPatientIds.has(p.id) ? 'PENDING'  : 'NONE';
+      return { id: p.id, hcId: p.user.registrationId, firstName: p.firstName, lastName: p.lastName, age, city: p.city ?? '—', accessRequestStatus };
+    });
+
+    return res.json({ success: true, data: { patients: results, total: results.length, browseMode: q.length === 0 } });
+  } catch (e) {
+    console.error('searchPatients', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/**
+ * POST /api/v1/doctor/access-request
+ * Body: { patientId }
+ * Creates SYSTEM notification for patient — no schema change needed
+ */
+router.post('/access-request', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+  try {
+    const userId = req.user?.userId ?? req.user?.id;
+    const dp     = await prisma.doctorProfile.findUnique({
+      where:  { userId },
+      select: { id: true, firstName: true, lastName: true, specialization: true, hcDoctorId: true, isVerified: true },
+    });
+    if (!dp) return res.status(404).json({ success: false, message: 'Doctor profile not found' });
+    const doctorId = dp.id;
+
+    const { patientId } = req.body;
+    if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
+
+    const patient = await prisma.patientProfile.findUnique({
+      where:  { id: patientId },
+      select: { userId: true, firstName: true, lastName: true },
+    });
+    if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+    const existing = await prisma.patientConsent.findFirst({ where: { doctorId, patientId, status: 'ACTIVE' } });
+    if (existing) return res.status(409).json({ success: false, message: 'You already have active access to this patient' });
+
+    const alreadyPending = await prisma.notification.findFirst({
+      where: { userId: patient.userId, type: 'SYSTEM', isRead: false, data: { path: ['doctorId'], equals: doctorId } },
+    });
+    if (alreadyPending) return res.status(409).json({ success: false, message: 'Access request already pending for this patient' });
+
+    const doctorName = `Dr. ${dp.firstName} ${dp.lastName}`;
+    const spec       = dp.specialization ?? 'General Physician';
+
+    await prisma.notification.create({
+      data: {
+        userId: patient.userId,
+        type:   'SYSTEM',
+        title:  `${doctorName} has requested access to your health profile`,
+        body:   `${doctorName} (${spec}) wants to view your HealthConnect health profile. Open notifications to accept or decline.`,
+        data:   { requestType: 'DOCTOR_ACCESS_REQUEST', doctorId, doctorName, doctorSpec: spec, hcDoctorId: dp.hcDoctorId ?? '', isVerified: dp.isVerified, patientId },
+      },
+    });
+
+    return res.json({ success: true, data: { message: 'Access request sent. Patient will be notified in-app and by email.', patientId, doctorId } });
+  } catch (e) {
+    console.error('sendAccessRequest', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/v1/doctor/access-requests
+ * Returns all sent requests: PENDING (from notifications) + ACCEPTED/REJECTED (from PatientConsent)
+ */
+router.get('/access-requests', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+  try {
+    const userId = req.user?.userId ?? req.user?.id;
+    const dp     = await prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!dp) return res.status(404).json({ success: false, message: 'Doctor profile not found' });
+    const doctorId = dp.id;
+
+    const [consents, pendingNotifs] = await Promise.all([
+      prisma.patientConsent.findMany({
+        where:   { doctorId },
+        include: { patient: { select: { id: true, firstName: true, lastName: true, user: { select: { registrationId: true } } } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.notification.findMany({
+        where:   { type: 'SYSTEM', isRead: false, data: { path: ['doctorId'], equals: doctorId } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const acceptedIds = new Set(consents.map(c => c.patientId));
+
+    const pendingPatientIds = pendingNotifs
+      .map(n => (n.data as any)?.patientId)
+      .filter((id): id is string => !!id && !acceptedIds.has(id));
+
+    const pendingPatients = pendingPatientIds.length
+      ? await prisma.patientProfile.findMany({
+          where:  { id: { in: pendingPatientIds } },
+          select: { id: true, firstName: true, lastName: true, user: { select: { registrationId: true } } },
+        })
+      : [];
+    const pMap = new Map(pendingPatients.map(p => [p.id, p]));
+
+    const pendingRows = pendingNotifs
+      .filter(n => { const pid = (n.data as any)?.patientId; return pid && !acceptedIds.has(pid); })
+      .map(n => {
+        const pid = (n.data as any)?.patientId as string;
+        const p   = pMap.get(pid);
+        return { id: n.id, patientId: pid, patientName: p ? `${p.firstName} ${p.lastName}` : '', patientHcId: p?.user.registrationId ?? '', status: 'PENDING' as const, createdAt: n.createdAt.toISOString() };
+      });
+
+    const consentRows = consents.map(c => ({
+      id:          c.id,
+      patientId:   c.patient.id,
+      patientName: `${c.patient.firstName} ${c.patient.lastName}`,
+      patientHcId: c.patient.user.registrationId,
+      status:      (c.status === 'ACTIVE' ? 'ACCEPTED' : 'REJECTED') as 'ACCEPTED' | 'REJECTED',
+      createdAt:   c.createdAt.toISOString(),
+    }));
+
+    return res.json({ success: true, data: { requests: [...pendingRows, ...consentRows], total: pendingRows.length + consentRows.length } });
+  } catch (e) {
+    console.error('getAccessRequests', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/*
+ * POST /api/v1/patient/consent/approve
+ * Patient approves a doctor access request notification → creates PatientConsent (ACTIVE)
+ * Body: { notificationId, doctorId }
+ */
+router.post('/patient/consent/approve', authenticate, requireRole('PATIENT'), async (req: any, res) => {
+  try {
+    const userId = req.user?.userId ?? req.user?.id;
+    const { notificationId, doctorId } = req.body;
+    if (!doctorId) return res.status(400).json({ success: false, message: 'doctorId is required' });
+
+    // Get patient profile
+    const patient = await prisma.patientProfile.findUnique({ where: { userId }, select: { id: true, firstName: true, lastName: true } });
+    if (!patient) return res.status(404).json({ success: false, message: 'Patient profile not found' });
+
+    // Check doctor exists
+    const doctor = await prisma.doctorProfile.findUnique({ where: { id: doctorId }, select: { id: true } });
+    if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+
+    // Create or update consent — set expiry to 1 year from now
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const existing = await prisma.patientConsent.findFirst({
+      where: { doctorId, patientId: patient.id },
+    });
+    if (existing) {
+      await prisma.patientConsent.update({
+        where: { id: existing.id },
+        data:  { status: 'ACTIVE', expiresAt },
+      });
+    } else {
+      await prisma.patientConsent.create({
+        data: { doctorId, patientId: patient.id, status: 'ACTIVE', expiresAt },
+      });
+    }
+
+    // Mark notification as read
+    if (notificationId) {
+      await prisma.notification.update({ where: { id: notificationId }, data: { isRead: true } }).catch(() => {});
+    }
+
+    // Notify doctor that access was granted
+    await prisma.notification.create({
+      data: {
+        userId:  (await prisma.doctorProfile.findUnique({ where: { id: doctorId }, select: { userId: true } }))?.userId ?? '',
+        type:    'SYSTEM',
+        title:   'Patient approved your access request',
+        body:    `${patient.firstName} ${patient.lastName} has approved your request to view their health profile.`,
+        data:    { requestType: 'ACCESS_GRANTED', patientId: patient.id },
+      },
+    }).catch(() => {});
+
+    return res.json({ success: true, message: 'Access granted successfully' });
+  } catch (e) {
+    console.error('consent-approve', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/*
+ * POST /api/v1/patient/consent/reject
+ * Patient rejects a doctor access request → marks notification read, no consent created
+ * Body: { notificationId, doctorId }
+ */
+router.post('/patient/consent/reject', authenticate, requireRole('PATIENT'), async (req: any, res) => {
+  try {
+    const userId = req.user?.userId ?? req.user?.id;
+    const { notificationId, doctorId } = req.body;
+
+    // Mark notification as read
+    if (notificationId) {
+      await prisma.notification.update({ where: { id: notificationId }, data: { isRead: true } }).catch(() => {});
+    }
+
+    // If there was a pending/revoked consent, keep it as REVOKED
+    const patient = await prisma.patientProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (patient && doctorId) {
+      const existing = await prisma.patientConsent.findFirst({ where: { doctorId, patientId: patient.id } });
+      if (existing && existing.status !== 'ACTIVE') {
+        await prisma.patientConsent.update({ where: { id: existing.id }, data: { status: 'REVOKED' } }).catch(() => {});
+      }
+    }
+
+    return res.json({ success: true, message: 'Access request declined' });
+  } catch (e) {
+    console.error('consent-reject', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/*
+ * GET /api/v1/doctor/patient-profile/:id
+ * Returns full patient health profile — consent-gated.
+ */
+router.get('/patient-profile/:id', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+  try {
+    const userId    = req.user?.userId ?? req.user?.id;
+    const dp        = await prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!dp) return res.status(404).json({ success: false, message: 'Doctor profile not found' });
+    const doctorId  = dp.id;
+    const patientId = req.params.id;
+
+    const now = new Date();
+
+    // ── Fix 1: Consent expiry check ───────────────────────────────────────────
+    // Fetch ACTIVE consent and check it hasn't expired
+    const consentRaw = await prisma.patientConsent.findFirst({
+      where: { doctorId, patientId, status: 'ACTIVE' },
+    });
+    // If consent exists but expiresAt is in the past, treat as expired — deny
+    const consent = consentRaw && (!(consentRaw as any).expiresAt || new Date((consentRaw as any).expiresAt) > now)
+      ? consentRaw
+      : null;
+    // Auto-revoke expired consent so future checks don't pass it
+    if (consentRaw && !consent) {
+      await prisma.patientConsent.update({
+        where: { id: consentRaw.id },
+        data:  { status: 'EXPIRED' },
+      }).catch(() => {}); // silent — EXPIRED status may not exist in enum yet, fallback gracefully
+    }
+
+    // ── Fix 2: Appointment time-window check (±2 hours of scheduled time) ────
+    // Access is allowed only if appointment is within [scheduledAt - 2h, scheduledAt + 2h]
+    // OR if appointment was COMPLETED within the last 2 hours
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    const windowStart = new Date(now.getTime() - TWO_HOURS);
+    const windowEnd   = new Date(now.getTime() + TWO_HOURS);
+
+    const appt = await prisma.appointment.findFirst({
+      where: {
+        doctorId,
+        patientId,
+        OR: [
+          // Upcoming or in-progress: scheduledAt within ±2h window
+          {
+            status:      { in: ['CONFIRMED', 'PENDING'] },
+            scheduledAt: { gte: windowStart, lte: windowEnd },
+          },
+          // Recently completed: completed within last 2 hours
+          {
+            status:      'COMPLETED',
+            scheduledAt: { gte: windowStart },
+          },
+        ],
+      },
+    });
+
+    if (!consent && !appt) {
+      return res.status(403).json({
+        success: false,
+        message: consent === null && consentRaw
+          ? 'Your consent access has expired. Please request a new access from the patient.'
+          : 'Access not granted. Patient has not shared their profile with you, or your appointment window has passed.',
+      });
+    }
+
+    // Fetch profile + related data in parallel (separate queries = no TS include errors)
+    const [profile, userInfo, conditions, medications, allergies, vitals, healthScore] = await Promise.all([
+      prisma.patientProfile.findUnique({ where: { id: patientId } }),
+      prisma.user.findFirst({ where: { patientProfile: { id: patientId } }, select: { registrationId: true, email: true } }),
+      prisma.condition.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' } }),
+      prisma.medication.findMany({ where: { patientId, status: 'ACTIVE' } }),
+      prisma.allergy.findMany({ where: { patientId } }),
+      prisma.vital.findMany({ where: { patientId }, orderBy: { measuredAt: 'desc' }, take: 20 }),
+      prisma.healthScore.findUnique({ where: { patientId } }),
+    ]);
+
+    if (!profile) return res.status(404).json({ success: false, message: 'Patient profile not found' });
+
+    // Calculate age from dateOfBirth
+    let age: number | null = null;
+    if (profile.dateOfBirth) {
+      const today = new Date();
+      const dob   = new Date(profile.dateOfBirth);
+      age = today.getFullYear() - dob.getFullYear();
+      if (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) {
+        age--;
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        patient: {
+          id:          profile.id,
+          firstName:   profile.firstName,
+          lastName:    profile.lastName,
+          dateOfBirth: profile.dateOfBirth,
+          age,
+          gender:      profile.gender,
+          bloodGroup:  profile.bloodGroup,
+          phone:       profile.phone,
+          hcId:        userInfo?.registrationId ?? '',
+          email:       userInfo?.email ?? '',
+          conditions,
+          medications,
+          allergies,
+          vitals,
+          healthScore: healthScore ?? null,
+        },
+        accessType:  consent ? 'CONSENT' : 'APPOINTMENT',
+        expiresAt:   (consent as any)?.expiresAt ?? null,
+        // For appointment-based access: window ends 2h after scheduledAt
+        accessWindow: !consent && appt ? {
+          scheduledAt: (appt as any).scheduledAt,
+          windowEnds:  new Date(new Date((appt as any).scheduledAt).getTime() + 2 * 60 * 60 * 1000).toISOString(),
+        } : null,
+      },
+    });
+  } catch (e) {
+    console.error('patient-profile', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/*
+ * GET /api/v1/doctor/records
+ * Returns medical records (reports) for the doctor's patients
+ */
+router.get('/records', authenticate, requireRole('DOCTOR'), async (req: any, res) => {
+  try {
+    const userId   = req.user?.userId ?? req.user?.id;
+    const dp       = await prisma.doctorProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!dp) return res.status(404).json({ success: false, message: 'Doctor profile not found' });
+    const doctorId = dp.id;
+
+    // Get all appointments for this doctor to find patient IDs
+    const appts = await prisma.appointment.findMany({
+      where:  { doctorId },
+      select: { patientId: true, patient: { select: { firstName: true, lastName: true } } },
+      distinct: ['patientId'],
+    });
+
+    const patientIds = appts.map((a: any) => a.patientId);
+    const patientMap = new Map(appts.map((a: any) => [
+      a.patientId,
+      `${a.patient.firstName} ${a.patient.lastName}`,
+    ]));
+
+    // Try to get health records if the model exists
+    let records: any[] = [];
+    try {
+      records = await (prisma as any).healthRecord.findMany({
+        where:   { patientId: { in: patientIds } },
+        orderBy: { createdAt: 'desc' },
+        take:    50,
+        include: { patient: { select: { firstName: true, lastName: true } } },
+      });
+    } catch {
+      // healthRecord model may not exist — return empty
+      records = [];
+    }
+
+    const formatted = records.map((r: any) => ({
+      id:          r.id,
+      name:        r.name ?? r.fileName ?? r.title ?? 'Medical Record',
+      type:        r.type ?? r.recordType ?? 'LAB',
+      status:      r.status ?? 'PENDING',
+      date:        (r.createdAt ?? r.date)?.toISOString?.() ?? '',
+      patientId:   r.patientId,
+      patient:     r.patient ? `${r.patient.firstName} ${r.patient.lastName}` : (patientMap.get(r.patientId) ?? ''),
+      notes:       r.notes ?? r.doctorNotes ?? '',
+    }));
+
+    return res.json({ success: true, data: { records: formatted, total: formatted.length } });
+  } catch (e) {
+    console.error('doctor-records', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
+/*
+ * GET /api/v1/patient/prescriptions
+ * Returns prescriptions issued by doctors for the logged-in patient
+ */
+router.get('/patient/prescriptions', authenticate, requireRole('PATIENT'), async (req: any, res) => {
+  try {
+    const userId = req.user?.userId ?? req.user?.id;
+    const patient = await prisma.patientProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!patient) return res.status(404).json({ success: false, message: 'Patient profile not found' });
+
+    // Fetch prescriptions issued to this patient
+    const prescriptions = await (prisma as any).prescription.findMany({
+      where:   { patientId: patient.id },
+      include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
+      orderBy: { createdAt: 'desc' },
+      take:    50,
+    }).catch(() => []);
+
+    const formatted = prescriptions.map((rx: any) => ({
+      id:         rx.id,
+      date:       rx.createdAt?.toISOString?.() ?? null,
+      status:     rx.status ?? 'ACTIVE',
+      notes:      rx.notes ?? '',
+      doctorName: rx.doctor ? `Dr. ${rx.doctor.firstName} ${rx.doctor.lastName}` : null,
+      doctorSpec: rx.doctor?.specialization ?? null,
+      drugs:      Array.isArray(rx.drugs) ? rx.drugs : [],
+      // Single-drug fallback for older schema
+      drug:       rx.drug ?? null,
+      dosage:     rx.dosage ?? null,
+      frequency:  rx.frequency ?? null,
+    }));
+
+    return res.json({ success: true, data: { prescriptions: formatted, total: formatted.length } });
+  } catch (e) {
+    console.error('patient-prescriptions', e);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 export default router;

@@ -1,0 +1,33 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_routes_1 = __importDefault(require("./auth.routes"));
+const patient_routes_1 = __importDefault(require("./patient.routes"));
+const hospital_routes_1 = __importDefault(require("./hospital.routes"));
+const appointment_routes_1 = __importDefault(require("./appointment.routes"));
+const community_routes_1 = __importDefault(require("./community.routes"));
+const article_routes_1 = __importDefault(require("./article.routes"));
+const subscription_routes_1 = __importDefault(require("./subscription.routes"));
+const public_routes_1 = __importDefault(require("./public.routes"));
+const platform_routes_1 = __importDefault(require("./platform.routes"));
+const admin_routes_1 = __importDefault(require("./admin.routes"));
+const doctor_routes_1 = __importDefault(require("./doctor.routes"));
+const notification_routes_1 = __importDefault(require("./notification.routes"));
+const router = (0, express_1.Router)();
+router.use('/auth', auth_routes_1.default);
+router.use('/', patient_routes_1.default);
+router.use('/hospitals', hospital_routes_1.default);
+router.use('/appointments', appointment_routes_1.default);
+router.use('/communities', community_routes_1.default);
+router.use('/articles', article_routes_1.default);
+router.use('/subscription', subscription_routes_1.default);
+router.use('/public', public_routes_1.default);
+router.use('/platform', platform_routes_1.default);
+router.use('/admin', admin_routes_1.default);
+router.use('/doctor', doctor_routes_1.default);
+router.use('/notifications', notification_routes_1.default);
+exports.default = router;
+//# sourceMappingURL=index.js.map

@@ -1,8 +1,7 @@
+// src/middleware/consent.ts
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ApiResponse } from '../utils/apiResponse';
-
-const prisma = new PrismaClient();
 
 export const requireConsent = (patientIdParam = 'patientId') => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -12,16 +11,28 @@ export const requireConsent = (patientIdParam = 'patientId') => {
       }
 
       const patientId = req.params[patientIdParam] || req.body.patientId;
-      
+
       if (!patientId) {
         return ApiResponse.error(res, 'INVALID_INPUT', 'Patient ID required', 400);
+      }
+
+      // ── FIX: patientConsent.doctorId stores DoctorProfile.id, NOT User.id ──
+      // Previously this used req.user.userId directly which always failed because
+      // the JWT userId is the User table primary key, not the DoctorProfile key.
+      const doctorProfile = await prisma.doctorProfile.findUnique({
+        where:  { userId: req.user.userId },
+        select: { id: true },
+      });
+
+      if (!doctorProfile) {
+        return ApiResponse.error(res, 'NOT_FOUND', 'Doctor profile not found', 404);
       }
 
       const consent = await prisma.patientConsent.findFirst({
         where: {
           patientId,
-          doctorId: req.user.userId,
-          status: 'ACTIVE',
+          doctorId: doctorProfile.id,   // ← correct: DoctorProfile.id
+          status:   'ACTIVE',
           OR: [
             { expiresAt: null },
             { expiresAt: { gt: new Date() } },
@@ -34,7 +45,7 @@ export const requireConsent = (patientIdParam = 'patientId') => {
           res,
           'CONSENT_REQUIRED',
           'Patient consent required to access this data',
-          403
+          403,
         );
       }
 

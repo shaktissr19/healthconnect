@@ -2890,3 +2890,330 @@ Unique constraint failed on the fields: (`communityId`,`userId`)
     at $n.request (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6307)
     at l (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:130:9633)
     at joinCommunity (/var/www/healthconnect/healthconnect-api/src/controllers/community.controller.ts:21:15)
+[2026-03-23 04:11:20] error: PrismaClientValidationError: 
+Invalid `prisma.patientProfile.update()` invocation:
+
+{
+  where: {
+    id: "fc065622-eac3-4570-a289-9afd41c2d49e"
+  },
+  data: {
+    id: "fc065622-eac3-4570-a289-9afd41c2d49e",
+    userId: "34e6367c-bdfe-41df-88fa-92a804029bc8",
+    firstName: "Shakti",
+    lastName: "Rathour",
+    phone: "+918860694799",
+    dateOfBirth: new Date("1992-12-13T00:00:00.000Z"),
+    gender: "MALE",
+    bloodGroup: "O_POSITIVE",
+    rhFactor: "UNKNOWN",
+    profilePhotoUrl: null,
+    addressLine1: null,
+    addressLine2: null,
+    city: "Saharanpur",
+    state: "Uttar Pradesh",
+    pinCode: "247342",
+    country: "India",
+    languagePreference: "en",
+    insuranceProvider: null,
+    insurancePolicyNumber: null,
+    createdAt: "2026-03-22T16:21:21.628Z",
+    updatedAt: "2026-03-22T16:21:21.628Z",
+    emergencyContacts: [],
+                       ~~
+    email: "Shaktijnv2@gmail.com",
+    registrationId: "HCP10239",
+    isEmailVerified: false,
+    memberSince: "2026-03-22T16:21:21.628Z",
+    settings: null,
+    subscription: {
+      plan: "Basic",
+      tier: "FREE",
+      endDate: null,
+      features: {}
+    }
+  }
+}
+
+Argument `emergencyContacts`: Invalid value provided. Expected EmergencyContactUncheckedUpdateManyWithoutPatientNestedInput, provided ().
+    at wn (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at $n.handleRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6958)
+    at $n.handleAndLogRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at l (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at updateProfile (/var/www/healthconnect/healthconnect-api/src/controllers/patient.controller.ts:24:41)
+[2026-03-23 04:11:24] error: PrismaClientValidationError: 
+Invalid `prisma.patientProfile.update()` invocation:
+
+{
+  where: {
+    id: "fc065622-eac3-4570-a289-9afd41c2d49e"
+  },
+  data: {
+    id: "fc065622-eac3-4570-a289-9afd41c2d49e",
+    userId: "34e6367c-bdfe-41df-88fa-92a804029bc8",
+    firstName: "Shakti",
+    lastName: "Rathour",
+    phone: "+918860694799",
+    dateOfBirth: new Date("1992-12-13T00:00:00.000Z"),
+    gender: "MALE",
+    bloodGroup: "O_POSITIVE",
+    rhFactor: "UNKNOWN",
+    profilePhotoUrl: null,
+    addressLine1: null,
+    addressLine2: null,
+    city: "Saharanpur",
+    state: "Uttar Pradesh",
+    pinCode: "247342",
+    country: "India",
+    languagePreference: "en",
+    insuranceProvider: null,
+    insurancePolicyNumber: null,
+    createdAt: "2026-03-22T16:21:21.628Z",
+    updatedAt: "2026-03-22T16:21:21.628Z",
+    emergencyContacts: [],
+                       ~~
+    email: "Shaktijnv2@gmail.com",
+    registrationId: "HCP10239",
+    isEmailVerified: false,
+    memberSince: "2026-03-22T16:21:21.628Z",
+    settings: null,
+    subscription: {
+      plan: "Basic",
+      tier: "FREE",
+      endDate: null,
+      features: {}
+    }
+  }
+}
+
+Argument `emergencyContacts`: Invalid value provided. Expected EmergencyContactUncheckedUpdateManyWithoutPatientNestedInput, provided ().
+    at wn (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at $n.handleRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6958)
+    at $n.handleAndLogRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at l (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at updateProfile (/var/www/healthconnect/healthconnect-api/src/controllers/patient.controller.ts:24:41)
+[2026-03-23 07:52:56] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:131:47)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-28 14:18:22] error: PrismaClientValidationError: 
+Invalid `prisma.patientProfile.update()` invocation:
+
+{
+  where: {
+    id: "eabecfc7-3ec9-4a82-88bf-965467023c5a"
+  },
+  data: {
+    id: "eabecfc7-3ec9-4a82-88bf-965467023c5a",
+    userId: "f334f074-7d6d-430a-b8c7-9b842486ffcf",
+    firstName: "Rahul",
+    lastName: "Sharma",
+    phone: null,
+    dateOfBirth: new Date("1990-06-15T00:00:00.000Z"),
+    gender: "MALE",
+    bloodGroup: "O_POSITIVE",
+    rhFactor: "UNKNOWN",
+    profilePhotoUrl: null,
+    addressLine1: "42 Lajpat Nagar, New Delhi",
+    addressLine2: null,
+    city: "New Delhi",
+    state: "Delhi",
+    pinCode: "110024",
+    country: "India",
+    languagePreference: "en",
+    insuranceProvider: null,
+    insurancePolicyNumber: null,
+    createdAt: "2026-02-26T18:05:42.541Z",
+    updatedAt: "2026-02-26T18:05:42.541Z",
+    emergencyContacts: [
+      {
+        id: "81db3033-9bbb-45e4-9bbe-e4546f34c2ae",
+        patientId: "eabecfc7-3ec9-4a82-88bf-965467023c5a",
+        name: "Sunita Sharma",
+        relationship: "Mother",
+        phone: "9876511111",
+        email: null,
+        isPrimary: true,
+        createdAt: "2026-02-26T18:05:43.109Z",
+        updatedAt: "2026-02-26T18:05:43.109Z"
+      },
+      {
+        id: "5e54fbb7-5642-4030-9273-f575f9a2ba3d",
+        patientId: "eabecfc7-3ec9-4a82-88bf-965467023c5a",
+        name: "Anil Sharma",
+        relationship: "Father",
+        phone: "9876522222",
+        email: null,
+        isPrimary: false,
+        createdAt: "2026-02-26T18:05:43.109Z",
+        updatedAt: "2026-02-26T18:05:43.109Z"
+      }
+    ],
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    email: "rahul@demo.hc",
+    registrationId: "HCP00234",
+    isEmailVerified: true,
+    memberSince: "2026-02-26T18:05:39.138Z",
+    settings: {
+      id: "16507a69-9e4d-499a-b8e9-223f636c2d6c",
+      userId: "f334f074-7d6d-430a-b8c7-9b842486ffcf",
+      allowDoctorAccess: true,
+      allowAnonymousPosting: true,
+      contributeToResearch: false,
+      emailNotifications: true,
+      smsNotifications: true,
+      pushNotifications: true,
+      appointmentReminders: true,
+      medicationReminders: true,
+      communityActivity: true,
+      weeklyHealthSummary: false,
+      language: "en",
+      timezone: "Asia/Kolkata",
+      createdAt: "2026-02-26T18:05:43.131Z",
+      updatedAt: "2026-02-26T18:05:43.131Z"
+    },
+    subscription: {
+      plan: "Basic",
+      tier: "FREE",
+      endDate: null,
+      features: {}
+    }
+  }
+}
+
+Argument `emergencyContacts`: Invalid value provided. Expected EmergencyContactUncheckedUpdateManyWithoutPatientNestedInput, provided (Object, Object).
+    at wn (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at $n.handleRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6958)
+    at $n.handleAndLogRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at l (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at updateProfile (/var/www/healthconnect/healthconnect-api/src/controllers/patient.controller.ts:24:41)
+[2026-03-28 14:18:28] error: PrismaClientValidationError: 
+Invalid `prisma.patientProfile.update()` invocation:
+
+{
+  where: {
+    id: "eabecfc7-3ec9-4a82-88bf-965467023c5a"
+  },
+  data: {
+    id: "eabecfc7-3ec9-4a82-88bf-965467023c5a",
+    userId: "f334f074-7d6d-430a-b8c7-9b842486ffcf",
+    firstName: "Rahul",
+    lastName: "Sharma",
+    phone: null,
+    dateOfBirth: new Date("1990-06-15T00:00:00.000Z"),
+    gender: "MALE",
+    bloodGroup: "O_POSITIVE",
+    rhFactor: "UNKNOWN",
+    profilePhotoUrl: null,
+    addressLine1: "42 Lajpat Nagar, New Delhi",
+    addressLine2: null,
+    city: "New Delhi",
+    state: "Delhi",
+    pinCode: "110024",
+    country: "India",
+    languagePreference: "en",
+    insuranceProvider: null,
+    insurancePolicyNumber: null,
+    createdAt: "2026-02-26T18:05:42.541Z",
+    updatedAt: "2026-02-26T18:05:42.541Z",
+    emergencyContacts: [
+      {
+        id: "81db3033-9bbb-45e4-9bbe-e4546f34c2ae",
+        patientId: "eabecfc7-3ec9-4a82-88bf-965467023c5a",
+        name: "Sunita Sharma",
+        relationship: "Mother",
+        phone: "9876511111",
+        email: null,
+        isPrimary: true,
+        createdAt: "2026-02-26T18:05:43.109Z",
+        updatedAt: "2026-02-26T18:05:43.109Z"
+      },
+      {
+        id: "5e54fbb7-5642-4030-9273-f575f9a2ba3d",
+        patientId: "eabecfc7-3ec9-4a82-88bf-965467023c5a",
+        name: "Anil Sharma",
+        relationship: "Father",
+        phone: "9876522222",
+        email: null,
+        isPrimary: false,
+        createdAt: "2026-02-26T18:05:43.109Z",
+        updatedAt: "2026-02-26T18:05:43.109Z"
+      }
+    ],
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    email: "rahul@demo.hc",
+    registrationId: "HCP00234",
+    isEmailVerified: true,
+    memberSince: "2026-02-26T18:05:39.138Z",
+    settings: {
+      id: "16507a69-9e4d-499a-b8e9-223f636c2d6c",
+      userId: "f334f074-7d6d-430a-b8c7-9b842486ffcf",
+      allowDoctorAccess: true,
+      allowAnonymousPosting: true,
+      contributeToResearch: false,
+      emailNotifications: true,
+      smsNotifications: true,
+      pushNotifications: true,
+      appointmentReminders: true,
+      medicationReminders: true,
+      communityActivity: true,
+      weeklyHealthSummary: false,
+      language: "en",
+      timezone: "Asia/Kolkata",
+      createdAt: "2026-02-26T18:05:43.131Z",
+      updatedAt: "2026-02-26T18:05:43.131Z"
+    },
+    subscription: {
+      plan: "Basic",
+      tier: "FREE",
+      endDate: null,
+      features: {}
+    }
+  }
+}
+
+Argument `emergencyContacts`: Invalid value provided. Expected EmergencyContactUncheckedUpdateManyWithoutPatientNestedInput, provided (Object, Object).
+    at wn (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at $n.handleRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6958)
+    at $n.handleAndLogRequestError (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at l (/var/www/healthconnect/healthconnect-api/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at updateProfile (/var/www/healthconnect/healthconnect-api/src/controllers/patient.controller.ts:24:41)
+[2026-03-29 14:21:20] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:131:47)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-29 16:23:09] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:131:47)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-29 16:23:43] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:133:30)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-29 16:24:31] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:133:30)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-29 16:53:24] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:133:30)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-29 17:13:11] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:133:30)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-29 17:17:28] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:133:30)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-03-30 06:13:08] error: Email failed: Appointment Confirmed — Dr. Arvind Sharma on 30 March 2026 → Forbidden
+[2026-03-30 12:23:12] error: Error: Invalid credentials
+    at Function.unauthorized (/var/www/healthconnect/healthconnect-api/src/utils/apiError.ts:21:12)
+    at Object.login (/var/www/healthconnect/healthconnect-api/src/services/auth.service.ts:133:30)
+    at login (/var/www/healthconnect/healthconnect-api/src/controllers/auth.controller.ts:14:20)
+[2026-04-01 05:33:11] error: Email failed: Appointment Confirmed — Dr. Arvind Sharma on 1 April 2026 → Forbidden
+[2026-04-03 07:15:18] error: Email failed: Appointment Confirmed — Dr. Arvind Sharma on 31 March 2026 → Forbidden

@@ -493,3 +493,273 @@ export async function updateAvailability(req: Request, res: Response) {
     return ok(res, { availability: updated });
   } catch (e) { console.error('updateAvailability', e); return err(res, 'Server error', 500); }
 }
+
+// =============================================================================
+// GET /doctor/patients/search?q=<name or HC registration ID>
+// Returns ONLY: id, hcId, firstName, lastName, age, city
+// No health data — PHI safe, pre-consent
+// =============================================================================
+export async function searchPatients(req: Request, res: Response) {
+  try {
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
+    const doctorId = await getDoctorId(userId);
+    if (!doctorId) return err(res, 'Doctor profile not found', 404);
+
+    const q = ((req.query.q as string) ?? '').trim();
+    if (q.length < 2) return err(res, 'Search query must be at least 2 characters', 400);
+
+    // Search by name OR by HC registration ID (registrationId on User)
+    const patients = await prisma.patientProfile.findMany({
+      where: {
+        OR: [
+          { firstName:  { contains: q, mode: 'insensitive' } },
+          { lastName:   { contains: q, mode: 'insensitive' } },
+          // Full name search: concat firstName+lastName via individual contains
+          {
+            AND: [
+              { firstName: { contains: q.split(' ')[0], mode: 'insensitive' } },
+              q.split(' ').length > 1
+                ? { lastName: { contains: q.split(' ')[1], mode: 'insensitive' } }
+                : {},
+            ],
+          },
+          // HC ID search via user.registrationId
+          { user: { registrationId: { contains: q, mode: 'insensitive' } } },
+        ],
+      },
+      select: {
+        id:          true,
+        firstName:   true,
+        lastName:    true,
+        dateOfBirth: true,
+        city:        true,
+        user: {
+          select: { registrationId: true },
+        },
+      },
+      take: 10, // cap results — doctor doesn't need a huge list
+    });
+
+    // For each result, check if doctor already has ACTIVE consent or a pending request
+    const existingConsents = await prisma.patientConsent.findMany({
+      where: {
+        doctorId,
+        patientId: { in: patients.map(p => p.id) },
+      },
+      select: { patientId: true, status: true },
+    });
+    const consentMap = new Map(existingConsents.map(c => [c.patientId, c.status]));
+
+    // Check for pending notification-based requests already sent
+    const pendingNotifs = await prisma.notification.findMany({
+      where: {
+        type:   'SYSTEM',
+        data:   { path: ['requestType'], equals: 'DOCTOR_ACCESS_REQUEST' },
+        userId: { in: patients.map(p => p.user.registrationId) }, // filtered below
+      },
+      select: { data: true, userId: true },
+    });
+    // Map by patientUserId → pending
+    const pendingSet = new Set(pendingNotifs.map(n => (n.data as any)?.patientUserId));
+
+    const results = patients.map(p => {
+      const age = p.dateOfBirth
+        ? Math.floor((Date.now() - new Date(p.dateOfBirth).getTime()) / (365.25 * 86400000))
+        : null;
+      const consentStatus = consentMap.get(p.id);
+      let requestStatus: 'NONE' | 'PENDING' | 'ACCEPTED' | 'REJECTED' = 'NONE';
+      if (consentStatus === 'ACTIVE')   requestStatus = 'ACCEPTED';
+      if (consentStatus === 'REVOKED')  requestStatus = 'REJECTED';
+      if (pendingSet.has(p.id))        requestStatus = 'PENDING';
+
+      return {
+        id:            p.id,
+        hcId:          p.user.registrationId,
+        firstName:     p.firstName,
+        lastName:      p.lastName,
+        age,
+        city:          p.city ?? '—',
+        accessRequestStatus: requestStatus,
+      };
+    });
+
+    return ok(res, { patients: results, total: results.length });
+  } catch (e) { console.error('searchPatients', e); return err(res, 'Server error', 500); }
+}
+
+// =============================================================================
+// POST /doctor/access-request
+// Body: { patientId: string }
+// Creates a SYSTEM notification for the patient — no schema migration needed.
+// Patient approves via POST /patient/consents (already exists).
+// =============================================================================
+export async function sendAccessRequest(req: Request, res: Response) {
+  try {
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
+    const doctorId = await getDoctorId(userId);
+    if (!doctorId) return err(res, 'Doctor profile not found', 404);
+
+    const { patientId } = req.body;
+    if (!patientId) return err(res, 'patientId is required', 400);
+
+    // Verify patient exists
+    const patient = await prisma.patientProfile.findUnique({
+      where:  { id: patientId },
+      select: { userId: true, firstName: true, lastName: true },
+    });
+    if (!patient) return err(res, 'Patient not found', 404);
+
+    // Check for existing active consent
+    const existing = await prisma.patientConsent.findFirst({
+      where: { doctorId, patientId, status: 'ACTIVE' },
+    });
+    if (existing) return err(res, 'You already have active access to this patient', 409);
+
+    // Check for already pending request (notification not yet acted on)
+    const alreadyPending = await prisma.notification.findFirst({
+      where: {
+        userId: patient.userId,
+        type:   'SYSTEM',
+        isRead: false,
+        data:   { path: ['requestType'], equals: 'DOCTOR_ACCESS_REQUEST' },
+      },
+    });
+    if (alreadyPending) {
+      // Check it's from this doctor
+      const data = alreadyPending.data as any;
+      if (data?.doctorId === doctorId) {
+        return err(res, 'Access request already pending for this patient', 409);
+      }
+    }
+
+    // Fetch doctor details for notification content
+    const doctor = await prisma.doctorProfile.findUnique({
+      where:  { id: doctorId },
+      select: { firstName: true, lastName: true, specialization: true, hcDoctorId: true, isVerified: true },
+    });
+    if (!doctor) return err(res, 'Doctor profile not found', 404);
+
+    const doctorName = `Dr. ${doctor.firstName} ${doctor.lastName}`;
+    const spec       = doctor.specialization ?? 'General Physician';
+
+    // Create in-app notification for patient
+    await prisma.notification.create({
+      data: {
+        userId: patient.userId,
+        type:   'SYSTEM',
+        title:  `${doctorName} has requested access to your health profile`,
+        body:   `${doctorName} (${spec}) is requesting access to view your HealthConnect health profile. You can accept or decline this request.`,
+        data:   {
+          requestType:   'DOCTOR_ACCESS_REQUEST',
+          doctorId,
+          doctorName,
+          doctorSpec:    spec,
+          hcDoctorId:    doctor.hcDoctorId ?? '',
+          isVerified:    doctor.isVerified,
+          patientId,
+          patientUserId: patient.userId,
+        },
+      },
+    });
+
+    // TODO: trigger email via your email service here
+    // e.g. emailService.sendAccessRequestEmail(patient.email, doctorName, acceptLink, rejectLink)
+
+    return ok(res, {
+      message: 'Access request sent. Patient will be notified by in-app notification and email.',
+      patientId,
+      doctorId,
+    });
+  } catch (e) { console.error('sendAccessRequest', e); return err(res, 'Server error', 500); }
+}
+
+// =============================================================================
+// GET /doctor/access-requests
+// Returns all consents (ACTIVE/REVOKED) + pending notification-based requests
+// for this doctor — so they can see the full picture in Sent Requests tab
+// =============================================================================
+export async function getAccessRequests(req: Request, res: Response) {
+  try {
+    const userId   = (req as any).user?.userId ?? (req as any).user?.id;
+    const doctorId = await getDoctorId(userId);
+    if (!doctorId) return err(res, 'Doctor profile not found', 404);
+
+    // 1. Accepted/revoked consents from PatientConsent table
+    const consents = await prisma.patientConsent.findMany({
+      where:   { doctorId },
+      include: {
+        patient: {
+          select: {
+            id:        true,
+            firstName: true,
+            lastName:  true,
+            user:      { select: { registrationId: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // 2. Pending requests — unread SYSTEM notifications with DOCTOR_ACCESS_REQUEST
+    //    that this doctor sent (identified by doctorId in data)
+    const pendingNotifs = await prisma.notification.findMany({
+      where: {
+        type:   'SYSTEM',
+        isRead: false,
+        data:   { path: ['doctorId'], equals: doctorId },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Build unified list
+    const acceptedIds = new Set(consents.map(c => c.patientId));
+
+    const consentRows = consents.map(c => ({
+      id:            c.id,
+      patientId:     c.patient.id,
+      patientName:   `${c.patient.firstName} ${c.patient.lastName}`,
+      patientHcId:   c.patient.user.registrationId,
+      status:        c.status === 'ACTIVE' ? 'ACCEPTED' : 'REJECTED',
+      createdAt:     c.createdAt.toISOString(),
+    }));
+
+    const pendingRows = pendingNotifs
+      .filter(n => {
+        const d = n.data as any;
+        return d?.patientId && !acceptedIds.has(d.patientId);
+      })
+      .map(n => {
+        const d = n.data as any;
+        return {
+          id:          n.id,
+          patientId:   d.patientId,
+          patientName: '', // patient name not stored in notification — privacy
+          patientHcId: '',
+          status:      'PENDING',
+          createdAt:   n.createdAt.toISOString(),
+        };
+      });
+
+    // Enrich pending rows with patient name/hcId safely
+    const pendingPatientIds = pendingRows.map(r => r.patientId).filter(Boolean);
+    if (pendingPatientIds.length) {
+      const pendingPatients = await prisma.patientProfile.findMany({
+        where:  { id: { in: pendingPatientIds } },
+        select: { id: true, firstName: true, lastName: true, user: { select: { registrationId: true } } },
+      });
+      const pMap = new Map(pendingPatients.map(p => [p.id, p]));
+      pendingRows.forEach(r => {
+        const p = pMap.get(r.patientId);
+        if (p) {
+          r.patientName = `${p.firstName} ${p.lastName}`;
+          r.patientHcId = p.user.registrationId;
+        }
+      });
+    }
+
+    return ok(res, {
+      requests: [...pendingRows, ...consentRows],
+      total:    pendingRows.length + consentRows.length,
+    });
+  } catch (e) { console.error('getAccessRequests', e); return err(res, 'Server error', 500); }
+}

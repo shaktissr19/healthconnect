@@ -445,26 +445,163 @@ export const removeReaction = async (req: Request, res: Response, next: NextFunc
 };
 
 
+// ─── POST /api/v1/communities/request ────────────────────────────────────────
 export const submitCommunityRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, category, reason } = req.body;
-    if (!name?.trim() || !reason?.trim())
-      return ApiResponse.error(res, 'BAD_REQUEST', 'Name and reason are required', 400);
+    // Accept both field names: 'communityName' (frontend v4) and 'name' (legacy)
+    const communityName = (req.body.communityName || req.body.name || '').trim();
+    const { category, reason } = req.body;
+    const userId = (req as any).user?.userId ?? null; // optionalAuth — may be null for guests
 
-    const requestedBy   = req.user?.userId || null;
-    const requesterEmail = req.user?.userId
-      ? (await prisma.user.findUnique({ where:{ id: req.user.userId }, select:{ email:true } }))?.email
-      : null;
+    if (!communityName)
+      return ApiResponse.error(res, 'BAD_REQUEST', 'Community name is required', 400);
+    if (!reason?.trim())
+      return ApiResponse.error(res, 'BAD_REQUEST', 'Reason is required', 400);
 
-    await (prisma as any).$executeRaw`
-      INSERT INTO community_requests
-        (id, name, category, reason, "requestedBy", "requesterEmail", status, "createdAt", "updatedAt")
-      VALUES
-        (gen_random_uuid()::text, ${name.trim()}, ${category||null}, ${reason.trim()},
-         ${requestedBy}, ${requesterEmail||null}, 'PENDING', NOW(), NOW())
-    `;
+    // Return existing PENDING request instead of creating a duplicate
+    if (userId) {
+      const existing = await prisma.communityRequest.findFirst({
+        where: { requestedBy: userId, status: 'PENDING' },
+      });
+      if (existing) {
+        return ApiResponse.success(res, existing, 'You already have a pending request');
+      }
+    }
 
-    return ApiResponse.created(res, null, 'Request submitted. Our team will review within 48 hours.');
+    const request = await prisma.communityRequest.create({
+      data: {
+        communityName,
+        category: category?.trim() || null,
+        reason:   reason.trim(),
+        requestedBy: userId,
+      },
+    });
+
+    // Notify all admins in-app (non-fatal)
+    try {
+      const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+      if (admins.length > 0) {
+        await prisma.notification.createMany({
+          data: admins.map((admin) => ({
+            userId: admin.id,
+            type:   'COMMUNITY_REQUEST' as const,
+            title:  '💡 New Community Request',
+            body:   `"${communityName}" was requested${userId ? ' by a member' : ' by a guest'}.`,
+            data:   { requestId: request.id, link: '/admin/community-requests' },
+            isRead: false,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    } catch (notifErr) {
+      console.warn('[submitCommunityRequest] Notification error (non-fatal):', notifErr);
+    }
+
+    return ApiResponse.created(res, request, 'Request submitted. Our team will review within 48 hours.');
+  } catch (e) { next(e); }
+};
+
+// ─── GET /api/v1/communities/request/status ──────────────────────────────────
+export const getMyCommunityRequest = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user?.userId;
+    if (!userId) return ApiResponse.error(res, 'UNAUTHORIZED', 'Authentication required', 401);
+
+    const request = await prisma.communityRequest.findFirst({
+      where:   { requestedBy: userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!request) return ApiResponse.notFound(res, 'No request found');
+    return ApiResponse.success(res, request);
+  } catch (e) { next(e); }
+};
+
+// ─── GET /api/v1/communities/admin/requests ───────────────────────────────────
+export const adminListCommunityRequests = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if ((req as any).user?.role !== 'ADMIN')
+      return ApiResponse.forbidden(res, 'Admin access required');
+
+    const { status } = req.query;
+    const page  = Math.max(1, parseInt((req.query.page  as string) || '1'));
+    const limit = Math.min(50, parseInt((req.query.limit as string) || '20'));
+    const where: any = status ? { status } : {};
+
+    const [requests, total] = await Promise.all([
+      prisma.communityRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip:  (page - 1) * limit,
+        take:  limit,
+        include: {
+          requester: {
+            select: {
+              id: true, email: true,
+              patientProfile: { select: { firstName: true, lastName: true } },
+              doctorProfile:  { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+      }),
+      prisma.communityRequest.count({ where }),
+    ]);
+
+    return ApiResponse.success(res, {
+      requests,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (e) { next(e); }
+};
+
+// ─── PATCH /api/v1/communities/admin/requests/:id ────────────────────────────
+export const adminReviewCommunityRequest = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if ((req as any).user?.role !== 'ADMIN')
+      return ApiResponse.forbidden(res, 'Admin access required');
+
+    const { id }                = req.params;
+    const { status, adminNote } = req.body;
+    const adminId               = (req as any).user?.userId;
+
+    if (!['APPROVED', 'REJECTED'].includes(status))
+      return ApiResponse.error(res, 'BAD_REQUEST', 'Status must be APPROVED or REJECTED', 400);
+
+    const request = await prisma.communityRequest.update({
+      where: { id },
+      data: {
+        status,
+        adminNote:  adminNote?.trim() || null,
+        reviewedBy: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    // Notify the requester (non-fatal)
+    if (request.requestedBy) {
+      try {
+        const isApproved = status === 'APPROVED';
+        await prisma.notification.create({
+          data: {
+            userId: request.requestedBy,
+            type:   'COMMUNITY_REQUEST_UPDATE' as const,
+            title:  isApproved ? '✅ Community Request Approved!' : '❌ Community Request Update',
+            body:   isApproved
+              ? `Great news! "${request.communityName}" has been approved and will be live soon.`
+              : `Your request for "${request.communityName}" was not approved.${adminNote ? ` Reason: ${adminNote}` : ''}`,
+            data:   { requestId: request.id, link: '/communities' },
+            isRead: false,
+          },
+        });
+      } catch (notifErr) {
+        console.warn('[adminReviewCommunityRequest] Notification error (non-fatal):', notifErr);
+      }
+    }
+
+    return ApiResponse.success(res, request);
   } catch (e) { next(e); }
 };
 

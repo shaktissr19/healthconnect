@@ -35,4 +35,14 @@ router.delete('/comments/:commentId', communityController.deleteComment);
 router.post('/posts/:postId/react', validate(reactionSchema), communityController.reactToPost);
 router.delete('/posts/:postId/react', communityController.removeReaction);
 
+// ── Community Requests ────────────────────────────────────────────────────────
+// POST   /api/v1/communities/request        — submit request (auth optional via optionalAuth)
+// GET    /api/v1/communities/request/status — get own request status (authenticated)
+// GET    /api/v1/communities/admin/requests — list all requests (admin only — enforced in controller)
+// PATCH  /api/v1/communities/admin/requests/:id — approve/reject (admin only)
+router.post('/request',               optionalAuth, communityController.submitCommunityRequest);
+router.get('/request/status',         communityController.getMyCommunityRequest);
+router.get('/admin/requests',         communityController.adminListCommunityRequests);
+router.patch('/admin/requests/:id',   communityController.adminReviewCommunityRequest);
+
 export default router;
