@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# logs (IMPORTANT FIX)
+logs/
+*.log
+
+# prevent tracking backend logs from frontend
+../healthconnect-api/logs/
