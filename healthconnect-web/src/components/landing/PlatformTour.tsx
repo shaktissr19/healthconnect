@@ -103,7 +103,7 @@ export default function PlatformTour() {
   const s = SLIDES[active];
 
   return (
-    <section style={{ background:'#fff', padding:'48px 48px 0' }}>
+    <section id="platform-tour" style={{ background:'#fff', padding:'48px 48px 0' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
 
@@ -188,8 +188,18 @@ export default function PlatformTour() {
                 {s.note}
               </div>
 
-              <Link href="/?home=1#signup" className="pt-cta" style={{ background:s.accent, boxShadow:`0 4px 16px ${s.accent}45` }}>
-                Get Started →
+              <Link
+                href={
+                  s.title === 'Doctor Dashboard' ? '/?home=1#signup&role=doctor' :
+                  s.title === 'Hospital Directory' ? '/?home=1#signup&role=hospital' :
+                  '/?home=1#signup'
+                }
+                className="pt-cta"
+                style={{ background:s.accent, boxShadow:`0 4px 16px ${s.accent}45` }}
+              >
+                {s.title === 'Doctor Dashboard' ? 'Join as a Doctor →' :
+                 s.title === 'Hospital Directory' ? 'Register Hospital →' :
+                 'Get Started →'}
               </Link>
             </div>
           </div>

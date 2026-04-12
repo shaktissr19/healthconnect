@@ -30,14 +30,18 @@ const C = {
 const SNOOZE_KEY  = 'hc_onboarding_snoozed';
 const DONE_KEY    = 'hc_onboarding_done';
 
-export function isOnboardingDone():    boolean { return localStorage.getItem(DONE_KEY)   === 'true'; }
+export function isOnboardingDone():    boolean { return localStorage.getItem(DONE_KEY) === 'true'; }
 export function isOnboardingSnoozed(): boolean {
   const v = localStorage.getItem(SNOOZE_KEY);
   if (!v) return false;
-  // Snooze lasts for the current browser session only (sessionStorage would also work)
-  return v === 'session';
+  // Snooze expires after 24 hours — re-shows modal the next day
+  const snoozedAt = parseInt(v, 10);
+  if (isNaN(snoozedAt)) { localStorage.removeItem(SNOOZE_KEY); return false; }
+  const hoursElapsed = (Date.now() - snoozedAt) / 3_600_000;
+  if (hoursElapsed > 24) { localStorage.removeItem(SNOOZE_KEY); return false; }
+  return true;
 }
-export function snoozeOnboarding()  { localStorage.setItem(SNOOZE_KEY, 'session'); }
+export function snoozeOnboarding()  { localStorage.setItem(SNOOZE_KEY, String(Date.now())); }
 export function completeOnboarding(){ localStorage.setItem(DONE_KEY, 'true'); localStorage.removeItem(SNOOZE_KEY); }
 
 // ── Shared input style ────────────────────────────────────────────────────
@@ -107,7 +111,7 @@ function PrimaryBtn({ children, onClick, disabled, loading }: any) {
 // PATIENT ONBOARDING
 // Steps: 1-About You  2-Contact  3-Emergency Contact
 // ─────────────────────────────────────────────────────────────────────────────
-function PatientOnboarding({ onComplete, onSnooze }: { onComplete: () => void; onSnooze: () => void }) {
+function PatientOnboarding({ onComplete, onSnooze, onStepChange }: { onComplete: () => void; onSnooze: () => void; onStepChange: (s: number) => void }) {
   const [step,    setStep]    = useState(0);
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
@@ -143,10 +147,10 @@ function PatientOnboarding({ onComplete, onSnooze }: { onComplete: () => void; o
     setSaving(true); setError('');
     try {
       // Step 0+1 data saved together at end, or per step — save all at final step
-      if (step < 2) { setStep(s => s + 1); setSaving(false); return; }
+      if (step < 2) { const ns = step + 1; setStep(ns); onStepChange(ns); setSaving(false); return; }
 
       // Final step — save everything
-      await api.patch('/patient/profile', {
+      await api.put('/patient/profile', {
         dateOfBirth:  dob,
         gender:       gender.toUpperCase(),
         bloodGroup:   bloodGroup || undefined,
@@ -156,7 +160,7 @@ function PatientOnboarding({ onComplete, onSnooze }: { onComplete: () => void; o
       });
 
       // Save emergency contact
-      await api.post('/patient/emergency-contacts', {
+      await api.post('/patient/profile/emergency-contacts', {
         name: ecName, relationship: ecRelation, phone: ecPhone, isPrimary: true,
       }).catch(() => {}); // non-blocking if endpoint varies
 
@@ -173,28 +177,26 @@ function PatientOnboarding({ onComplete, onSnooze }: { onComplete: () => void; o
       {/* Step 0: About You */}
       {step === 0 && (
         <>
-          <div style={{ row2 } as any}>
-            <div style={row2}>
-              <Field l="Date of Birth" required>
-                <input type="date" value={dob} onChange={e => setDob(e.target.value)}
-                  style={{ ...inp, colorScheme: 'dark' }} max={new Date().toISOString().split('T')[0]} />
-              </Field>
-              <Field l="Gender" required>
-                <Select value={gender} onChange={setGender} placeholder="Select gender"
-                  options={[{v:'MALE',l:'Male'},{v:'FEMALE',l:'Female'},{v:'OTHER',l:'Other'},{v:'PREFER_NOT_TO_SAY',l:'Prefer not to say'}]} />
-              </Field>
-            </div>
-            <Field l="Blood Group">
-              <Select value={bloodGroup} onChange={setBloodGroup} placeholder="Select blood group (optional)"
-                options={[
-                  {v:'A_POSITIVE',l:'A+'},{v:'A_NEGATIVE',l:'A-'},
-                  {v:'B_POSITIVE',l:'B+'},{v:'B_NEGATIVE',l:'B-'},
-                  {v:'AB_POSITIVE',l:'AB+'},{v:'AB_NEGATIVE',l:'AB-'},
-                  {v:'O_POSITIVE',l:'O+'},{v:'O_NEGATIVE',l:'O-'},
-                  {v:'UNKNOWN',l:'Unknown'},
-                ]} />
+          <div style={row2}>
+            <Field l="Date of Birth" required>
+              <input type="date" value={dob} onChange={e => setDob(e.target.value)}
+                style={{ ...inp, colorScheme: 'dark' }} max={new Date().toISOString().split('T')[0]} />
+            </Field>
+            <Field l="Gender" required>
+              <Select value={gender} onChange={setGender} placeholder="Select gender"
+                options={[{v:'MALE',l:'Male'},{v:'FEMALE',l:'Female'},{v:'OTHER',l:'Other'},{v:'PREFER_NOT_TO_SAY',l:'Prefer not to say'}]} />
             </Field>
           </div>
+          <Field l="Blood Group">
+            <Select value={bloodGroup} onChange={setBloodGroup} placeholder="Select blood group (optional)"
+              options={[
+                {v:'A_POSITIVE',l:'A+'},{v:'A_NEGATIVE',l:'A-'},
+                {v:'B_POSITIVE',l:'B+'},{v:'B_NEGATIVE',l:'B-'},
+                {v:'AB_POSITIVE',l:'AB+'},{v:'AB_NEGATIVE',l:'AB-'},
+                {v:'O_POSITIVE',l:'O+'},{v:'O_NEGATIVE',l:'O-'},
+                {v:'UNKNOWN',l:'Unknown'},
+              ]} />
+          </Field>
           <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(20,184,166,0.06)', border: `1px solid ${C.border}`, fontSize: 12, color: C.txt2, marginTop: 4 }}>
             💡 This helps doctors provide better care and emergency services to use the right blood type.
           </div>
@@ -252,7 +254,7 @@ function PatientOnboarding({ onComplete, onSnooze }: { onComplete: () => void; o
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {step > 0 && (
-            <button onClick={() => setStep(s => s - 1)}
+            <button onClick={() => { const ns = step - 1; setStep(ns); onStepChange(ns); }}
               style={{ padding: '11px 20px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.txt2, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               ← Back
             </button>
@@ -274,7 +276,7 @@ function PatientOnboarding({ onComplete, onSnooze }: { onComplete: () => void; o
 // DOCTOR ONBOARDING
 // Steps: 0-Basic  1-Practice  2-Credentials  3-Journey (optional)
 // ─────────────────────────────────────────────────────────────────────────────
-function DoctorOnboarding({ onComplete, onSnooze }: { onComplete: () => void; onSnooze: () => void }) {
+function DoctorOnboarding({ onComplete, onSnooze, onStepChange }: { onComplete: () => void; onSnooze: () => void; onStepChange: (s: number) => void }) {
   const [step,   setStep]   = useState(0);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
@@ -319,7 +321,7 @@ function DoctorOnboarding({ onComplete, onSnooze }: { onComplete: () => void; on
   const handleSave = async () => {
     setSaving(true); setError('');
     try {
-      if (step < 3) { setStep(s => s + 1); setSaving(false); return; }
+      if (step < 3) { const ns = step + 1; setStep(ns); onStepChange(ns); setSaving(false); return; }
 
       // Build awards array from comma-separated string
       const awardsArr = awards.split(',').map(s => s.trim()).filter(Boolean);
@@ -462,7 +464,7 @@ function DoctorOnboarding({ onComplete, onSnooze }: { onComplete: () => void; on
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {step > 0 && (
-            <button onClick={() => setStep(s => s - 1)}
+            <button onClick={() => { const ns = step - 1; setStep(ns); onStepChange(ns); }}
               style={{ padding: '11px 20px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.txt2, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               ← Back
             </button>
@@ -484,7 +486,7 @@ function DoctorOnboarding({ onComplete, onSnooze }: { onComplete: () => void; on
 // HOSPITAL ONBOARDING
 // Steps: 0-Basic  1-Location  2-Details
 // ─────────────────────────────────────────────────────────────────────────────
-function HospitalOnboarding({ onComplete, onSnooze }: { onComplete: () => void; onSnooze: () => void }) {
+function HospitalOnboarding({ onComplete, onSnooze, onStepChange }: { onComplete: () => void; onSnooze: () => void; onStepChange: (s: number) => void }) {
   const [step,   setStep]   = useState(0);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
@@ -508,7 +510,7 @@ function HospitalOnboarding({ onComplete, onSnooze }: { onComplete: () => void; 
   const handleSave = async () => {
     setSaving(true); setError('');
     try {
-      if (step < 2) { setStep(s => s + 1); setSaving(false); return; }
+      if (step < 2) { const ns = step + 1; setStep(ns); onStepChange(ns); setSaving(false); return; }
       await api.put('/hospital/profile', {
         phone, hospitalType, registrationNumber: registrationNo,
         city, state, address,
@@ -590,7 +592,7 @@ function HospitalOnboarding({ onComplete, onSnooze }: { onComplete: () => void; 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {step > 0 && (
-            <button onClick={() => setStep(s => s - 1)}
+            <button onClick={() => { const ns = step - 1; setStep(ns); onStepChange(ns); }}
               style={{ padding: '11px 20px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.txt2, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
               ← Back
             </button>
@@ -625,7 +627,7 @@ export default function ProfileOnboardingModal({ role, userName, onClose }: Prop
     HOSPITAL: { steps: 3, icon: '🏥', color: '#F59E0B', label: 'Hospital Profile' },
   };
 
-  const [step, setCurrentStep] = useState(0); // tracked by child but reflected here for stepbar
+  const [currentStep, setCurrentStep] = useState(0); // synced from child via onStepChange
 
   const config = ROLE_CONFIG[role] ?? ROLE_CONFIG.PATIENT;
 
@@ -681,7 +683,18 @@ export default function ProfileOnboardingModal({ role, userName, onClose }: Prop
                 Just a few details to get you set up — takes under 2 minutes.
               </p>
             </div>
-            {/* No close button — use Remind me later instead */}
+            {/* Close / snooze button */}
+            <button onClick={handleSnooze}
+              title="Remind me later"
+              style={{
+                background: 'rgba(255,255,255,0.06)', border: `1px solid ${C.border}`,
+                color: C.txt2, width: 32, height: 32, borderRadius: '50%',
+                cursor: 'pointer', fontSize: 16, display: 'flex',
+                alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                transition: 'all 0.15s',
+              }}>
+              ✕
+            </button>
           </div>
 
           {/* Step pills */}
@@ -698,20 +711,27 @@ export default function ProfileOnboardingModal({ role, userName, onClose }: Prop
             ))}
           </div>
 
-          {/* Progress bar placeholder — children update step */}
+          {/* Progress bar — synced with child step via onStepChange */}
           <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
             {STEP_TITLES[role].map((_, i) => (
-              <div key={i} style={{ flex: 1, height: 3, borderRadius: 100, background: 'rgba(255,255,255,0.08)' }}
-                id={`hc-ob-step-${i}`} />
+              <div key={i} style={{
+                flex: 1, height: 3, borderRadius: 100,
+                background: i < currentStep
+                  ? config.color
+                  : i === currentStep
+                  ? `${config.color}60`
+                  : 'rgba(255,255,255,0.08)',
+                transition: 'background 0.3s',
+              }} />
             ))}
           </div>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px 28px' }}>
-          {role === 'PATIENT'  && <PatientOnboarding  onComplete={handleComplete} onSnooze={handleSnooze} />}
-          {role === 'DOCTOR'   && <DoctorOnboarding   onComplete={handleComplete} onSnooze={handleSnooze} />}
-          {role === 'HOSPITAL' && <HospitalOnboarding onComplete={handleComplete} onSnooze={handleSnooze} />}
+          {role === 'PATIENT'  && <PatientOnboarding  onComplete={handleComplete} onSnooze={handleSnooze} onStepChange={setCurrentStep} />}
+          {role === 'DOCTOR'   && <DoctorOnboarding   onComplete={handleComplete} onSnooze={handleSnooze} onStepChange={setCurrentStep} />}
+          {role === 'HOSPITAL' && <HospitalOnboarding onComplete={handleComplete} onSnooze={handleSnooze} onStepChange={setCurrentStep} />}
         </div>
       </div>
 

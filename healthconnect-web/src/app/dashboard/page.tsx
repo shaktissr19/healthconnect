@@ -1,6 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiStore';
+import { useAuthStore } from '@/store/authStore';
 import dynamic from 'next/dynamic';
 
 const HomePage             = dynamic(() => import('@/components/dashboard/pages/HomePage'),                 { ssr: false });
@@ -19,22 +20,49 @@ const SubscriptionPage     = dynamic(() => import('@/components/dashboard/pages/
 const ComingSoon           = dynamic(() => import('@/components/dashboard/pages/ComingSoon'),               { ssr: false });
 
 export default function DashboardPage() {
-  const { activePage, setActivePage } = useUIStore() as any;
+  const { activePage, setActivePage, resetToHome } = useUIStore() as any;
+  const user = useAuthStore(s => (s as any).user);
   const currentPage = activePage ?? 'home';
 
-  // Read ?tab= from URL on mount — allows direct linking to pages
-  // e.g. /dashboard?tab=profile from navbar Profile click
+  // Fresh-login guard — reset to Home on first dashboard mount after login.
+  // Uses a sessionStorage flag so it only fires once per login session,
+  // not on every route change or browser-back navigation.
+  useEffect(() => {
+    if (!user) return;
+    const loginKey = `hc_landed_${user.id ?? user.email}`;
+    if (!sessionStorage.getItem(loginKey)) {
+      // First time landing after this login — go to Home
+      sessionStorage.setItem(loginKey, '1');
+      resetToHome();
+    }
+  }, [user?.id]);
+
+  // Read ?tab= from URL on mount — only for genuine external deep-links.
+  // FIXED: Previously this ran on every mount including after login, causing
+  // the dashboard to always land on whatever ?tab= was last in the URL (e.g.
+  // my-health). Now we:
+  //   1. Only honour ?tab= if the URL actually contains it right now.
+  //   2. Always strip ?tab= immediately so it cannot persist across refreshes.
+  //   3. On a fresh login (no ?tab= in URL), activePage stays at 'home'.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const tab = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    // Always clean the URL — prevents stale ?tab= surviving a refresh
+    if (window.location.search) {
+      window.history.replaceState({}, '', '/dashboard');
+    }
     const validPages = ['home','my-health','vitals','symptoms','medications',
       'therapies','appointments','find-doctors','communities',
       'profile','settings','consents','subscription'];
+    // Only apply the tab if it was explicitly in the URL this load
+    // AND we are not coming from a fresh login (fresh login sets activePage
+    // to 'home' via uiStore.resetToHome() before redirecting to /dashboard)
     if (tab && validPages.includes(tab)) {
       setActivePage(tab);
-      // Clean the URL without triggering a navigation
-      window.history.replaceState({}, '', '/dashboard');
     }
+    // If no ?tab= → activePage stays at its current value ('home' for fresh login,
+    // or whatever the user was on if they manually refreshed mid-session)
   }, []);
 
   const pages: Record<string, React.ReactNode> = {

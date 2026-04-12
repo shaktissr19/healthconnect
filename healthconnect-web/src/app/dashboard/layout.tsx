@@ -492,9 +492,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      <SessionTimeoutManager />
 
-      
 
       {/* ── Layout shell ────────────────────────────────────────────────────── */}
       <div style={{ minHeight: '100vh', background: T.pageBg }}>
@@ -510,7 +508,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           // Full-width topbar: content shifts right by sidebar, down by topbar
         }}>
           {/* Email verification banner — shows when isEmailVerified === false */}
-          <EmailVerificationBanner />
           <EmailVerificationBanner />
           <main id="hc-main" style={{
             padding: '20px 28px 56px',

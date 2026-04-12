@@ -45,7 +45,10 @@ export function useProfileScore(profile: any, role: 'PATIENT' | 'DOCTOR' | 'HOSP
     let sections: ProfileSection[] = [];
 
     if (role === 'PATIENT') {
+      // name + email are always present from registration — ensures score starts > 0% for any signed-up user
       sections = [
+        { key: 'name',      label: 'Full name',               points:  8, done: !!(profile.firstName?.trim() || profile.user?.firstName?.trim()), action: 'profile' },
+        { key: 'email',     label: 'Email address',           points:  7, done: !!(profile.email?.trim()     || profile.user?.email?.trim()),     action: 'profile' },
         { key: 'basic',     label: 'Date of birth & gender',  points: 20, done: !!(profile.dateOfBirth && profile.gender),       action: 'profile' },
         { key: 'contact',   label: 'Phone & city',            points: 15, done: !!(profile.phone && profile.city),               action: 'profile' },
         { key: 'emergency', label: 'Emergency contact',       points: 15, done: !!(profile.emergencyContacts?.length > 0),       action: 'profile' },
@@ -166,11 +169,20 @@ export function ProfileCompletenessBanner({ score, role, sections, onGoToProfile
     HOSPITAL: 'Complete your hospital profile to attract more patients.',
   };
 
+  // Dynamic colours based on score — uses light theme to match warm-grey dashboard
+  const bgMap    = score >= 50 ? 'rgba(245,158,11,0.06)'  : 'rgba(239,68,68,0.05)';
+  const bdMap    = score >= 50 ? 'rgba(245,158,11,0.2)'   : 'rgba(239,68,68,0.18)';
+  const bdLeft   = score >= 50 ? 'rgba(245,158,11,0.55)'  : color;
+  const txtMain  = '#1E293B';
+  const txtSub   = '#475569';
+  const pillBg   = 'rgba(0,0,0,0.04)';
+  const pillBd   = 'rgba(0,0,0,0.08)';
+
   return (
     <div style={{
-      background:   'linear-gradient(135deg, #0C1628, #111E33)',
-      border:       `1px solid ${color}30`,
-      borderLeft:   `3px solid ${color}`,
+      background:   bgMap,
+      border:       `1px solid ${bdMap}`,
+      borderLeft:   `3px solid ${bdLeft}`,
       borderRadius: 14,
       padding:      '16px 20px',
       marginBottom: 20,
@@ -186,14 +198,14 @@ export function ProfileCompletenessBanner({ score, role, sections, onGoToProfile
       {/* Text */}
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color: C.txt }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: txtMain }}>
             Profile {score}% complete
           </span>
           <span style={{ fontSize: 11, color, fontWeight: 600, background: color + '15', padding: '1px 8px', borderRadius: 100 }}>
             {scoreLabel(score)}
           </span>
         </div>
-        <p style={{ color: C.txt2, fontSize: 12, margin: '0 0 8px' }}>
+        <p style={{ color: txtSub, fontSize: 12, margin: '0 0 8px' }}>
           {ROLE_MSG[role]}
         </p>
         {/* Quick list of what's missing */}
@@ -202,14 +214,14 @@ export function ProfileCompletenessBanner({ score, role, sections, onGoToProfile
             {incomplete.map(s => (
               <span key={s.key} style={{
                 fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 100,
-                background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`,
-                color: C.txt2,
+                background: pillBg, border: `1px solid ${pillBd}`,
+                color: txtSub,
               }}>
                 + {s.label}
               </span>
             ))}
             {sections.filter(s => !s.done).length > 3 && (
-              <span style={{ fontSize: 10, color: C.txt3 }}>
+              <span style={{ fontSize: 10, color: txtSub }}>
                 +{sections.filter(s => !s.done).length - 3} more
               </span>
             )}
@@ -234,7 +246,7 @@ export function ProfileCompletenessBanner({ score, role, sections, onGoToProfile
       <button onClick={() => setDismissed(true)}
         style={{
           position: 'absolute', top: 10, right: 12,
-          background: 'none', border: 'none', color: C.txt3,
+          background: 'none', border: 'none', color: txtSub,
           cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 2,
         }}>×</button>
     </div>
