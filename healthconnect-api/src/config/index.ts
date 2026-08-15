@@ -28,11 +28,12 @@ export const config = {
   },
 
   auth: {
-    // In production set COOKIE_DOMAIN=.healthconnect.sbs so both
-    // healthconnect.sbs and api.healthconnect.sbs can receive the access cookie.
+    // Production: COOKIE_DOMAIN=.healthconnect.sbs allows the frontend and API
+    // subdomains to participate in the same secure browser session.
     cookieDomain: process.env.COOKIE_DOMAIN || undefined,
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'hc_access',
     refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'hc_refresh',
+    sessionCookieName: process.env.SESSION_COOKIE_NAME || 'hc_session',
   },
 
   redis: {
