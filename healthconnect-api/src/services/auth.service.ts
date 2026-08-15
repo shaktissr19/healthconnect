@@ -7,6 +7,7 @@ import { generateToken, generateRefreshToken, verifyRefreshToken } from '../util
 import { generateRegistrationId } from '../utils/registrationId';
 import { generateAccessToken } from '../utils/helpers';
 import { prisma } from '../lib/prisma';
+import { config } from '../config';
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -23,6 +24,9 @@ const safeEqual = (a: string, b: string): boolean => {
     return false;
   }
 };
+
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+const absoluteSessionSeconds = () => config.auth.absoluteSessionHours * 60 * 60;
 
 export interface RegisterInput {
   email: string;
@@ -96,13 +100,16 @@ export const register = async (input: RegisterInput) => {
     }
   }
 
-  const payload = {
+  const accessPayload = {
     userId: user.id,
     role: user.role,
     registrationId: user.registrationId,
   };
-  const token = generateToken(payload);
-  const refreshToken = generateRefreshToken(payload);
+  const token = generateToken(accessPayload);
+  const refreshToken = generateRefreshToken({
+    ...accessPayload,
+    sessionStartedAt: nowSeconds(),
+  });
 
   await prisma.user.update({
     where: { id: user.id },
@@ -151,13 +158,16 @@ export const login = async ({ email, password }: { email: string; password: stri
   const match = await comparePassword(password, user.passwordHash);
   if (!match) throw ApiError.unauthorized('Invalid credentials');
 
-  const payload = {
+  const accessPayload = {
     userId: user.id,
     role: user.role,
     registrationId: user.registrationId,
   };
-  const token = generateToken(payload);
-  const refreshToken = generateRefreshToken(payload);
+  const token = generateToken(accessPayload);
+  const refreshToken = generateRefreshToken({
+    ...accessPayload,
+    sessionStartedAt: nowSeconds(),
+  });
 
   await prisma.user.update({
     where: { id: user.id },
@@ -190,22 +200,34 @@ export const logout = async (userId: string) => {
 export const refreshToken = async (token: string) => {
   try {
     const decoded = verifyRefreshToken(token);
+    const sessionStartedAt = decoded.sessionStartedAt ?? decoded.iat;
+    if (!sessionStartedAt) throw new Error('Missing session start');
+
+    const sessionAge = nowSeconds() - sessionStartedAt;
+    if (sessionAge < 0 || sessionAge >= absoluteSessionSeconds()) {
+      throw new Error('Absolute session expired');
+    }
+
     const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
 
     if (!user || !user.isActive || !user.refreshToken) throw new Error('Invalid');
     if (!safeEqual(hashToken(token), user.refreshToken)) throw new Error('Invalid');
 
-    // Use the current DB role/registration ID rather than trusting stale refresh claims.
-    const payload = {
+    // Use current DB role/registration ID instead of trusting stale refresh claims.
+    const accessPayload = {
       userId: user.id,
       role: user.role,
       registrationId: user.registrationId,
     };
 
-    const newAccessToken = generateToken(payload);
-    const newRefreshToken = generateRefreshToken(payload);
+    const newAccessToken = generateToken(accessPayload);
+    const newRefreshToken = generateRefreshToken({
+      ...accessPayload,
+      // Preserve the original login time so token rotation never extends the
+      // absolute authenticated-session window.
+      sessionStartedAt,
+    });
 
-    // Rotation makes the just-used refresh token invalid immediately.
     await prisma.user.update({
       where: { id: user.id },
       data: { refreshToken: hashToken(newRefreshToken) },
@@ -213,7 +235,7 @@ export const refreshToken = async (token: string) => {
 
     return { token: newAccessToken, refreshToken: newRefreshToken };
   } catch {
-    throw ApiError.unauthorized('Invalid or expired refresh token');
+    throw ApiError.unauthorized('Invalid, expired, or reauthentication-required session');
   }
 };
 
@@ -267,8 +289,37 @@ export const resetPassword = async (token: string, newPassword: string) => {
       passwordHash: hashed,
       passwordResetToken: null,
       passwordResetExpiry: null,
-      // A password reset is a security event: revoke the current refresh session.
       refreshToken: null,
+    },
+  });
+};
+
+export const changePassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !user.isActive) throw ApiError.unauthorized('Session is no longer active');
+
+  const matches = await comparePassword(currentPassword, user.passwordHash);
+  if (!matches) {
+    throw ApiError.badRequest('CURRENT_PASSWORD_INVALID', 'Current password is incorrect');
+  }
+
+  const reusesCurrent = await comparePassword(newPassword, user.passwordHash);
+  if (reusesCurrent) {
+    throw ApiError.badRequest('PASSWORD_REUSE', 'New password must be different from current password');
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      refreshToken: null,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
     },
   });
 };
