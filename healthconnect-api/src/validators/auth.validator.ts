@@ -1,28 +1,52 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['PATIENT', 'DOCTOR', 'HOSPITAL']),
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  phone: z.string().regex(/^\d{10}$/, 'Invalid phone number').optional(),
-});
+const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('Invalid email address')
+  .max(254, 'Email address is too long');
 
-export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
+const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128, 'Password must be at most 128 characters');
 
-export const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email address'),
-});
+export const registerSchema = z
+  .object({
+    email: emailSchema,
+    password: passwordSchema,
+    role: z.enum(['PATIENT', 'DOCTOR', 'HOSPITAL']),
+    firstName: z.string().trim().min(1, 'First name is required').max(100),
+    lastName: z.string().trim().min(1, 'Last name is required').max(100),
+    phone: z.string().regex(/^\d{10}$/, 'Invalid phone number').optional(),
+  })
+  .strict();
 
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1, 'Token is required'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-});
+export const loginSchema = z
+  .object({
+    email: emailSchema,
+    password: z.string().min(1, 'Password is required').max(128),
+  })
+  .strict();
 
-export const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
+export const forgotPasswordSchema = z
+  .object({
+    email: emailSchema,
+  })
+  .strict();
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, 'Token is required').max(512),
+    password: passwordSchema,
+  })
+  .strict();
+
+// Refresh is now cookie-first. The body field remains optional temporarily for
+// backward compatibility with non-browser clients during the migration.
+export const refreshTokenSchema = z
+  .object({
+    refreshToken: z.string().min(1).max(4096).optional(),
+  })
+  .strict();
