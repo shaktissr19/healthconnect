@@ -1,171 +1,210 @@
 'use client';
-// src/components/SessionTimeoutManager.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Mounts in root layout.tsx — runs on ALL pages.
-// Only activates when user is authenticated (isAuthenticated === true).
-//
-// Flow:
-//   0–10 min inactivity  → silent timer
-//   At 10 min            → warning modal with live countdown
-//   Warning modal        → "Stay Signed In" resets timer | "Sign Out Now" logs out
-//   Any activity         → resets timer, dismisses warning if showing
-//   At 15 min            → clearAuth() + navigate to / + inactivity toast
-//   Tab hidden           → timer pauses, resumes when tab visible
-//
-// Inactivity = no mousemove, keydown, scroll, touchstart, click
-// ─────────────────────────────────────────────────────────────────────────────
+
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
-const TIMEOUT_MS       = 15 * 60 * 1000;  // 15 minutes total
-const WARNING_AT_MS    = 10 * 60 * 1000;  // Show warning at 10 minutes
-const WARNING_DURATION = TIMEOUT_MS - WARNING_AT_MS;  // 5 minutes warning window
-const TICK_MS          = 1000;  // Check every second
+// HealthConnect browser-session policy:
+//   0–13 min idle  : silent
+//   13–15 min idle : explicit warning
+//   15 min idle    : server logout + local logout
+// The backend separately enforces the absolute reauthentication window.
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const WARNING_AT_MS = 13 * 60 * 1000;
+const WARNING_DURATION_MS = IDLE_TIMEOUT_MS - WARNING_AT_MS;
+const CHECK_INTERVAL_MS = 1000;
+const ACTIVITY_WRITE_THROTTLE_MS = 5000;
+const LAST_ACTIVITY_KEY = 'hc_last_activity';
+
+const readSharedActivity = (): number => {
+  if (typeof window === 'undefined') return Date.now();
+  const raw = window.localStorage.getItem(LAST_ACTIVITY_KEY);
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : Date.now();
+};
+
+const writeSharedActivity = (value: number) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LAST_ACTIVITY_KEY, String(value));
+};
 
 export default function SessionTimeoutManager() {
   const { isAuthenticated, clearAuth, _hasHydrated } = useAuthStore();
+  const [showWarning, setShowWarning] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(
+    WARNING_DURATION_MS / 1000,
+  );
+  const [renewing, setRenewing] = useState(false);
 
-  const [showWarning,       setShowWarning]       = useState(false);
-  const [secondsRemaining,  setSecondsRemaining]  = useState(WARNING_DURATION / 1000);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastWriteRef = useRef(0);
+  const warningRef = useRef(false);
+  const logoutStartedRef = useRef(false);
 
-  const lastActivityRef  = useRef<number>(Date.now());
-  const intervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isHiddenRef      = useRef<boolean>(false);
-  const hiddenAtRef      = useRef<number>(0);
-
-  // ── Reset activity timestamp on any user interaction ─────────────────────
-  const resetActivity = useCallback(() => {
-    lastActivityRef.current = Date.now();
-    if (showWarning) {
-      setShowWarning(false);
-      setSecondsRemaining(WARNING_DURATION / 1000);
-    }
+  useEffect(() => {
+    warningRef.current = showWarning;
   }, [showWarning]);
 
-  // ── Logout due to inactivity ──────────────────────────────────────────────
-  const handleTimeout = useCallback(() => {
-    setShowWarning(false);
-    clearAuth();
-    // Show inactivity message via URL param — picked up by home page or toast
-    window.location.replace('/?session=expired');
-  }, [clearAuth]);
+  const clearTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
 
-  // ── Stay signed in ────────────────────────────────────────────────────────
-  const handleStaySignedIn = useCallback(() => {
-    resetActivity();
-    setShowWarning(false);
-    setSecondsRemaining(WARNING_DURATION / 1000);
-  }, [resetActivity]);
+  const performLogout = useCallback(
+    async (reason: 'idle' | 'manual') => {
+      if (logoutStartedRef.current) return;
+      logoutStartedRef.current = true;
+      clearTimer();
+      setShowWarning(false);
 
-  // ── Sign out now ─────────────────────────────────────────────────────────
+      try {
+        await api.post('/auth/logout');
+      } catch {
+        // Cookies/session may already be expired; local cleanup must still happen.
+      } finally {
+        clearAuth();
+        try {
+          window.localStorage.removeItem(LAST_ACTIVITY_KEY);
+        } catch {
+          // Ignore storage failures during logout.
+        }
+        window.location.replace(reason === 'idle' ? '/?session=expired' : '/');
+      }
+    },
+    [clearAuth, clearTimer],
+  );
+
+  const recordActivity = useCallback(() => {
+    // Once the warning is visible, require an explicit Stay Signed In action.
+    // This prevents background/accidental mouse movement from renewing a
+    // sensitive healthcare session without clear user intent.
+    if (warningRef.current) return;
+
+    const now = Date.now();
+    if (now - lastWriteRef.current < ACTIVITY_WRITE_THROTTLE_MS) return;
+    lastWriteRef.current = now;
+    writeSharedActivity(now);
+  }, []);
+
+  const handleStaySignedIn = useCallback(async () => {
+    if (renewing) return;
+    setRenewing(true);
+
+    try {
+      // Explicitly rotate/validate the refresh session. The backend preserves
+      // the original session start time, so this cannot bypass the absolute
+      // reauthentication limit.
+      await api.post('/auth/refresh', {});
+      const now = Date.now();
+      lastWriteRef.current = now;
+      writeSharedActivity(now);
+      setSecondsRemaining(WARNING_DURATION_MS / 1000);
+      setShowWarning(false);
+    } catch {
+      await performLogout('idle');
+    } finally {
+      setRenewing(false);
+    }
+  }, [performLogout, renewing]);
+
   const handleSignOutNow = useCallback(() => {
-    setShowWarning(false);
-    clearAuth();
-    window.location.replace('/');
-  }, [clearAuth]);
+    void performLogout('manual');
+  }, [performLogout]);
 
-  // ── Main timer effect — runs when authenticated ───────────────────────────
   useEffect(() => {
     if (!_hasHydrated || !isAuthenticated) {
-      // Clear any running timer when logged out
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      clearTimer();
       setShowWarning(false);
+      logoutStartedRef.current = false;
       return;
     }
 
-    // Activity events to track
-    const events = ['mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
-    events.forEach(ev => window.addEventListener(ev, resetActivity, { passive: true }));
+    logoutStartedRef.current = false;
 
-    // Tab visibility change — pause timer when hidden
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        isHiddenRef.current = true;
-        hiddenAtRef.current = Date.now();
-      } else {
-        if (isHiddenRef.current) {
-          // Add the time the tab was hidden to last activity
-          // so we don't time out a user who switched tabs briefly
-          const hiddenFor = Date.now() - hiddenAtRef.current;
-          lastActivityRef.current += hiddenFor;
-          isHiddenRef.current = false;
-        }
+    const existing = readSharedActivity();
+    if (!window.localStorage.getItem(LAST_ACTIVITY_KEY)) {
+      writeSharedActivity(existing);
+    }
+
+    const events = ['mousemove', 'keydown', 'scroll', 'touchstart', 'click'] as const;
+    events.forEach((event) =>
+      window.addEventListener(event, recordActivity, { passive: true }),
+    );
+
+    // Storage events keep multiple HealthConnect tabs synchronized. The timer
+    // intentionally does NOT pause when a tab becomes hidden.
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== LAST_ACTIVITY_KEY || warningRef.current) return;
+      if (event.newValue) {
+        setShowWarning(false);
+        setSecondsRemaining(WARNING_DURATION_MS / 1000);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('storage', handleStorage);
 
-    // Reset activity on mount
-    lastActivityRef.current = Date.now();
-
-    // Main interval — checks inactivity every second
+    clearTimer();
     intervalRef.current = setInterval(() => {
-      if (isHiddenRef.current) return; // Paused while tab is hidden
+      const lastActivity = readSharedActivity();
+      const elapsed = Date.now() - lastActivity;
 
-      const elapsed = Date.now() - lastActivityRef.current;
-
-      if (elapsed >= TIMEOUT_MS) {
-        // Hard logout
-        clearInterval(intervalRef.current!);
-        intervalRef.current = null;
-        handleTimeout();
+      if (elapsed >= IDLE_TIMEOUT_MS) {
+        void performLogout('idle');
         return;
       }
 
       if (elapsed >= WARNING_AT_MS) {
-        // Show warning and count down remaining seconds
-        const remaining = Math.ceil((TIMEOUT_MS - elapsed) / 1000);
-        setSecondsRemaining(remaining);
+        setSecondsRemaining(Math.max(0, Math.ceil((IDLE_TIMEOUT_MS - elapsed) / 1000)));
         setShowWarning(true);
-      } else {
-        // Still in safe zone — hide warning if somehow showing
-        if (showWarning) setShowWarning(false);
+      } else if (warningRef.current) {
+        setShowWarning(false);
+        setSecondsRemaining(WARNING_DURATION_MS / 1000);
       }
-    }, TICK_MS);
+    }, CHECK_INTERVAL_MS);
 
     return () => {
-      events.forEach(ev => window.removeEventListener(ev, resetActivity));
-      document.removeEventListener('visibilitychange', handleVisibility);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      events.forEach((event) => window.removeEventListener(event, recordActivity));
+      window.removeEventListener('storage', handleStorage);
+      clearTimer();
     };
-  }, [_hasHydrated, isAuthenticated, resetActivity, handleTimeout, showWarning]);
+  }, [
+    _hasHydrated,
+    isAuthenticated,
+    clearTimer,
+    performLogout,
+    recordActivity,
+  ]);
 
-  // Format seconds as MM:SS
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return `${minutes}:${remainder.toString().padStart(2, '0')}`;
   };
 
-  // Don't render anything if not authenticated or warning not showing
   if (!isAuthenticated || !showWarning) return null;
 
   return (
     <>
-      {/* ── Warning Modal Overlay ─────────────────────────────────────── */}
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(15, 23, 42, 0.7)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 20,
-        animation: 'stmFadeIn 0.25s ease',
-      }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="hc-session-warning-title"
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(15, 23, 42, 0.7)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+          animation: 'stmFadeIn 0.25s ease',
+        }}
+      >
         <div style={{
-          background: '#fff',
-          borderRadius: 24,
-          padding: '40px 36px',
+          background: '#fff', borderRadius: 24, padding: '40px 36px',
           maxWidth: 420, width: '100%',
           boxShadow: '0 24px 80px rgba(15,23,42,0.22)',
-          textAlign: 'center',
-          animation: 'stmSlideUp 0.25s ease',
+          textAlign: 'center', animation: 'stmSlideUp 0.25s ease',
         }}>
-          {/* Icon */}
           <div style={{
             width: 64, height: 64, borderRadius: '50%',
             background: '#FFF7ED', border: '2px solid #FED7AA',
@@ -175,30 +214,25 @@ export default function SessionTimeoutManager() {
             ⏱️
           </div>
 
-          {/* Heading */}
-          <h2 style={{
-            margin: '0 0 8px',
-            fontSize: 22, fontWeight: 800, color: '#0F172A',
-            fontFamily: 'DM Sans, sans-serif', letterSpacing: '-0.3px',
+          <h2 id="hc-session-warning-title" style={{
+            margin: '0 0 8px', fontSize: 22, fontWeight: 800,
+            color: '#0F172A', fontFamily: 'DM Sans, sans-serif',
+            letterSpacing: '-0.3px',
           }}>
             Still there?
           </h2>
 
-          {/* Subtitle */}
           <p style={{
-            margin: '0 0 24px',
-            fontSize: 14.5, color: '#64748B',
+            margin: '0 0 24px', fontSize: 14.5, color: '#64748B',
             fontFamily: 'DM Sans, sans-serif', lineHeight: 1.65,
           }}>
-            You've been inactive for a while. For your security, you'll be signed out automatically.
+            For your privacy, HealthConnect signs you out after 15 minutes of inactivity.
+            Confirm that you want to continue this session.
           </p>
 
-          {/* Countdown */}
           <div style={{
-            background: '#FFF7ED',
-            border: '1.5px solid #FED7AA',
-            borderRadius: 14, padding: '16px',
-            marginBottom: 24,
+            background: '#FFF7ED', border: '1.5px solid #FED7AA',
+            borderRadius: 14, padding: '16px', marginBottom: 24,
           }}>
             <div style={{
               fontSize: 13, fontWeight: 600, color: '#92400E',
@@ -207,48 +241,43 @@ export default function SessionTimeoutManager() {
             }}>
               SIGNING OUT IN
             </div>
-            <div style={{
+            <div aria-live="polite" style={{
               fontSize: 44, fontWeight: 900, color: '#C2410C',
-              fontFamily: 'DM Sans, sans-serif', letterSpacing: '-1px',
-              lineHeight: 1,
+              fontFamily: 'DM Sans, sans-serif', letterSpacing: '-1px', lineHeight: 1,
             }}>
               {formatTime(secondsRemaining)}
             </div>
           </div>
 
-          {/* Buttons */}
           <div style={{ display: 'flex', gap: 10, flexDirection: 'column' }}>
             <button
-              onClick={handleStaySignedIn}
+              onClick={() => void handleStaySignedIn()}
+              disabled={renewing}
+              autoFocus
               style={{
                 width: '100%', padding: '14px',
-                background: 'linear-gradient(135deg, #0D9488, #14B8A6)',
-                border: 'none', borderRadius: 12,
-                color: '#fff', fontSize: 15, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                background: renewing ? '#94A3B8' : 'linear-gradient(135deg, #0D9488, #14B8A6)',
+                border: 'none', borderRadius: 12, color: '#fff',
+                fontSize: 15, fontWeight: 700,
+                cursor: renewing ? 'wait' : 'pointer',
+                fontFamily: 'DM Sans, sans-serif',
                 boxShadow: '0 4px 16px rgba(20,184,166,0.3)',
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.transform = ''}>
-              ✓ Stay Signed In
+            >
+              {renewing ? 'Checking session…' : '✓ Stay Signed In'}
             </button>
+
             <button
               onClick={handleSignOutNow}
+              disabled={renewing}
               style={{
-                width: '100%', padding: '13px',
-                background: '#fff', border: '1.5px solid #E2E8F0',
-                borderRadius: 12, color: '#64748B',
-                fontSize: 14, fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                width: '100%', padding: '13px', background: '#fff',
+                border: '1.5px solid #E2E8F0', borderRadius: 12,
+                color: '#64748B', fontSize: 14, fontWeight: 600,
+                cursor: renewing ? 'not-allowed' : 'pointer',
+                fontFamily: 'DM Sans, sans-serif',
               }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = '#FECACA';
-                (e.currentTarget as HTMLElement).style.color = '#DC2626';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = '#E2E8F0';
-                (e.currentTarget as HTMLElement).style.color = '#64748B';
-              }}>
+            >
               Sign Out Now
             </button>
           </div>
@@ -256,8 +285,8 @@ export default function SessionTimeoutManager() {
       </div>
 
       <style>{`
-        @keyframes stmFadeIn   { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes stmSlideUp  { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
+        @keyframes stmFadeIn { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes stmSlideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
       `}</style>
     </>
   );
