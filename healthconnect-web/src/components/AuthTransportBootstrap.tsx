@@ -7,9 +7,17 @@ import { useAuthStore } from '@/store/authStore';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.healthconnect.sbs/api/v1';
 const SESSION_COOKIE_NAME = 'hc_session';
+const LEGACY_COOKIE_NAME = 'hc_token';
 
 let configured = false;
 let refreshPromise: Promise<void> | null = null;
+
+const clearLegacyAuthCookie = () => {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${LEGACY_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+  // Also attempt the production parent-domain variant used by some deployments.
+  document.cookie = `${LEGACY_COOKIE_NAME}=; path=/; domain=.healthconnect.sbs; max-age=0; SameSite=Lax; Secure`;
+};
 
 const hasSessionHint = () => {
   if (typeof document === 'undefined') return false;
@@ -90,17 +98,13 @@ configureAxiosTransport();
 export default function AuthTransportBootstrap() {
   useEffect(() => {
     let cancelled = false;
+    clearLegacyAuthCookie();
 
     const validateSession = async () => {
       const state = useAuthStore.getState();
       const shouldValidate = state.isAuthenticated || hasSessionHint();
 
-      if (!shouldValidate) {
-        // Local UI state cannot manufacture a session. If neither the persisted
-        // UI state nor server-issued non-secret hint exists, remain signed out.
-        if (state.isAuthenticated) useAuthStore.getState().clearAuth();
-        return;
-      }
+      if (!shouldValidate) return;
 
       try {
         // /auth/me is authoritative. If the access cookie expired, the Axios
