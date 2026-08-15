@@ -40,6 +40,10 @@ export const refreshCookieOptions = (): CookieOptions => ({
 
 export const sessionCookieOptions = (): CookieOptions => ({
   ...baseCookieOptions(),
+  // hc_session contains only the literal value "1". It is deliberately readable
+  // by the frontend so it can decide whether /auth/me bootstrap is worth calling;
+  // no identity, role, JWT, or authorization data is exposed.
+  httpOnly: false,
   path: '/',
   maxAge: durationToMs(config.jwt.refreshExpiresIn, 7 * 24 * 60 * 60 * 1000),
 });
@@ -51,8 +55,6 @@ export const setAuthCookies = (
 ): void => {
   res.cookie(config.auth.accessCookieName, accessToken, accessCookieOptions());
   res.cookie(config.auth.refreshCookieName, refreshToken, refreshCookieOptions());
-  // This contains no identity/credential data. It only lets Next middleware
-  // know a refreshable browser session may exist after the 15m access cookie expires.
   res.cookie(config.auth.sessionCookieName, '1', sessionCookieOptions());
 };
 
