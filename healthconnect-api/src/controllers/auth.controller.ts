@@ -84,6 +84,24 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
   }
 };
 
+export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await AuthService.changePassword(
+      req.user!.userId,
+      req.body.currentPassword,
+      req.body.newPassword,
+    );
+    clearAuthCookies(res);
+    return ApiResponse.success(
+      res,
+      null,
+      'Password changed successfully. Please sign in again.',
+    );
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const getCurrentUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = await AuthService.getCurrentUser(req.user!.userId);
