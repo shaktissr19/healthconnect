@@ -11,6 +11,11 @@ import routes from './routes';
 
 const app: Application = express();
 
+// The API is served behind one Nginx reverse proxy in production. Trusting one
+// proxy lets Express resolve req.ip from X-Forwarded-For instead of treating all
+// users as the local Nginx address. This is essential for per-client rate limits.
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
