@@ -43,6 +43,17 @@ export const resetPasswordSchema = z
   })
   .strict();
 
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required').max(128),
+    newPassword: passwordSchema,
+  })
+  .strict()
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    path: ['newPassword'],
+    message: 'New password must be different from the current password',
+  });
+
 // Refresh is now cookie-first. The body field remains optional temporarily for
 // backward compatibility with non-browser clients during the migration.
 export const refreshTokenSchema = z
