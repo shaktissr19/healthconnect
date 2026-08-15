@@ -2,6 +2,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.healthconnect.sbs/api/v1';
+
 export interface User {
   id: string;
   email: string;
@@ -28,7 +30,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -41,7 +43,20 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearAuth: () => {
+        const hadSession = get().isAuthenticated;
         set({ user: null, token: null, isAuthenticated: false });
+
+        // Existing dashboard components already call clearAuth() for sign-out.
+        // Keep those callers working while ensuring the HttpOnly refresh session
+        // is also revoked server-side. Logout is idempotent and cookie-aware.
+        if (hadSession && typeof window !== 'undefined') {
+          void fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+          }).catch(() => undefined);
+        }
       },
 
       setHasHydrated: (val) => set({ _hasHydrated: val }),
