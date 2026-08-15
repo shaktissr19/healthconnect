@@ -10,6 +10,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
   refreshTokenSchema,
 } from '../validators/auth.validator';
 import * as AuthService from '../services/auth.service';
@@ -28,6 +29,13 @@ router.post(
   authController.forgotPassword,
 );
 router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
+router.post(
+  '/change-password',
+  authRateLimiter,
+  authenticate,
+  validate(changePasswordSchema),
+  authController.changePassword,
+);
 router.get('/me', authenticate, authController.getCurrentUser);
 
 router.post(
