@@ -38,6 +38,12 @@ export const refreshCookieOptions = (): CookieOptions => ({
   maxAge: durationToMs(config.jwt.refreshExpiresIn, 7 * 24 * 60 * 60 * 1000),
 });
 
+export const sessionCookieOptions = (): CookieOptions => ({
+  ...baseCookieOptions(),
+  path: '/',
+  maxAge: durationToMs(config.jwt.refreshExpiresIn, 7 * 24 * 60 * 60 * 1000),
+});
+
 export const setAuthCookies = (
   res: Response,
   accessToken: string,
@@ -45,11 +51,15 @@ export const setAuthCookies = (
 ): void => {
   res.cookie(config.auth.accessCookieName, accessToken, accessCookieOptions());
   res.cookie(config.auth.refreshCookieName, refreshToken, refreshCookieOptions());
+  // This contains no identity/credential data. It only lets Next middleware
+  // know a refreshable browser session may exist after the 15m access cookie expires.
+  res.cookie(config.auth.sessionCookieName, '1', sessionCookieOptions());
 };
 
 export const clearAuthCookies = (res: Response): void => {
   const access = accessCookieOptions();
   const refresh = refreshCookieOptions();
+  const session = sessionCookieOptions();
 
   res.clearCookie(config.auth.accessCookieName, {
     httpOnly: access.httpOnly,
@@ -65,6 +75,14 @@ export const clearAuthCookies = (res: Response): void => {
     sameSite: refresh.sameSite,
     domain: refresh.domain,
     path: refresh.path,
+  });
+
+  res.clearCookie(config.auth.sessionCookieName, {
+    httpOnly: session.httpOnly,
+    secure: session.secure,
+    sameSite: session.sameSite,
+    domain: session.domain,
+    path: session.path,
   });
 };
 
