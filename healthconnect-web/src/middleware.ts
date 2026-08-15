@@ -10,6 +10,7 @@ const PROTECTED_PREFIXES = [
 ];
 
 const ACCESS_COOKIE_NAME = 'hc_access';
+const SESSION_COOKIE_NAME = 'hc_session';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,12 +21,13 @@ export function middleware(request: NextRequest) {
 
   if (!isProtected) return NextResponse.next();
 
-  // The cookie is HttpOnly: browser JavaScript cannot read it, but Next.js
-  // middleware can read it server-side. Full role validation remains enforced
-  // by the API; dashboard layouts also redirect mismatched roles.
-  const token = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
+  // hc_access is the short-lived credential. hc_session is only a non-secret
+  // hint that a refreshable session may still exist. Backend authorization is
+  // always authoritative for protected data.
+  const accessToken = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
+  const sessionHint = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
-  if (!token || token.trim() === '') {
+  if ((!accessToken || accessToken.trim() === '') && sessionHint !== '1') {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.searchParams.set('redirect', pathname);
