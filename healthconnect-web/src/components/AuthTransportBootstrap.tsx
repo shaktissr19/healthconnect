@@ -6,9 +6,17 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.healthconnect.sbs/api/v1';
+const SESSION_COOKIE_NAME = 'hc_session';
 
 let configured = false;
 let refreshPromise: Promise<void> | null = null;
+
+const hasSessionHint = () => {
+  if (typeof document === 'undefined') return false;
+  return document.cookie
+    .split(';')
+    .some((cookie) => cookie.trim() === `${SESSION_COOKIE_NAME}=1`);
+};
 
 const redirectToLoginIfNeeded = () => {
   if (typeof window === 'undefined') return;
@@ -29,9 +37,8 @@ const configureAxiosTransport = () => {
 
   api.defaults.withCredentials = true;
 
-  // Remove the legacy hc_token request/response interceptors defined in api.ts.
-  // Axios 1.x exposes clear() on the interceptor managers. This lets us migrate
-  // authentication without rewriting the large shared API contract in one step.
+  // Remove only the legacy auth interceptors configured by api.ts. The shared
+  // endpoint definitions remain untouched.
   api.interceptors.request.clear();
   api.interceptors.response.clear();
 
@@ -48,7 +55,8 @@ const configureAxiosTransport = () => {
         url.includes('/auth/refresh') ||
         url.includes('/auth/forgot-password') ||
         url.includes('/auth/reset-password') ||
-        url.includes('/auth/verify-email');
+        url.includes('/auth/verify-email') ||
+        url.includes('/auth/change-password');
 
       if (status !== 401 || !original || original._hcRetry || isAuthEndpoint) {
         return Promise.reject(error);
@@ -83,16 +91,28 @@ export default function AuthTransportBootstrap() {
   useEffect(() => {
     let cancelled = false;
 
-    const validatePersistedSession = async () => {
+    const validateSession = async () => {
       const state = useAuthStore.getState();
-      if (!state.isAuthenticated) return;
+      const shouldValidate = state.isAuthenticated || hasSessionHint();
+
+      if (!shouldValidate) {
+        // Local UI state cannot manufacture a session. If neither the persisted
+        // UI state nor server-issued non-secret hint exists, remain signed out.
+        if (state.isAuthenticated) useAuthStore.getState().clearAuth();
+        return;
+      }
 
       try {
+        // /auth/me is authoritative. If the access cookie expired, the Axios
+        // response interceptor performs one refresh and retries this request.
         const response = await api.get('/auth/me');
         if (cancelled) return;
+
         const payload = response?.data?.data ?? response?.data;
         if (payload?.id) {
           useAuthStore.getState().setAuth(payload);
+        } else {
+          useAuthStore.getState().clearAuth();
         }
       } catch {
         if (!cancelled) {
@@ -101,7 +121,7 @@ export default function AuthTransportBootstrap() {
       }
     };
 
-    void validatePersistedSession();
+    void validateSession();
     return () => {
       cancelled = true;
     };
