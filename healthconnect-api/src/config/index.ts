@@ -27,6 +27,14 @@ export const config = {
       process.env.JWT_REFRESH_EXPIRES_IN || process.env.REFRESH_TOKEN_EXPIRY || '7d',
   },
 
+  auth: {
+    // In production set COOKIE_DOMAIN=.healthconnect.sbs so both
+    // healthconnect.sbs and api.healthconnect.sbs can receive the access cookie.
+    cookieDomain: process.env.COOKIE_DOMAIN || undefined,
+    accessCookieName: process.env.ACCESS_COOKIE_NAME || 'hc_access',
+    refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'hc_refresh',
+  },
+
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
