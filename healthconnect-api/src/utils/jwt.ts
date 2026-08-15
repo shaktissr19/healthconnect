@@ -6,6 +6,9 @@ export interface JwtPayload {
   userId: string;
   role: string;
   registrationId: string;
+  // Present on refresh tokens so rotation cannot extend one continuous session
+  // beyond the configured absolute reauthentication window.
+  sessionStartedAt?: number;
   iat?: number;
   exp?: number;
 }
