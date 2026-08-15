@@ -1,23 +1,21 @@
 // src/app/layout.tsx — Root Layout
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGE: Added SessionTimeoutManager — auto-logout after 15min inactivity
-//   Warning shown at 10min, hard logout at 15min, all pages, authenticated only
-// ─────────────────────────────────────────────────────────────────────────────
 import type { Metadata, Viewport } from 'next';
 import { Poppins, Nunito } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
+import AuthTransportBootstrap from '@/components/AuthTransportBootstrap';
 
 const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['400','500','600','700','800'],
+  weight: ['400', '500', '600', '700', '800'],
   variable: '--font-heading',
   display: 'swap',
 });
+
 const nunito = Nunito({
   subsets: ['latin'],
-  weight: ['400','500','600','700'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-body',
   display: 'swap',
 });
@@ -50,6 +48,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${poppins.variable} ${nunito.variable}`}>
       <body>
+        {/* Configures credential cookies + automatic access-token refresh. */}
+        <AuthTransportBootstrap />
+
         {/* Session timeout — 10min warning, 15min auto-logout, all pages */}
         <SessionTimeoutManager />
 
@@ -65,7 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               fontFamily: 'var(--font-body)',
             },
             success: { iconTheme: { primary: '#22C55E', secondary: '#fff' } },
-            error:   { iconTheme: { primary: '#F43F5E', secondary: '#fff' } },
+            error: { iconTheme: { primary: '#F43F5E', secondary: '#fff' } },
           }}
         />
       </body>
