@@ -8,6 +8,11 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '5000', 10),
@@ -34,6 +39,9 @@ export const config = {
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'hc_access',
     refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'hc_refresh',
     sessionCookieName: process.env.SESSION_COOKIE_NAME || 'hc_session',
+    // A refresh token may be valid for 7 days, but one continuous authenticated
+    // session must re-authenticate after this absolute period. Default: 8 hours.
+    absoluteSessionHours: parsePositiveInt(process.env.AUTH_ABSOLUTE_SESSION_HOURS, 8),
   },
 
   redis: {
