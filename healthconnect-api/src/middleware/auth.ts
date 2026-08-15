@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyToken, JwtPayload } from '../utils/jwt';
 import { ApiResponse } from '../utils/apiResponse';
 import { logger } from '../utils/logger';
+import { getAccessTokenFromRequest } from '../utils/authCookies';
 
-// Extend Express Request to include user
 declare global {
   namespace Express {
     interface Request {
@@ -14,20 +14,19 @@ declare global {
 
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Prefer the HttpOnly access cookie. Bearer remains supported temporarily
+    // for backward compatibility with existing API clients during migration.
+    const token = getAccessTokenFromRequest(req);
+
+    if (!token) {
       return ApiResponse.unauthorized(res, 'No token provided');
     }
 
-    const token = authHeader.split(' ')[1];
-    
     try {
-      const decoded = verifyToken(token);
-      req.user = decoded;
-      next();
+      req.user = verifyToken(token);
+      return next();
     } catch (error: any) {
-      if (error.name === 'TokenExpiredError') {
+      if (error?.name === 'TokenExpiredError') {
         return ApiResponse.error(res, 'TOKEN_EXPIRED', 'Token has expired', 401);
       }
       return ApiResponse.error(res, 'INVALID_TOKEN', 'Invalid token', 401);
@@ -38,21 +37,18 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
-// Optional authentication - doesn't fail if no token
-export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
+    const token = getAccessTokenFromRequest(req);
+    if (token) {
       try {
         req.user = verifyToken(token);
       } catch {
-        // Ignore invalid tokens for optional auth
+        // Optional auth intentionally ignores invalid/expired credentials.
       }
     }
-    next();
-  } catch (error) {
-    next();
+    return next();
+  } catch {
+    return next();
   }
 };
