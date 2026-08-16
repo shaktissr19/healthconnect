@@ -26,6 +26,7 @@ export interface PatientProfileCompletion {
 }
 
 const hasText = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
+const hasValidIndianMobile = (value: unknown) => typeof value === 'string' && /^[6-9]\d{9}$/.test(value.trim());
 
 export const calculateProfileCompletion = (profile: {
   firstName?: string | null;
@@ -69,7 +70,7 @@ export const calculateProfileCompletion = (profile: {
       key: 'phone',
       label: 'Mobile number',
       section: 'CONTACT',
-      complete: hasText(profile.phone),
+      complete: hasValidIndianMobile(profile.phone),
     },
     {
       key: 'city',
@@ -97,7 +98,7 @@ export const calculateProfileCompletion = (profile: {
         contact.isPrimary &&
         hasText(contact.name) &&
         hasText(contact.relationship) &&
-        hasText(contact.phone),
+        hasValidIndianMobile(contact.phone),
       )),
     },
   ];
