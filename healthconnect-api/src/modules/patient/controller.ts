@@ -80,6 +80,10 @@ export const addSurgery = async (req: Request, res: Response, next: NextFunction
   try { return ApiResponse.created(res, await PatientService.addSurgery(uid(req), req.body), 'Surgery record added'); } catch (e) { next(e); }
 };
 
+export const updateSurgery = async (req: Request, res: Response, next: NextFunction) => {
+  try { return ApiResponse.success(res, await PatientService.updateSurgery(uid(req), req.params.surgeryId, req.body), 'Surgery record updated'); } catch (e) { next(e); }
+};
+
 export const deleteSurgery = async (req: Request, res: Response, next: NextFunction) => {
   try { await PatientService.deleteSurgery(uid(req), req.params.surgeryId); return ApiResponse.success(res, null, 'Surgery record deleted'); } catch (e) { next(e); }
 };
@@ -87,6 +91,10 @@ export const deleteSurgery = async (req: Request, res: Response, next: NextFunct
 // ── Vaccinations ───────────────────────────────────────────────
 export const addVaccination = async (req: Request, res: Response, next: NextFunction) => {
   try { return ApiResponse.created(res, await PatientService.addVaccination(uid(req), req.body), 'Vaccination added'); } catch (e) { next(e); }
+};
+
+export const updateVaccination = async (req: Request, res: Response, next: NextFunction) => {
+  try { return ApiResponse.success(res, await PatientService.updateVaccination(uid(req), req.params.vaccinationId, req.body), 'Vaccination updated'); } catch (e) { next(e); }
 };
 
 export const deleteVaccination = async (req: Request, res: Response, next: NextFunction) => {
@@ -98,6 +106,10 @@ export const addFamilyHistory = async (req: Request, res: Response, next: NextFu
   try { return ApiResponse.created(res, await PatientService.addFamilyHistory(uid(req), req.body), 'Family history added'); } catch (e) { next(e); }
 };
 
+export const updateFamilyHistory = async (req: Request, res: Response, next: NextFunction) => {
+  try { return ApiResponse.success(res, await PatientService.updateFamilyHistory(uid(req), req.params.historyId, req.body), 'Family history updated'); } catch (e) { next(e); }
+};
+
 export const deleteFamilyHistory = async (req: Request, res: Response, next: NextFunction) => {
   try { await PatientService.deleteFamilyHistory(uid(req), req.params.historyId); return ApiResponse.success(res, null, 'Family history deleted'); } catch (e) { next(e); }
 };
@@ -105,6 +117,10 @@ export const deleteFamilyHistory = async (req: Request, res: Response, next: Nex
 // ── Hospitalization History ────────────────────────────────────
 export const addHospitalizationHistory = async (req: Request, res: Response, next: NextFunction) => {
   try { return ApiResponse.created(res, await PatientService.addHospitalizationHistory(uid(req), req.body), 'Hospitalization record added'); } catch (e) { next(e); }
+};
+
+export const updateHospitalizationHistory = async (req: Request, res: Response, next: NextFunction) => {
+  try { return ApiResponse.success(res, await PatientService.updateHospitalizationHistory(uid(req), req.params.historyId, req.body), 'Hospitalization record updated'); } catch (e) { next(e); }
 };
 
 export const deleteHospitalizationHistory = async (req: Request, res: Response, next: NextFunction) => {
