@@ -1,1 +1,1 @@
-export * from './healthScore.v2_1.service';
+export * from './healthScore.v2_2.service';
