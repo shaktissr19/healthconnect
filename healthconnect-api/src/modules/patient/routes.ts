@@ -6,9 +6,21 @@ import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roleGuard';
 import { validate } from '../../middleware/validate';
 import {
+  allergySchema,
+  conditionSchema,
   emergencyContactSchema,
+  familyHistorySchema,
+  hospitalizationSchema,
+  surgerySchema,
+  updateAllergySchema,
+  updateConditionSchema,
   updateEmergencyContactSchema,
+  updateFamilyHistorySchema,
+  updateHospitalizationSchema,
   updateProfileSchema,
+  updateSurgerySchema,
+  updateVaccinationSchema,
+  vaccinationSchema,
 } from './validator';
 
 const router  = Router();
@@ -24,21 +36,39 @@ router.post('/patient/profile/emergency-contacts', ...patient, validate(emergenc
 router.put('/patient/profile/emergency-contacts/:contactId', ...patient, validate(updateEmergencyContactSchema), PatientController.updateEmergencyContact);
 router.delete('/patient/profile/emergency-contacts/:contactId', ...patient, PatientController.deleteEmergencyContact);
 
+// Medical history aggregate used by My Health > Medical History.
 router.get('/patient/medical-history', ...patient, PatientController.getMedicalHistory);
-router.post('/patient/conditions', ...patient, PatientController.addCondition);
-router.put('/patient/conditions/:conditionId', ...patient, PatientController.updateCondition);
+
+router.post('/patient/conditions', ...patient, validate(conditionSchema), PatientController.addCondition);
+router.put('/patient/conditions/:conditionId', ...patient, validate(updateConditionSchema), PatientController.updateCondition);
 router.delete('/patient/conditions/:conditionId', ...patient, PatientController.deleteCondition);
-router.post('/patient/allergies', ...patient, PatientController.addAllergy);
-router.put('/patient/allergies/:allergyId', ...patient, PatientController.updateAllergy);
+
+router.post('/patient/allergies', ...patient, validate(allergySchema), PatientController.addAllergy);
+router.put('/patient/allergies/:allergyId', ...patient, validate(updateAllergySchema), PatientController.updateAllergy);
 router.delete('/patient/allergies/:allergyId', ...patient, PatientController.deleteAllergy);
-router.post('/patient/surgeries', ...patient, PatientController.addSurgery);
+
+router.post('/patient/surgeries', ...patient, validate(surgerySchema), PatientController.addSurgery);
+router.put('/patient/surgeries/:surgeryId', ...patient, validate(updateSurgerySchema), PatientController.updateSurgery);
 router.delete('/patient/surgeries/:surgeryId', ...patient, PatientController.deleteSurgery);
-router.post('/patient/vaccinations', ...patient, PatientController.addVaccination);
+
+router.post('/patient/vaccinations', ...patient, validate(vaccinationSchema), PatientController.addVaccination);
+router.put('/patient/vaccinations/:vaccinationId', ...patient, validate(updateVaccinationSchema), PatientController.updateVaccination);
 router.delete('/patient/vaccinations/:vaccinationId', ...patient, PatientController.deleteVaccination);
-router.post('/patient/family-history', ...patient, PatientController.addFamilyHistory);
+
+router.post('/patient/family-history', ...patient, validate(familyHistorySchema), PatientController.addFamilyHistory);
+router.put('/patient/family-history/:historyId', ...patient, validate(updateFamilyHistorySchema), PatientController.updateFamilyHistory);
 router.delete('/patient/family-history/:historyId', ...patient, PatientController.deleteFamilyHistory);
-router.post('/patient/hospitalization-history', ...patient, PatientController.addHospitalizationHistory);
+
+// Canonical hospitalization-history routes retained for backward compatibility.
+router.post('/patient/hospitalization-history', ...patient, validate(hospitalizationSchema), PatientController.addHospitalizationHistory);
+router.put('/patient/hospitalization-history/:historyId', ...patient, validate(updateHospitalizationSchema), PatientController.updateHospitalizationHistory);
 router.delete('/patient/hospitalization-history/:historyId', ...patient, PatientController.deleteHospitalizationHistory);
+
+// UI compatibility aliases. Existing web clients already call /patient/hospitalizations.
+// Keep both route families so deployed clients and older consumers continue working.
+router.post('/patient/hospitalizations', ...patient, validate(hospitalizationSchema), PatientController.addHospitalizationHistory);
+router.put('/patient/hospitalizations/:historyId', ...patient, validate(updateHospitalizationSchema), PatientController.updateHospitalizationHistory);
+router.delete('/patient/hospitalizations/:historyId', ...patient, PatientController.deleteHospitalizationHistory);
 
 router.get('/patient/symptoms', ...patient, PatientController.getSymptoms);
 router.post('/patient/symptoms', ...patient, PatientController.logSymptom);
