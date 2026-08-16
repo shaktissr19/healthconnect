@@ -56,6 +56,11 @@ export const getLifestyle = async (req: Request, res: Response, next: NextFuncti
       sleepHoursAvg: null,
       tobaccoStatus: null,
       fruitVegServingsDay: null,
+      medicationStatus: null,
+      conditionStatus: null,
+      familyHistoryStatus: null,
+      medicationTrackingStartedAt: null,
+      alcoholStatus: null,
     });
   } catch (e) { next(e); }
 };
@@ -71,6 +76,12 @@ export const updateLifestyle = async (req: Request, res: Response, next: NextFun
       if (!Number.isFinite(n) || n < min || n > max) throw Object.assign(new Error(`${name} is invalid`), { statusCode: 400 });
       return n;
     };
+    const enumValue = (value: unknown, allowed: string[], name: string) => {
+      if (value === undefined || value === null || value === '') return null;
+      const v = String(value).toUpperCase();
+      if (!allowed.includes(v)) throw Object.assign(new Error(`${name} must be one of: ${allowed.join(', ')}`), { statusCode: 400 });
+      return v;
+    };
 
     const heightCm = num(req.body.heightCm, 80, 250, 'heightCm');
     const waistCm = num(req.body.waistCm, 30, 250, 'waistCm');
@@ -78,16 +89,17 @@ export const updateLifestyle = async (req: Request, res: Response, next: NextFun
     const vigorous = num(req.body.vigorousActivityMinWeek, 0, 10000, 'vigorousActivityMinWeek');
     const sleep = num(req.body.sleepHoursAvg, 0, 24, 'sleepHoursAvg');
     const servings = num(req.body.fruitVegServingsDay, 0, 30, 'fruitVegServingsDay');
-    const tobacco = req.body.tobaccoStatus == null || req.body.tobaccoStatus === '' ? null : String(req.body.tobaccoStatus).toUpperCase();
-    if (tobacco && !['NEVER', 'FORMER', 'CURRENT', 'SECONDHAND'].includes(tobacco)) {
-      return res.status(400).json({ success: false, message: 'tobaccoStatus must be NEVER, FORMER, CURRENT, or SECONDHAND' });
-    }
+    const tobacco = enumValue(req.body.tobaccoStatus, ['NEVER','FORMER','CURRENT','SECONDHAND'], 'tobaccoStatus');
+    const medicationStatus = enumValue(req.body.medicationStatus, ['NONE','TAKING_PRESCRIBED','UNKNOWN'], 'medicationStatus');
+    const conditionStatus = enumValue(req.body.conditionStatus, ['NONE','KNOWN','UNKNOWN'], 'conditionStatus');
+    const familyHistoryStatus = enumValue(req.body.familyHistoryStatus, ['NONE','RECORDED','UNKNOWN'], 'familyHistoryStatus');
+    const alcoholStatus = enumValue(req.body.alcoholStatus, ['NONE','OCCASIONAL','REGULAR','UNKNOWN'], 'alcoholStatus');
 
     const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>`
       INSERT INTO "patient_lifestyle_health"
-        ("patientId", "heightCm", "waistCm", "moderateActivityMinWeek", "vigorousActivityMinWeek", "sleepHoursAvg", "tobaccoStatus", "fruitVegServingsDay", "updatedAt")
+        ("patientId", "heightCm", "waistCm", "moderateActivityMinWeek", "vigorousActivityMinWeek", "sleepHoursAvg", "tobaccoStatus", "fruitVegServingsDay", "medicationStatus", "conditionStatus", "familyHistoryStatus", "medicationTrackingStartedAt", "alcoholStatus", "updatedAt")
       VALUES
-        (${patientId}, ${heightCm}, ${waistCm}, ${moderate == null ? null : Math.round(moderate)}, ${vigorous == null ? null : Math.round(vigorous)}, ${sleep}, ${tobacco}, ${servings}, NOW())
+        (${patientId}, ${heightCm}, ${waistCm}, ${moderate == null ? null : Math.round(moderate)}, ${vigorous == null ? null : Math.round(vigorous)}, ${sleep}, ${tobacco}, ${servings}, ${medicationStatus}, ${conditionStatus}, ${familyHistoryStatus}, CASE WHEN ${medicationStatus}='TAKING_PRESCRIBED' THEN NOW() ELSE NULL END, ${alcoholStatus}, NOW())
       ON CONFLICT ("patientId") DO UPDATE SET
         "heightCm" = EXCLUDED."heightCm",
         "waistCm" = EXCLUDED."waistCm",
@@ -96,9 +108,17 @@ export const updateLifestyle = async (req: Request, res: Response, next: NextFun
         "sleepHoursAvg" = EXCLUDED."sleepHoursAvg",
         "tobaccoStatus" = EXCLUDED."tobaccoStatus",
         "fruitVegServingsDay" = EXCLUDED."fruitVegServingsDay",
+        "medicationStatus" = EXCLUDED."medicationStatus",
+        "conditionStatus" = EXCLUDED."conditionStatus",
+        "familyHistoryStatus" = EXCLUDED."familyHistoryStatus",
+        "medicationTrackingStartedAt" = CASE
+          WHEN EXCLUDED."medicationStatus"='TAKING_PRESCRIBED' THEN COALESCE("patient_lifestyle_health"."medicationTrackingStartedAt", NOW())
+          ELSE NULL
+        END,
+        "alcoholStatus" = EXCLUDED."alcoholStatus",
         "updatedAt" = NOW()
       RETURNING *
     `;
-    return ApiResponse.success(res, rows[0], 'Lifestyle health inputs updated');
+    return ApiResponse.success(res, rows[0], 'Health assessment inputs updated');
   } catch (e) { next(e); }
 };
