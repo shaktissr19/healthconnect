@@ -9,6 +9,64 @@ export { HEALTH_SCORE_ALGORITHM_VERSION };
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const overallStatus = (score: number | null) =>
   score == null ? 'INCOMPLETE_ASSESSMENT' : score >= 85 ? 'STRONG' : score >= 70 ? 'GOOD' : score >= 55 ? 'NEEDS_ATTENTION' : 'NEEDS_REVIEW';
+const domainStatus = (score: number | null) =>
+  score == null ? 'NO_DATA' : score >= 85 ? 'STRONG' : score >= 70 ? 'GOOD' : score >= 55 ? 'NEEDS_ATTENTION' : 'NEEDS_REVIEW';
+const interp = (x: number, anchors: Array<[number, number]>) => {
+  const a = [...anchors].sort((p, q) => p[0] - q[0]);
+  if (x <= a[0][0]) return a[0][1];
+  if (x >= a[a.length - 1][0]) return a[a.length - 1][1];
+  for (let i = 0; i < a.length - 1; i++) {
+    const [x1, y1] = a[i], [x2, y2] = a[i + 1];
+    if (x >= x1 && x <= x2) return y1 + (y2 - y1) * (x - x1) / (x2 - x1);
+  }
+  return a[a.length - 1][1];
+};
+
+/**
+ * Correct the legacy v2.1 activity curve at the canonical layer.
+ * Stored values are TOTAL MINUTES PER WEEK:
+ * moderate-equivalent minutes = moderate + 2 * vigorous.
+ * Near-zero activity should not receive a mid-range wellness score.
+ */
+function normalizeActivityDomain(base: any) {
+  const lifestyle = (base?.domains ?? []).find((d: any) => d?.key === 'lifestyle');
+  const activity = lifestyle?.components?.find((c: any) => c?.key === 'activity');
+  if (!lifestyle || !activity || !activity.value) return;
+
+  const match = String(activity.value).match(/([0-9.]+)\s+min moderate\s*\+\s*([0-9.]+)\s+min vigorous/i);
+  if (!match) return;
+
+  const moderate = Number(match[1]);
+  const vigorous = Number(match[2]);
+  if (!Number.isFinite(moderate) || !Number.isFinite(vigorous)) return;
+
+  const equivalent = moderate + 2 * vigorous;
+  const activityScore = clamp(interp(equivalent, [
+    [0, 30],
+    [30, 40],
+    [60, 50],
+    [90, 62],
+    [120, 76],
+    [150, 90],
+    [225, 97],
+    [300, 100],
+    [450, 100],
+  ]));
+
+  activity.score = activityScore;
+  activity.status = domainStatus(activityScore);
+  activity.explanation = `Uses ${equivalent} moderate-equivalent minutes/week (${moderate} moderate + 2 × ${vigorous} vigorous). The adult aerobic-health reference is 150–300 moderate minutes/week, 75–150 vigorous minutes/week, or an equivalent combination.`;
+
+  const componentWeights: Record<string, number> = { tobacco: 50, activity: 35, diet: 15 };
+  const scored = (lifestyle.components ?? [])
+    .filter((c: any) => c?.score != null && componentWeights[c.key] != null)
+    .map((c: any) => ({ score: Number(c.score), weight: componentWeights[c.key] }));
+  const totalWeight = scored.reduce((sum: number, p: any) => sum + p.weight, 0);
+  if (totalWeight > 0) {
+    lifestyle.score = clamp(scored.reduce((sum: number, p: any) => sum + p.score * p.weight, 0) / totalWeight);
+    lifestyle.status = domainStatus(lifestyle.score);
+  }
+}
 
 /**
  * HC-HSI 2.0 presentation/scoring policy
@@ -27,6 +85,8 @@ const overallStatus = (score: number | null) =>
  * exposed separately as assessmentReadiness.percent.
  */
 function finalize(base: any) {
+  normalizeActivityDomain(base);
+
   const readiness = base?.assessmentReadiness ?? { complete: false, completed: 0, total: 10, percent: 0, items: [] };
   const scoreable = (base?.domains ?? []).filter(
     (d: any) => d?.applicable !== false && d?.score != null && Number.isFinite(Number(d.score)),
@@ -47,9 +107,6 @@ function finalize(base: any) {
 
   const score = rawScore;
 
-  // Reliability of the data actually contributing to the score. It is not
-  // multiplied by assessment completeness because that would duplicate the
-  // meaning of assessmentReadiness.percent and confuse patients.
   let confidence = scoreWeight > 0
     ? clamp(
         scoreable.reduce(
