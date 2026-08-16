@@ -4,8 +4,7 @@ import { getPatient, prisma } from './_shared';
 const asDate = (value?: string | null) => (value ? new Date(value) : undefined);
 const normalizedConditionStatus = (status?: string) => {
   if (!status) return undefined;
-  // The current UI historically exposed MANAGED while the persisted enum uses ACTIVE/CHRONIC/RESOLVED/IN_REMISSION.
-  // Treat MANAGED as ACTIVE rather than failing the request; the UI will be migrated to the canonical enum separately.
+  // Backward compatibility for older web bundles that exposed MANAGED.
   return status === 'MANAGED' ? 'ACTIVE' : status;
 };
 
@@ -28,8 +27,8 @@ export const getMedicalHistory = async (userId: string) => {
     prisma.hospitalizationHistory.findMany({ where: { patientId }, orderBy: { admissionDate: 'desc' } }),
   ]);
 
-  // Keep canonical database fields AND provide the legacy UI aliases used by MedicalHistoryTab.
-  // This is deliberately additive so doctor/admin consumers of the canonical contract do not break.
+  // Canonical database fields remain untouched. UI aliases are additive so existing
+  // doctor/admin consumers are not broken while the patient UI is normalized.
   return {
     conditions: conditions.map((item) => ({
       ...item,
@@ -63,6 +62,8 @@ export const addCondition = async (userId: string, data: {
   diagnosedBy?: string;
   managingDoctor?: string;
   treatingDoctor?: string;
+  severity?: string;
+  lastReviewed?: string;
   notes?: string;
 }) => {
   const patient = await getPatient(userId);
@@ -93,6 +94,8 @@ export const updateCondition = async (
     diagnosedBy: string;
     managingDoctor: string;
     treatingDoctor: string;
+    severity: string;
+    lastReviewed: string;
     notes: string;
   }>,
 ) => {
@@ -100,15 +103,17 @@ export const updateCondition = async (
   const condition = await prisma.condition.findFirst({ where: { id: conditionId, patientId: patient.id } });
   if (!condition) throw ApiError.notFound('Condition not found');
 
-  const { treatingDoctor, ...rest } = data;
   return prisma.condition.update({
     where: { id: conditionId },
     data: {
-      ...rest,
+      name: data.name,
+      icdCode: data.icdCode,
       status: normalizedConditionStatus(data.status) as any,
       diagnosedDate: data.diagnosedDate ? new Date(data.diagnosedDate) : undefined,
       resolvedDate: data.resolvedDate ? new Date(data.resolvedDate) : undefined,
-      managingDoctor: data.managingDoctor ?? treatingDoctor,
+      diagnosedBy: data.diagnosedBy,
+      managingDoctor: data.managingDoctor ?? data.treatingDoctor,
+      notes: data.notes,
     },
   });
 };
@@ -125,6 +130,7 @@ export const addAllergy = async (userId: string, data: {
   category?: string;
   severity?: string;
   reaction?: string;
+  crossReactive?: string;
   diagnosedDate?: string;
   notes?: string;
 }) => {
@@ -145,7 +151,15 @@ export const addAllergy = async (userId: string, data: {
 export const updateAllergy = async (
   userId: string,
   allergyId: string,
-  data: Partial<{ allergen: string; category: string; severity: string; reaction: string; diagnosedDate: string; notes: string }>,
+  data: Partial<{
+    allergen: string;
+    category: string;
+    severity: string;
+    reaction: string;
+    crossReactive: string;
+    diagnosedDate: string;
+    notes: string;
+  }>,
 ) => {
   const patient = await getPatient(userId);
   const allergy = await prisma.allergy.findFirst({ where: { id: allergyId, patientId: patient.id } });
@@ -153,10 +167,12 @@ export const updateAllergy = async (
   return prisma.allergy.update({
     where: { id: allergyId },
     data: {
-      ...data,
+      allergen: data.allergen,
       category: data.category as any,
       severity: data.severity as any,
+      reaction: data.reaction,
       diagnosedDate: data.diagnosedDate ? new Date(data.diagnosedDate) : undefined,
+      notes: data.notes,
     },
   });
 };
@@ -212,13 +228,16 @@ export const updateSurgery = async (
   const patient = await getPatient(userId);
   const surgery = await prisma.surgery.findFirst({ where: { id: surgeryId, patientId: patient.id } });
   if (!surgery) throw ApiError.notFound('Surgery record not found');
-  const { name, procedureName, surgeryDate, ...rest } = data;
   return prisma.surgery.update({
     where: { id: surgeryId },
     data: {
-      ...rest,
-      procedureName: procedureName ?? name,
-      surgeryDate: surgeryDate ? new Date(surgeryDate) : undefined,
+      procedureName: data.procedureName ?? data.name,
+      surgeryDate: data.surgeryDate ? new Date(data.surgeryDate) : undefined,
+      hospital: data.hospital,
+      surgeon: data.surgeon,
+      outcome: data.outcome,
+      complications: data.complications,
+      notes: data.notes,
     },
   });
 };
@@ -282,15 +301,19 @@ export const updateVaccination = async (
   const patient = await getPatient(userId);
   const vaccination = await prisma.vaccination.findFirst({ where: { id: vaccinationId, patientId: patient.id } });
   if (!vaccination) throw ApiError.notFound('Vaccination record not found');
-  const { administeredDate, administeredBy, dateAdministered, administrator, nextDueDate, ...rest } = data;
-  const administered = dateAdministered ?? administeredDate;
+  const administered = data.dateAdministered ?? data.administeredDate;
   return prisma.vaccination.update({
     where: { id: vaccinationId },
     data: {
-      ...rest,
+      vaccineName: data.vaccineName,
       dateAdministered: administered ? new Date(administered) : undefined,
-      nextDueDate: nextDueDate ? new Date(nextDueDate) : undefined,
-      administrator: administrator ?? administeredBy,
+      doseNumber: data.doseNumber,
+      totalDoses: data.totalDoses,
+      nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : undefined,
+      administrator: data.administrator ?? data.administeredBy,
+      batchNumber: data.batchNumber,
+      sideEffects: data.sideEffects,
+      notes: data.notes,
     },
   });
 };
@@ -345,13 +368,15 @@ export const updateFamilyHistory = async (
   const patient = await getPatient(userId);
   const entry = await prisma.familyHistory.findFirst({ where: { id: historyId, patientId: patient.id } });
   if (!entry) throw ApiError.notFound('Family history record not found');
-  const { condition, conditionName, livingStatus, status, ...rest } = data;
   return prisma.familyHistory.update({
     where: { id: historyId },
     data: {
-      ...rest,
-      conditionName: conditionName ?? condition,
-      status: status ?? livingStatus,
+      relation: data.relation,
+      conditionName: data.conditionName ?? data.condition,
+      ageOfOnset: data.ageOfOnset,
+      status: data.status ?? data.livingStatus,
+      causeOfDeath: data.causeOfDeath,
+      notes: data.notes,
     },
   });
 };
@@ -403,13 +428,16 @@ export const updateHospitalizationHistory = async (
   const patient = await getPatient(userId);
   const entry = await prisma.hospitalizationHistory.findFirst({ where: { id: historyId, patientId: patient.id } });
   if (!entry) throw ApiError.notFound('Hospitalization record not found');
-  const { admissionDate, dischargeDate, ...rest } = data;
   return prisma.hospitalizationHistory.update({
     where: { id: historyId },
     data: {
-      ...rest,
-      admissionDate: admissionDate ? new Date(admissionDate) : undefined,
-      dischargeDate: dischargeDate ? new Date(dischargeDate) : undefined,
+      hospitalName: data.hospitalName,
+      admissionDate: data.admissionDate ? new Date(data.admissionDate) : undefined,
+      dischargeDate: data.dischargeDate ? new Date(data.dischargeDate) : undefined,
+      reason: data.reason,
+      diagnosis: data.diagnosis,
+      treatingDoctor: data.treatingDoctor,
+      notes: data.notes,
     },
   });
 };
