@@ -33,6 +33,16 @@ const nonEmptyUpdate = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) => sche
   'Provide at least one field to update',
 );
 
+const allergyCategoryInput = z.string().trim().max(50).transform((value) => {
+  const normalized = value.toUpperCase().replace(/[\s-]+/g, '_');
+  if (['DRUG', 'MEDICATION', 'MEDICINE'].includes(normalized)) return 'DRUG' as const;
+  if (['FOOD'].includes(normalized)) return 'FOOD' as const;
+  if (['ENVIRONMENTAL', 'ENVIRONMENT', 'POLLEN', 'DUST'].includes(normalized)) return 'ENVIRONMENTAL' as const;
+  if (['INSECT', 'INSECT_BITE', 'INSECT_STING'].includes(normalized)) return 'INSECT' as const;
+  if (normalized === 'LATEX') return 'LATEX' as const;
+  return 'OTHER' as const;
+});
+
 export const updateProfileSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required').max(100).optional(),
   middleName: optionalNullableTrimmedString(100),
@@ -88,7 +98,7 @@ export const updateConditionSchema = nonEmptyUpdate(conditionBaseSchema);
 
 const allergyBaseSchema = z.object({
   allergen: z.string().trim().min(1, 'Allergen is required').max(200),
-  category: z.enum(['FOOD', 'DRUG', 'ENVIRONMENTAL', 'INSECT', 'LATEX', 'OTHER']).optional(),
+  category: allergyCategoryInput.optional(),
   severity: z.enum(['MILD', 'MODERATE', 'SEVERE', 'LIFE_THREATENING']).optional(),
   reaction: optionalTrimmedString(500),
   crossReactive: optionalTrimmedString(500),
