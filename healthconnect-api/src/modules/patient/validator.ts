@@ -15,6 +15,11 @@ const isValidDateOnly = (value: string) => {
 const dateOnly = z.string()
   .refine(isValidDateOnly, 'Use a valid date in YYYY-MM-DD format');
 
+const dateInput = z.string().refine((value) => {
+  if (isValidDateOnly(value)) return true;
+  return !Number.isNaN(Date.parse(value));
+}, 'Use a valid date');
+
 const dateOfBirth = dateOnly.refine((value) => {
   const dob = new Date(`${value}T00:00:00.000Z`);
   const today = new Date();
@@ -22,6 +27,11 @@ const dateOfBirth = dateOnly.refine((value) => {
   const oldestUtc = Date.UTC(today.getUTCFullYear() - 120, today.getUTCMonth(), today.getUTCDate());
   return dob.getTime() <= todayUtc && dob.getTime() >= oldestUtc;
 }, 'Date of birth must be in the past and within the last 120 years');
+
+const nonEmptyUpdate = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) => schema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  'Provide at least one field to update',
+);
 
 export const updateProfileSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required').max(100).optional(),
@@ -57,54 +67,143 @@ export const updateProfileSchema = z.object({
   governmentSchemeId: optionalNullableTrimmedString(150),
 }).strict();
 
-export const conditionSchema = z.object({
-  name: z.string().min(1, 'Condition name is required'),
-  icdCode: z.string().optional(),
-  status: z.enum(['ACTIVE', 'CHRONIC', 'RESOLVED', 'IN_REMISSION']),
-  diagnosedDate: z.string().datetime().optional(),
-  resolvedDate: z.string().datetime().optional(),
-  diagnosedBy: z.string().optional(),
-  managingDoctor: z.string().optional(),
-  notes: z.string().optional(),
+// Medical-history schemas accept both canonical backend names and the field aliases
+// already used by the deployed MedicalHistoryTab. This keeps the API backward compatible
+// while enforcing required values and valid dates.
+const conditionBaseSchema = z.object({
+  name: z.string().trim().min(1, 'Condition name is required').max(200),
+  icdCode: optionalTrimmedString(40),
+  status: z.enum(['ACTIVE', 'CHRONIC', 'RESOLVED', 'IN_REMISSION', 'MANAGED']).optional(),
+  diagnosedDate: dateInput.optional(),
+  resolvedDate: dateInput.optional(),
+  diagnosedBy: optionalTrimmedString(150),
+  managingDoctor: optionalTrimmedString(150),
+  treatingDoctor: optionalTrimmedString(150),
+  severity: optionalTrimmedString(80),
+  lastReviewed: dateInput.optional(),
+  notes: optionalTrimmedString(2000),
 });
+export const conditionSchema = conditionBaseSchema;
+export const updateConditionSchema = nonEmptyUpdate(conditionBaseSchema);
 
-export const allergySchema = z.object({
-  allergen: z.string().min(1, 'Allergen is required'),
-  category: z.enum(['FOOD', 'DRUG', 'ENVIRONMENTAL', 'INSECT', 'LATEX', 'OTHER']),
-  severity: z.enum(['MILD', 'MODERATE', 'SEVERE', 'LIFE_THREATENING']),
-  reaction: z.string().optional(),
-  diagnosedDate: z.string().datetime().optional(),
-  notes: z.string().optional(),
+const allergyBaseSchema = z.object({
+  allergen: z.string().trim().min(1, 'Allergen is required').max(200),
+  category: z.enum(['FOOD', 'DRUG', 'ENVIRONMENTAL', 'INSECT', 'LATEX', 'OTHER']).optional(),
+  severity: z.enum(['MILD', 'MODERATE', 'SEVERE', 'LIFE_THREATENING']).optional(),
+  reaction: optionalTrimmedString(500),
+  crossReactive: optionalTrimmedString(500),
+  diagnosedDate: dateInput.optional(),
+  notes: optionalTrimmedString(2000),
 });
+export const allergySchema = allergyBaseSchema;
+export const updateAllergySchema = nonEmptyUpdate(allergyBaseSchema);
 
-export const surgerySchema = z.object({
-  procedureName: z.string().min(1, 'Procedure name is required'),
-  surgeryDate: z.string().datetime(),
-  hospital: z.string().optional(),
-  surgeon: z.string().optional(),
-  outcome: z.string().optional(),
-  notes: z.string().optional(),
+const surgeryBaseSchema = z.object({
+  procedureName: optionalTrimmedString(250),
+  name: optionalTrimmedString(250),
+  surgeryDate: dateInput,
+  hospital: optionalTrimmedString(250),
+  surgeon: optionalTrimmedString(200),
+  outcome: optionalTrimmedString(500),
+  complications: optionalTrimmedString(1000),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Boolean(value.procedureName || value.name), {
+  message: 'Procedure name is required',
+  path: ['procedureName'],
 });
+export const surgerySchema = surgeryBaseSchema;
+export const updateSurgerySchema = z.object({
+  procedureName: optionalTrimmedString(250),
+  name: optionalTrimmedString(250),
+  surgeryDate: dateInput.optional(),
+  hospital: optionalTrimmedString(250),
+  surgeon: optionalTrimmedString(200),
+  outcome: optionalTrimmedString(500),
+  complications: optionalTrimmedString(1000),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
 
-export const vaccinationSchema = z.object({
-  vaccineName: z.string().min(1, 'Vaccine name is required'),
-  dateAdministered: z.string().datetime(),
+const vaccinationBaseSchema = z.object({
+  vaccineName: z.string().trim().min(1, 'Vaccine name is required').max(250),
+  dateAdministered: dateInput.optional(),
+  administeredDate: dateInput.optional(),
   doseNumber: z.number().int().positive().optional(),
   totalDoses: z.number().int().positive().optional(),
-  nextDueDate: z.string().datetime().optional(),
-  administrator: z.string().optional(),
-  batchNumber: z.string().optional(),
-  notes: z.string().optional(),
+  nextDueDate: dateInput.optional(),
+  administrator: optionalTrimmedString(200),
+  administeredBy: optionalTrimmedString(200),
+  batchNumber: optionalTrimmedString(100),
+  sideEffects: optionalTrimmedString(1000),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Boolean(value.dateAdministered || value.administeredDate), {
+  message: 'Vaccination date is required',
+  path: ['dateAdministered'],
 });
+export const vaccinationSchema = vaccinationBaseSchema;
+export const updateVaccinationSchema = z.object({
+  vaccineName: z.string().trim().min(1).max(250).optional(),
+  dateAdministered: dateInput.optional(),
+  administeredDate: dateInput.optional(),
+  doseNumber: z.number().int().positive().optional(),
+  totalDoses: z.number().int().positive().optional(),
+  nextDueDate: dateInput.optional(),
+  administrator: optionalTrimmedString(200),
+  administeredBy: optionalTrimmedString(200),
+  batchNumber: optionalTrimmedString(100),
+  sideEffects: optionalTrimmedString(1000),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
 
-export const familyHistorySchema = z.object({
-  relation: z.string().min(1, 'Relation is required'),
-  conditionName: z.string().min(1, 'Condition name is required'),
-  ageOfOnset: z.number().int().positive().optional(),
-  status: z.string().optional(),
-  causeOfDeath: z.string().optional(),
-  notes: z.string().optional(),
+const familyHistoryBaseSchema = z.object({
+  relation: z.string().trim().min(1, 'Relation is required').max(100),
+  conditionName: optionalTrimmedString(250),
+  condition: optionalTrimmedString(250),
+  ageOfOnset: z.number().int().min(0).max(120).optional(),
+  status: optionalTrimmedString(50),
+  livingStatus: optionalTrimmedString(50),
+  causeOfDeath: optionalTrimmedString(500),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Boolean(value.conditionName || value.condition), {
+  message: 'Condition name is required',
+  path: ['conditionName'],
 });
+export const familyHistorySchema = familyHistoryBaseSchema;
+export const updateFamilyHistorySchema = z.object({
+  relation: z.string().trim().min(1).max(100).optional(),
+  conditionName: optionalTrimmedString(250),
+  condition: optionalTrimmedString(250),
+  ageOfOnset: z.number().int().min(0).max(120).optional(),
+  status: optionalTrimmedString(50),
+  livingStatus: optionalTrimmedString(50),
+  causeOfDeath: optionalTrimmedString(500),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
+
+const hospitalizationBaseSchema = z.object({
+  hospitalName: z.string().trim().min(1, 'Hospital name is required').max(250),
+  admissionDate: dateInput,
+  dischargeDate: dateInput.optional(),
+  reason: optionalTrimmedString(500),
+  diagnosis: optionalTrimmedString(500),
+  treatingDoctor: optionalTrimmedString(200),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => {
+  if (!value.dischargeDate) return true;
+  return new Date(value.dischargeDate).getTime() >= new Date(value.admissionDate).getTime();
+}, {
+  message: 'Discharge date cannot be before admission date',
+  path: ['dischargeDate'],
+});
+export const hospitalizationSchema = hospitalizationBaseSchema;
+export const updateHospitalizationSchema = z.object({
+  hospitalName: z.string().trim().min(1).max(250).optional(),
+  admissionDate: dateInput.optional(),
+  dischargeDate: dateInput.optional(),
+  reason: optionalTrimmedString(500),
+  diagnosis: optionalTrimmedString(500),
+  treatingDoctor: optionalTrimmedString(200),
+  notes: optionalTrimmedString(2000),
+}).refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
 
 export const symptomSchema = z.object({
   name: z.string().min(1, 'Symptom name is required'),
