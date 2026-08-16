@@ -8,9 +8,11 @@ import { validate } from '../../middleware/validate';
 import {
   allergySchema,
   conditionSchema,
+  consentSchema,
   emergencyContactSchema,
   familyHistorySchema,
   hospitalizationSchema,
+  settingsSchema,
   surgerySchema,
   updateAllergySchema,
   updateConditionSchema,
@@ -22,6 +24,16 @@ import {
   updateVaccinationSchema,
   vaccinationSchema,
 } from './validator';
+import {
+  medicationCreateSchema,
+  medicationDoseSchema,
+  medicationUpdateSchema,
+  reportShareSchema,
+  symptomCreateSchema,
+  symptomUpdateSchema,
+  therapyCreateSchema,
+  vitalCreateSchema,
+} from './completion.validator';
 
 const router  = Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
@@ -65,37 +77,41 @@ router.put('/patient/hospitalization-history/:historyId', ...patient, validate(u
 router.delete('/patient/hospitalization-history/:historyId', ...patient, PatientController.deleteHospitalizationHistory);
 
 // UI compatibility aliases. Existing web clients already call /patient/hospitalizations.
-// Keep both route families so deployed clients and older consumers continue working.
 router.post('/patient/hospitalizations', ...patient, validate(hospitalizationSchema), PatientController.addHospitalizationHistory);
 router.put('/patient/hospitalizations/:historyId', ...patient, validate(updateHospitalizationSchema), PatientController.updateHospitalizationHistory);
 router.delete('/patient/hospitalizations/:historyId', ...patient, PatientController.deleteHospitalizationHistory);
 
+// Symptoms tracker.
 router.get('/patient/symptoms', ...patient, PatientController.getSymptoms);
-router.post('/patient/symptoms', ...patient, PatientController.logSymptom);
-router.put('/patient/symptoms/:symptomId', ...patient, PatientController.updateSymptom);
+router.post('/patient/symptoms', ...patient, validate(symptomCreateSchema), PatientController.logSymptom);
+router.put('/patient/symptoms/:symptomId', ...patient, validate(symptomUpdateSchema), PatientController.updateSymptom);
 router.delete('/patient/symptoms/:symptomId', ...patient, PatientController.deleteSymptom);
 
+// Vitals. Validation is structural only; clinical interpretation remains in the Health Score engine.
 router.get('/patient/vitals', ...patient, PatientController.getVitals);
-router.post('/patient/vitals', ...patient, PatientController.logVital);
+router.post('/patient/vitals', ...patient, validate(vitalCreateSchema), PatientController.logVital);
 router.delete('/patient/vitals/:vitalId', ...patient, PatientController.deleteVital);
 
+// Medications and dose adherence.
 router.get('/patient/medications', ...patient, PatientController.getMedications);
-router.post('/patient/medications', ...patient, PatientController.addMedication);
-router.put('/patient/medications/:medicationId', ...patient, PatientController.updateMedication);
+router.post('/patient/medications', ...patient, validate(medicationCreateSchema), PatientController.addMedication);
+router.put('/patient/medications/:medicationId', ...patient, validate(medicationUpdateSchema), PatientController.updateMedication);
 router.delete('/patient/medications/:medicationId', ...patient, PatientController.deleteMedication);
-router.post('/patient/medications/:medicationId/log', ...patient, PatientController.logMedicationDose);
+router.post('/patient/medications/:medicationId/log', ...patient, validate(medicationDoseSchema), PatientController.logMedicationDose);
 router.get('/patient/medications/:medicationId/logs', ...patient, PatientController.getMedicationLogs);
+
 router.get('/patient/therapies', ...patient, PatientController.getTherapies);
-router.post('/patient/therapies', ...patient, PatientController.addTherapy);
+router.post('/patient/therapies', ...patient, validate(therapyCreateSchema), PatientController.addTherapy);
 router.delete('/patient/therapies/:therapyId', ...patient, PatientController.deleteTherapy);
 
+// Reports Vault.
 router.get('/patient/reports', ...patient, PatientController.getReports);
 router.post('/patient/reports', ...patient, upload.single('file'), PatientController.uploadReport);
 router.delete('/patient/reports/:reportId', ...patient, PatientController.deleteReport);
-router.post('/patient/reports/:reportId/share', ...patient, PatientController.shareReport);
+router.post('/patient/reports/:reportId/share', ...patient, validate(reportShareSchema), PatientController.shareReport);
 router.delete('/patient/reports/:reportId/share/:doctorId', ...patient, PatientController.revokeReportShare);
 
-// Health Status Index v1 — canonical patient health intelligence contract.
+// Health Status Index — canonical patient health intelligence contract.
 router.get('/patient/health-score', ...patient, HealthScoreController.current);
 router.post('/patient/health-score/refresh', ...patient, HealthScoreController.refresh);
 router.get('/patient/health-score/history', ...patient, HealthScoreController.history);
@@ -103,10 +119,10 @@ router.get('/patient/health-score/lifestyle', ...patient, HealthScoreController.
 router.put('/patient/health-score/lifestyle', ...patient, HealthScoreController.updateLifestyle);
 
 router.get('/patient/consents', ...patient, PatientController.getConsents);
-router.post('/patient/consents', ...patient, PatientController.grantConsent);
+router.post('/patient/consents', ...patient, validate(consentSchema), PatientController.grantConsent);
 router.delete('/patient/consents/:consentId', ...patient, PatientController.revokeConsent);
 
 router.get('/patient/settings', ...patient, PatientController.getSettings);
-router.put('/patient/settings', ...patient, PatientController.updateSettings);
+router.put('/patient/settings', ...patient, validate(settingsSchema), PatientController.updateSettings);
 
 export default router;
