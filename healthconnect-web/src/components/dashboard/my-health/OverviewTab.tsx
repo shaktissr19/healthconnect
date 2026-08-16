@@ -1,565 +1,284 @@
 'use client';
-import { useState } from 'react';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { patientAPI } from '@/lib/api';
 import { useUIStore } from '@/store/uiStore';
 
-// ── HEALTH SCORE WEIGHTS (must sum to 100) ────────────────────────────────────
-// Clinically meaningful weighting — vitals dominate, lifestyle is a bonus signal
-const SCORE_PARAMS = [
-  { key:'vitalsScore',           label:'Vitals',               icon:'💓', weight:25, color:'linear-gradient(90deg,#EF4444,#F97316)', desc:'BP, blood sugar, heart rate, SpO2 in normal range' },
-  { key:'medicationAdherence',   label:'Medication Adherence', icon:'💊', weight:22, color:'linear-gradient(90deg,#0D9488,#14B8A6)', desc:'Doses taken on time in last 30 days' },
-  { key:'symptomBurden',         label:'Symptom Burden',       icon:'🩺', weight:18, color:'linear-gradient(90deg,#B45309,#F59E0B)', desc:'Inverse of symptom frequency × severity' },
-  { key:'appointmentRegularity', label:'Appointments',         icon:'📅', weight:15, color:'linear-gradient(90deg,#7C3AED,#8B5CF6)', desc:'Scheduled appointments attended' },
-  { key:'conditionControl',      label:'Condition Control',    icon:'📋', weight:10, color:'linear-gradient(90deg,#0F766E,#0D9488)', desc:'Active vs managed vs resolved conditions' },
-  { key:'lifestyleFactors',      label:'Lifestyle',            icon:'🌱', weight:7,  color:'linear-gradient(90deg,#16A34A,#22C55E)', desc:'Sleep, exercise & diet tracking' },
-  { key:'engagementScore',       label:'Self-monitoring',      icon:'📊', weight:3,  color:'linear-gradient(90deg,#1D4ED8,#3B82F6)', desc:'Frequency of logging vitals & symptoms' },
-];
+type DomainStatus = 'STRONG' | 'GOOD' | 'NEEDS_ATTENTION' | 'NEEDS_REVIEW' | 'NO_DATA';
+type ScoreStatus = 'STRONG' | 'GOOD' | 'NEEDS_ATTENTION' | 'NEEDS_REVIEW' | 'INSUFFICIENT_DATA';
 
-// ── MOCK FALLBACK DATA ────────────────────────────────────────────────────────
-const MOCK = {
-  healthScore: 72,
-  healthScoreTrend: 'stable',
-  weekDelta: 0,
-  conditions: [] as string[],
-  conditionCount: 0,
-  medicationAdherence: 0,
-  adherenceTrend: '',
-  upcomingAppointments: 0,
-  nextAppointment: { doctor: '—', spec: '—', date: '—', month: '—', time: '—', type: '—' },
-  activeMedications: 0,
-  medAlert: 'No active alerts',
-  scoreBreakdown: SCORE_PARAMS.map(p => ({ ...p, value: 0 })),
-  aiInsight: 'Your health data is being analysed. Check back soon for personalised insights.',
-  activeSymptoms: [] as any[],
-  riskAlert: null as string | null,
-  communitiesJoined: 0,
-  scoreHistory: [] as { score: number; date: string }[],
+type Domain = {
+  key: string;
+  label: string;
+  weight: number;
+  score: number | null;
+  status: DomainStatus;
+  confidence: number;
+  latestValue?: string | null;
+  measuredAt?: string | null;
+  explanation: string;
+  source: string;
 };
 
-// ── Merge API response shape → display shape ─────────────────────────────────
-// Dashboard response: { profile, healthScore:{score,medicationAdherence,...,trend},
-//   kpis:{upcomingAppointmentsCount,activeMedicationsCount,activeConditionsCount,
-//         medicationAdherencePct,refillAlertsCount,recentSymptomsCount,communitiesJoined,totalReports},
-//   upcomingAppointments:[{id,scheduledAt,type,status,doctor:{firstName,lastName,specialization}}],
-//   recentSymptoms:[{id,name,severity,loggedAt}] (optional)
-// }
-function merge(apiData: any) {
-  if (!apiData) return MOCK;
+type Alert = {
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  code: string;
+  title: string;
+  message: string;
+  domain: string;
+  observedAt?: string | null;
+};
 
-  const hs   = apiData.healthScore   ?? {};
-  const kpis = apiData.kpis          ?? {};
-  const next = apiData.upcomingAppointments?.[0] ?? null;
-  const recentSymptoms = apiData.recentSymptoms ?? [];
+type HealthScore = {
+  score: number | null;
+  status: ScoreStatus;
+  confidence: number;
+  dataCoverage: number;
+  algorithmVersion: string;
+  calculatedAt: string;
+  trend: 'IMPROVING' | 'STABLE' | 'WORSENING' | 'UNKNOWN';
+  delta: number | null;
+  hasCriticalAlert: boolean;
+  domains: Domain[];
+  alerts: Alert[];
+  missingData: Array<{ key: string; label: string; reason: string }>;
+  recommendations: string[];
+  history: Array<{ score: number | null; status: string; confidence: number; algorithmVersion: string; date: string }>;
+};
 
-  const scoreNum = typeof hs === 'number' ? hs : (hs.score ?? MOCK.healthScore);
+const C = {
+  card: '#FFFFFF', border: '#DCE8F2', text: '#0F2742', text2: '#385672', text3: '#6D859B',
+  blue: '#1A6BB5', blueBg: '#EDF6FD', green: '#15803D', amber: '#B45309', red: '#BE123C', purple: '#6D28D9',
+};
 
-  // 7-parameter breakdown — map API fields + compute weighted display
-  const scoreBreakdown = SCORE_PARAMS.map(p => ({
-    ...p,
-    value: hs[p.key] ?? (
-      // Fallback mappings for older API shapes
-      p.key === 'symptomBurden'  ? (hs.symptomFrequency  ?? 0) :
-      p.key === 'vitalsScore'    ? (hs.vitals             ?? 0) :
-      p.key === 'conditionControl'? (hs.conditionControl  ?? 0) :
-      p.key === 'engagementScore' ? (hs.engagement        ?? 0) : 0
-    ),
-  }));
+const STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  STRONG: { label: 'Strong', color: '#15803D', bg: '#ECFDF3' },
+  GOOD: { label: 'Good / Monitor', color: '#1A6BB5', bg: '#EDF6FD' },
+  NEEDS_ATTENTION: { label: 'Needs Attention', color: '#B45309', bg: '#FFF7ED' },
+  NEEDS_REVIEW: { label: 'Needs Review', color: '#BE123C', bg: '#FFF1F2' },
+  INSUFFICIENT_DATA: { label: 'Insufficient Data', color: '#64748B', bg: '#F1F5F9' },
+  NO_DATA: { label: 'No Data', color: '#64748B', bg: '#F1F5F9' },
+};
 
-  // Week-over-week delta from score history
-  const history: { score: number; date: string }[] = hs.history ?? apiData.scoreHistory ?? [];
-  let weekDelta = 0;
-  if (history.length >= 2) {
-    const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    weekDelta = (sorted[0]?.score ?? scoreNum) - (sorted[1]?.score ?? scoreNum);
-  }
-
-  // Next appointment
-  let nextAppt = MOCK.nextAppointment;
-  if (next) {
-    const dt   = new Date(next.scheduledAt);
-    const docF = next.doctor?.firstName ?? '';
-    const docL = next.doctor?.lastName  ?? '';
-    const spec = next.doctor?.specialization ?? '';
-    nextAppt = {
-      doctor: `Dr. ${docF} ${docL}`.trim(),
-      spec,
-      date:   String(dt.getDate()),
-      month:  dt.toLocaleDateString('en-IN', { month: 'short' }),
-      time:   dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-      type:   next.type === 'TELECONSULT' ? 'Teleconsult' : next.type === 'HOME_VISIT' ? 'Home Visit' : 'In-person',
-    };
-  }
-
-  const refillCount  = kpis.refillAlertsCount     ?? 0;
-  const activeCount  = kpis.activeMedicationsCount ?? 0;
-  let medAlert = MOCK.medAlert;
-  if (refillCount > 0) medAlert = `${refillCount} refill${refillCount > 1 ? 's' : ''} needed`;
-  else if (activeCount > 0) medAlert = `${activeCount} active prescription${activeCount > 1 ? 's' : ''}`;
-
-  const activeSymptoms = recentSymptoms.slice(0, 3).map((s: any) => ({
-    name:     s.name,
-    severity: s.severity ?? 5,
-    level:    s.severity >= 7 ? 'severe' : s.severity >= 4 ? 'moderate' : 'mild',
-    since:    s.loggedAt
-      ? new Date(s.loggedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-      : 'Recently',
-  }));
-
-  const adherencePct = kpis.medicationAdherencePct ?? hs.medicationAdherence ?? 0;
-  const adherenceTrend = adherencePct >= 85 ? 'Good adherence' : adherencePct >= 70 ? 'Fair adherence' : 'Needs improvement';
-  const conditionCount = kpis.activeConditionsCount ?? 0;
-  const conditionLabel = conditionCount === 0 ? 'No active conditions'
-    : conditionCount === 1 ? '1 active condition'
-    : `${conditionCount} active conditions`;
-
-  return {
-    healthScore:          scoreNum,
-    healthScoreTrend:     hs.trend ?? 'stable',
-    weekDelta,
-    conditions:           [conditionLabel],
-    conditionCount,
-    medicationAdherence:  adherencePct,
-    adherenceTrend,
-    upcomingAppointments: kpis.upcomingAppointmentsCount ?? 0,
-    nextAppointment:      nextAppt,
-    activeMedications:    activeCount,
-    medAlert,
-    scoreBreakdown,
-    aiInsight:            apiData.aiInsight ?? MOCK.aiInsight,
-    activeSymptoms,
-    riskAlert:            apiData.riskAlert ?? null,
-    communitiesJoined:    kpis.communitiesJoined ?? 0,
-    scoreHistory:         history.slice(-8),
-  };
+function unwrap<T>(res: any): T {
+  return (res?.data?.data ?? res?.data ?? {}) as T;
 }
 
-// ── Score Info Modal ──────────────────────────────────────────────────────────
-function ScoreInfoModal({ breakdown, score, onClose }: { breakdown: any[]; score: number; onClose: () => void }) {
-  const getStatus = (val: number) => val >= 80 ? { label:'Good', color:'#16A34A' } : val >= 60 ? { label:'Fair', color:'#D97706' } : val >= 1 ? { label:'Needs work', color:'#DC2626' } : { label:'No data', color:'#94A3B8' };
-  const getImprovement = (key: string, val: number): string => {
-    if (val >= 80) return '✓ On track';
-    const tips: Record<string, string> = {
-      vitalsScore:           'Log BP, blood sugar & heart rate readings regularly',
-      medicationAdherence:   'Set reminders to take medications on time',
-      symptomBurden:         'Track and manage your symptoms consistently',
-      appointmentRegularity: 'Book and attend scheduled doctor appointments',
-      conditionControl:      'Work with your doctor to move conditions to Managed',
-      lifestyleFactors:      'Track sleep, exercise and diet habits daily',
-      engagementScore:       'Log vitals and symptoms at least once a week',
-    };
-    return tips[key] ?? 'Keep improving';
-  };
+function scoreColor(score: number | null) {
+  if (score == null) return '#64748B';
+  if (score >= 85) return C.green;
+  if (score >= 70) return C.blue;
+  if (score >= 55) return C.amber;
+  return C.red;
+}
 
+function ScoreRing({ score }: { score: number | null }) {
+  const value = score ?? 0;
+  const circumference = 2 * Math.PI * 52;
+  const offset = circumference - (value / 100) * circumference;
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:20 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:580, maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 60px rgba(0,0,0,0.2)' }}>
-        {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, paddingBottom:16, borderBottom:'1px solid #E2EEF0' }}>
-          <div>
-            <div style={{ fontSize:17, fontWeight:800, color:'#0F2D2A', marginBottom:3 }}>How Your Health Score is Calculated</div>
-            <div style={{ fontSize:12, color:'#64748B' }}>7 weighted parameters — updated after every data change</div>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#94A3B8', lineHeight:1 }}>✕</button>
-        </div>
-
-        {/* Overall score */}
-        <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:20, padding:'14px 18px', background:'#F0FDF9', borderRadius:14, border:'1px solid rgba(13,148,136,0.2)' }}>
-          <div style={{ fontSize:42, fontWeight:900, color: score>=80?'#16A34A':score>=60?'#0D9488':'#D97706', lineHeight:1 }}>{score}</div>
-          <div>
-            <div style={{ fontWeight:700, fontSize:15, color:'#0F2D2A' }}>Overall Health Score</div>
-            <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>= Σ (parameter_score × weight%) across all 7 parameters</div>
-          </div>
-        </div>
-
-        {/* Formula */}
-        <div style={{ background:'#F8FFFE', border:'1px solid #E2EEF0', borderRadius:12, padding:'12px 16px', marginBottom:20, fontFamily:'JetBrains Mono, monospace', fontSize:11, color:'#4B6E6A', lineHeight:1.8 }}>
-          <div style={{ fontWeight:700, color:'#0F2D2A', marginBottom:6, fontFamily:'inherit' }}>Score Formula:</div>
-          {breakdown.map(p => (
-            <div key={p.key} style={{ display:'flex', gap:8 }}>
-              <span style={{ color:'#0D9488', minWidth:22 }}>{p.value}</span>
-              <span style={{ color:'#94A3B8' }}>×</span>
-              <span style={{ color:'#7C3AED', minWidth:32 }}>{p.weight}%</span>
-              <span style={{ color:'#64748B' }}>= {Math.round(p.value * p.weight / 100)}</span>
-              <span style={{ color:'#CBD5E1' }}>({p.label})</span>
-            </div>
-          ))}
-          <div style={{ borderTop:'1px solid #E2EEF0', paddingTop:8, marginTop:8, fontWeight:700, color:'#0F2D2A' }}>
-            Total = {score} / 100
-          </div>
-        </div>
-
-        {/* Parameter breakdown */}
-        <div style={{ fontSize:13, fontWeight:700, color:'#0F2D2A', marginBottom:12 }}>Parameter Breakdown</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {breakdown.map(p => {
-            const status = getStatus(p.value);
-            const tip    = getImprovement(p.key, p.value);
-            return (
-              <div key={p.key} style={{ background:'#F8FFFE', border:'1px solid #E2EEF0', borderRadius:12, padding:'12px 14px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                  <span style={{ fontSize:18 }}>{p.icon}</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ fontWeight:700, fontSize:13, color:'#0F2D2A' }}>{p.label}</span>
-                      <span style={{ fontSize:10, padding:'1px 7px', borderRadius:100, fontWeight:700, color:status.color, background:`${status.color}15`, border:`1px solid ${status.color}30` }}>{status.label}</span>
-                      <span style={{ marginLeft:'auto', fontSize:11, color:'#94A3B8', fontFamily:'JetBrains Mono,monospace' }}>weight: {p.weight}%</span>
-                    </div>
-                    <div style={{ fontSize:11, color:'#64748B', marginTop:2 }}>{p.desc}</div>
-                  </div>
-                  <div style={{ textAlign:'right', flexShrink:0 }}>
-                    <div style={{ fontSize:22, fontWeight:800, color: p.value>=80?'#16A34A':p.value>=60?'#D97706':p.value>0?'#DC2626':'#94A3B8', lineHeight:1 }}>{p.value}</div>
-                    <div style={{ fontSize:10, color:'#94A3B8' }}>/100</div>
-                  </div>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <div style={{ flex:1, height:5, background:'#E2EEF0', borderRadius:3, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:`${p.value}%`, background:p.color, borderRadius:3, transition:'width 0.8s ease' }} />
-                  </div>
-                  <div style={{ fontSize:11, color: p.value>=80?'#16A34A':'#64748B', fontWeight:600, whiteSpace:'nowrap', minWidth:120, textAlign:'right' }}>{tip}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer note */}
-        <div style={{ marginTop:18, padding:'10px 14px', background:'rgba(124,58,237,0.06)', border:'1px solid rgba(124,58,237,0.15)', borderRadius:10, fontSize:12, color:'#6D28D9', lineHeight:1.6 }}>
-          💡 <strong>Note:</strong> Vitals (25%) and Medication Adherence (22%) have the highest clinical weight. Logging vitals regularly is the fastest way to improve your score.
-        </div>
+    <div style={{ position: 'relative', width: 132, height: 132, flexShrink: 0 }}>
+      <svg width="132" height="132" viewBox="0 0 132 132" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="66" cy="66" r="52" fill="none" stroke="#E8EEF4" strokeWidth="12" />
+        <circle cx="66" cy="66" r="52" fill="none" stroke={scoreColor(score)} strokeWidth="12" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset .7s ease' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 34, fontWeight: 900, color: scoreColor(score), lineHeight: 1 }}>{score ?? '—'}</div>
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>/ 100</div>
       </div>
     </div>
   );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-export default function OverviewTab({ data, loading }: { data: any; loading: boolean }) {
-  const { setActiveTab, setActivePage } = useUIStore();
-  const [showScoreInfo, setShowScoreInfo] = useState(false);
-  const d = merge(data);
+function ConfidenceBar({ value, coverage }: { value: number; coverage: number }) {
+  const label = value >= 80 ? 'High confidence' : value >= 55 ? 'Moderate confidence' : value >= 30 ? 'Limited confidence' : 'Very limited data';
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12 }}>
+        <span style={{ color: C.text2, fontWeight: 700 }}>Data confidence</span>
+        <span style={{ color: C.text3 }}>{value}% · {label}</span>
+      </div>
+      <div style={{ height: 8, background: '#E8EEF4', borderRadius: 100, overflow: 'hidden' }}>
+        <div style={{ width: `${value}%`, height: '100%', borderRadius: 100, background: value >= 70 ? C.green : value >= 40 ? C.blue : C.amber, transition: 'width .5s ease' }} />
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11, color: C.text3 }}>Measured domains currently cover {coverage}% of the Health Status Index weighting.</div>
+    </div>
+  );
+}
 
-  // SVG ring: r=38, circumference=2π×38≈238.76
-  const circ   = 238.76;
-  const scoreNum = typeof d.healthScore === 'number' ? d.healthScore : 0;
-  const offset = circ * (1 - scoreNum / 100);
+function DomainCard({ domain }: { domain: Domain }) {
+  const meta = STATUS[domain.status] ?? STATUS.NO_DATA;
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{domain.label}</div>
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 100, color: meta.color, background: meta.bg, fontWeight: 800 }}>{meta.label}</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>Weight {domain.weight}% · Confidence {domain.confidence}% · {domain.source}</div>
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 900, color: scoreColor(domain.score) }}>{domain.score ?? '—'}</div>
+      </div>
+      <div style={{ height: 6, background: '#EDF2F7', borderRadius: 100, overflow: 'hidden' }}>
+        <div style={{ width: `${domain.score ?? 0}%`, height: '100%', borderRadius: 100, background: scoreColor(domain.score) }} />
+      </div>
+      {domain.latestValue && <div style={{ fontSize: 12, fontWeight: 700, color: C.text2 }}>Latest: {domain.latestValue}</div>}
+      <div style={{ fontSize: 12, lineHeight: 1.55, color: C.text3 }}>{domain.explanation}</div>
+    </div>
+  );
+}
 
-  const scoreLabel = scoreNum >= 80 ? 'Good' : scoreNum >= 60 ? 'Fair' : 'Needs Attention';
-  const scoreGradient = scoreNum >= 80 ? '#22C55E' : scoreNum >= 60 ? '#14B8A6' : '#F59E0B';
+function History({ rows }: { rows: HealthScore['history'] }) {
+  const valid = rows.filter(r => r.score != null).slice(0, 8).reverse();
+  if (!valid.length) return <div style={{ fontSize: 12, color: C.text3 }}>No historical snapshots yet. Use “Recalculate & save” to create the first versioned snapshot.</div>;
+  const max = 100;
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 120, paddingTop: 12 }}>
+      {valid.map((r, i) => {
+        const score = r.score ?? 0;
+        return (
+          <div key={`${r.date}-${i}`} style={{ flex: 1, minWidth: 26, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 5, height: '100%' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: scoreColor(score) }}>{score}</span>
+            <div style={{ width: '100%', maxWidth: 30, height: `${Math.max(6, (score / max) * 78)}px`, background: scoreColor(score), borderRadius: '6px 6px 2px 2px', opacity: .88 }} />
+            <span style={{ fontSize: 9, color: C.text3, whiteSpace: 'nowrap' }}>{new Date(r.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function OverviewTab({ data, loading: parentLoading }: { data?: any; loading?: boolean }) {
+  const uiStore = useUIStore() as any;
+  const [health, setHealth] = useState<HealthScore | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await patientAPI.getHealthScore();
+      setHealth(unwrap<HealthScore>(res));
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Unable to load your health score.');
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const refresh = async () => {
+    setRefreshing(true); setError('');
+    try {
+      const res = await patientAPI.refreshHealthScore();
+      setHealth(unwrap<HealthScore>(res));
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Unable to recalculate your health score.');
+    } finally { setRefreshing(false); }
+  };
+
+  const critical = useMemo(() => health?.alerts?.filter(a => a.severity === 'CRITICAL') ?? [], [health]);
+  const warnings = useMemo(() => health?.alerts?.filter(a => a.severity === 'WARNING') ?? [], [health]);
+  const statusMeta = STATUS[health?.status ?? 'INSUFFICIENT_DATA'];
+  const dashboardScore = data?.healthScore?.score;
+
+  if (loading || parentLoading) {
+    return <div style={{ display: 'grid', gap: 14 }}><div style={{ height: 210, borderRadius: 16, background: '#E9F1F7' }} /><div style={{ height: 300, borderRadius: 16, background: '#EEF4F8' }} /></div>;
+  }
 
   return (
-    <>
-      <style>{`
-        .ov-grid2  { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .ov-grid4  { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 20px; }
-        @media(max-width:1200px) { .ov-grid4 { grid-template-columns: repeat(3,1fr); } }
-        @media(max-width:800px)  { .ov-grid4 { grid-template-columns: 1fr 1fr; } }
-        @media(max-width:720px)  { .ov-grid4, .ov-grid2 { grid-template-columns: 1fr; } }
-        .ov-hs { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:16px 20px; display:flex; align-items:center; gap:20px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
-        .ov-hs-ring { position:relative; flex-shrink:0; }
-        .ov-hs-ring svg { transform:rotate(-90deg); }
-        .ov-hs-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .ov-hs-num   { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; line-height:1; }
-        .ov-hs-label { font-size:9px; color:#64748B; text-transform:uppercase; }
-        .ov-hs-title { font-family:'Syne',sans-serif; font-weight:800; font-size:15px; color:#0F2D2A; margin-bottom:4px; }
-        .ov-hs-sub   { font-size:12px; color:#64748B; margin-bottom:12px; }
-        .ov-bar-row  { display:flex; flex-direction:column; gap:10px; flex:1; }
-        .ov-bar-item { display:flex; align-items:center; gap:10px; }
-        .ov-bar-lbl  { font-size:12px; color:#4B6E6A; width:190px; flex-shrink:0; font-weight:500; display:flex; align-items:center; gap:0; }
-        .ov-bar-track { flex:1; height:7px; background:#E2EEF0; border-radius:3px; overflow:hidden; }
-        .ov-bar-fill  { height:100%; border-radius:3px; transition:width 1s ease; }
-        .ov-bar-score { font-size:12px; color:#0F2D2A; width:28px; text-align:right; font-weight:700; }
-        .ov-insight { background:#F5F3FF; border:1px solid #DDD6FE; border-radius:12px; padding:14px 16px; display:flex; align-items:flex-start; gap:12px; margin-bottom:20px; }
-        .ov-insight-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
-        .ov-insight-text { font-size:13px; color:#4B5563; line-height:1.6; }
-        .ov-insight-text strong { color:#7C3AED; }
-        .ov-qa { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
-        .ov-qa-btn { padding:9px 16px; border-radius:9px; border:1.5px solid #E2EEF0; background:#FFFFFF; color:#4B6E6A; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; font-family:'Plus Jakarta Sans',sans-serif; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-        .ov-qa-btn:hover { border-color:#0D9488; color:#0D9488; background:#F0FDF9; }
-        .ov-qa-btn.primary { background:linear-gradient(135deg,#0D9488,#14B8A6); border-color:transparent; color:#fff; box-shadow:0 2px 10px rgba(13,148,136,0.3); }
-        .ov-qa-btn.primary:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(20,184,166,0.4); }
-        .ov-kpi { min-height:0; background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:14px; position:relative; overflow:hidden; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
-        .ov-kpi:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
-        .ov-kpi::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; }
-        .ov-kpi.teal::after  { background:linear-gradient(90deg,#0D9488,#14B8A6); }
-        .ov-kpi.green::after { background:#22C55E; }
-        .ov-kpi.amber::after { background:#F59E0B; }
-        .ov-kpi.rose::after  { background:#F43F5E; }
-        .ov-kpi-lbl  { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; font-weight:600; }
-        .ov-kpi-val  { font-family:'Syne',sans-serif; font-size:32px; font-weight:800; color:#0F2D2A; line-height:1; margin-bottom:5px; }
-        .ov-kpi-val.teal  { color:#0D9488; }
-        .ov-kpi-val.green { color:#16A34A; }
-        .ov-kpi-val.amber { color:#D97706; }
-        .ov-kpi-trend { font-size:12px; color:#64748B; font-weight:500; }
-        .ov-kpi-trend.up   { color:#16A34A; font-weight:600; }
-        .ov-kpi-trend.down { color:#DC2626; font-weight:600; }
-        .ov-card { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:20px; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
-        .ov-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
-        .ov-card-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-        .ov-card-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; color:#0F2D2A; }
-        .ov-appt { display:flex; gap:16px; align-items:flex-start; }
-        .ov-appt-date { background:#F0FDF9; border:1.5px solid #99F6E4; border-radius:10px; padding:10px 14px; text-align:center; flex-shrink:0; min-width:58px; }
-        .ov-appt-day   { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:#0D9488; line-height:1; }
-        .ov-appt-month { font-size:9px; color:#64748B; text-transform:uppercase; font-weight:600; }
-        .ov-appt-doctor { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; color:#0F2D2A; margin-bottom:2px; }
-        .ov-appt-spec   { font-size:12px; color:#0D9488; margin-bottom:6px; font-weight:600; }
-        .ov-appt-meta   { font-size:12px; color:#64748B; }
-        .ov-appt-btns   { display:flex; gap:8px; margin-top:14px; }
-        .ov-tbl { width:100%; border-collapse:collapse; }
-        .ov-tbl th { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:.07em; padding:8px 10px; border-bottom:2px solid #E2EEF0; text-align:left; font-weight:700; }
-        .ov-tbl td { padding:10px 10px; font-size:13px; color:#4B6E6A; border-bottom:1px solid #F1F5F9; }
-        .ov-tbl tr:last-child td { border-bottom:none; }
-        .ov-tbl tr:hover td { background:#F8FFFE; color:#0F2D2A; }
-        .ov-pill { display:inline-flex; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:700; border:1px solid; }
-        .ov-pill.upcoming  { background:rgba(13,148,136,0.1); color:#0D9488; border-color:rgba(13,148,136,0.3); }
-        .ov-pill.mild      { background:rgba(22,163,74,0.1);  color:#16A34A; border-color:rgba(22,163,74,0.3); }
-        .ov-pill.moderate  { background:rgba(217,119,6,0.1); color:#D97706; border-color:rgba(217,119,6,0.3); }
-        .ov-pill.severe    { background:rgba(220,38,38,0.1);  color:#DC2626; border-color:rgba(220,38,38,0.3); }
-        .ov-risk { background:#FFF5F5; border:1px solid #FECACA; border-radius:12px; padding:14px 16px; display:flex; align-items:flex-start; gap:12px; margin-top:20px; }
-        .ov-risk-text { font-size:13px; color:#374151; line-height:1.6; }
-        .ov-risk-text strong { color:#DC2626; }
-        .ov-btn { padding:7px 14px; border-radius:9px; border:1.5px solid #E2EEF0; background:#FFFFFF; color:#4B6E6A; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:'Plus Jakarta Sans',sans-serif; }
-        .ov-btn:hover { border-color:#0D9488; color:#0D9488; }
-        .ov-btn.teal { background:linear-gradient(135deg,#0D9488,#14B8A6); border-color:transparent; color:#fff; }
-        .ov-btn.teal:hover { box-shadow:0 4px 14px rgba(20,184,166,0.35); }
-        .ov-loading { display:flex; flex-direction:column; gap:16px; }
-        .ov-skel { border-radius:14px; height:160px; background:#F0FDF9; animation:ov-shimmer 1.5s infinite; }
-        @keyframes ov-shimmer { 0%,100%{opacity:0.6} 50%{opacity:1} }
-      `}</style>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {error && <div style={{ padding: '12px 16px', borderRadius: 12, background: '#FFF1F2', border: '1px solid #FECDD3', color: C.red, fontSize: 13 }}>{error}</div>}
 
-      {loading && (
-        <div className="ov-loading">
-          <div className="ov-skel" style={{ height: 140 }} />
-          <div className="ov-skel" style={{ height: 80 }} />
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
-            {[1,2,3,4].map(i => <div key={i} className="ov-skel" style={{ height:100 }} />)}
+      {critical.map(a => (
+        <div key={a.code} style={{ padding: '15px 18px', borderRadius: 14, background: '#FFF1F2', border: '1.5px solid #FDA4AF' }}>
+          <div style={{ fontSize: 14, fontWeight: 900, color: C.red }}>⚠ Critical health alert · {a.title}</div>
+          <div style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.6, marginTop: 5 }}>{a.message}</div>
+          <div style={{ fontSize: 11, color: '#9F1239', marginTop: 6 }}>The overall score must not be used to dismiss this alert.</div>
+        </div>
+      ))}
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: 22, boxShadow: '0 3px 14px rgba(15,39,66,.06)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', color: C.text3, fontWeight: 800 }}>HealthConnect Health Status Index</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: C.text, marginTop: 4 }}>Your Health Score</div>
+            <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>Algorithm {health?.algorithmVersion ?? 'HC-HSI-1.0'} · measured health status, not a diagnosis</div>
+          </div>
+          <button onClick={refresh} disabled={refreshing} style={{ padding: '9px 15px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', color: C.blue, fontSize: 12, fontWeight: 800, cursor: refreshing ? 'wait' : 'pointer', opacity: refreshing ? .65 : 1 }}>
+            {refreshing ? 'Recalculating…' : '↻ Recalculate & save'}
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 24, alignItems: 'center' }}>
+          <ScoreRing score={health?.score ?? null} />
+          <div>
+            <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+              <span style={{ padding: '5px 11px', borderRadius: 100, color: statusMeta.color, background: statusMeta.bg, fontWeight: 900, fontSize: 12 }}>{statusMeta.label}</span>
+              {health?.trend && health.trend !== 'UNKNOWN' && <span style={{ fontSize: 12, color: C.text2 }}>{health.trend === 'IMPROVING' ? '↗ Improving' : health.trend === 'WORSENING' ? '↘ Worsening' : '→ Stable'}{health.delta != null ? ` (${health.delta > 0 ? '+' : ''}${health.delta})` : ''}</span>}
+            </div>
+            <p style={{ fontSize: 13, color: C.text2, lineHeight: 1.65, margin: '0 0 16px' }}>
+              {health?.score == null
+                ? 'There is not enough reliable structured health data to calculate a responsible overall score yet. Missing data is never assumed to be healthy.'
+                : 'The score is calculated only from domains with usable data. Missing domains do not add or subtract points; confidence tells you how complete and current the assessment is.'}
+            </p>
+            <ConfidenceBar value={health?.confidence ?? 0} coverage={health?.dataCoverage ?? 0} />
+          </div>
+        </div>
+
+        {dashboardScore != null && health?.score != null && dashboardScore !== health.score && (
+          <div style={{ marginTop: 14, fontSize: 11, color: C.text3 }}>Dashboard summary will synchronize to the current Health Status Index on its next refresh.</div>
+        )}
+      </div>
+
+      {warnings.length > 0 && (
+        <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 900, color: C.amber, marginBottom: 8 }}>Health alerts</div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {warnings.map(a => <div key={`${a.code}-${a.observedAt}`} style={{ fontSize: 12, color: '#7C2D12', lineHeight: 1.55 }}><strong>{a.title}:</strong> {a.message}</div>)}
           </div>
         </div>
       )}
 
-      {!loading && (
-        <>
-          {/* Health Score Widget */}
-          <div className="ov-hs">
-            <div className="ov-hs-ring">
-              <svg width="90" height="90" viewBox="0 0 90 90">
-                <circle cx="45" cy="45" r="38" fill="none" stroke="#E2EEF0" strokeWidth="8" />
-                <circle cx="45" cy="45" r="38" fill="none" stroke={scoreGradient} strokeWidth="8"
-                  strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} />
-              </svg>
-              <div className="ov-hs-center">
-                <div className="ov-hs-num" style={{ color: scoreGradient }}>{scoreNum}</div>
-                <div className="ov-hs-label">/100</div>
-              </div>
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:2 }}>
-                <div className="ov-hs-title">Health Score — {scoreLabel}</div>
-                {/* Week-over-week delta badge */}
-                {d.weekDelta !== 0 && (
-                  <span style={{
-                    fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:100,
-                    background: d.weekDelta > 0 ? 'rgba(34,197,94,0.12)' : 'rgba(220,38,38,0.1)',
-                    color:      d.weekDelta > 0 ? '#16A34A' : '#DC2626',
-                    border:     `1px solid ${d.weekDelta > 0 ? 'rgba(34,197,94,0.3)' : 'rgba(220,38,38,0.25)'}`,
-                  }}>
-                    {d.weekDelta > 0 ? `↑ +${d.weekDelta}` : `↓ ${d.weekDelta}`} this week
-                  </span>
-                )}
-                {/* ℹ️ Info button */}
-                <button onClick={() => setShowScoreInfo(true)}
-                  title="How is this score calculated?"
-                  style={{ width:22, height:22, borderRadius:'50%', border:'1.5px solid #CBD5E1', background:'#F8FAFC', color:'#64748B', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.2s', lineHeight:1 }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor='#0D9488'; (e.currentTarget as HTMLElement).style.color='#0D9488'; (e.currentTarget as HTMLElement).style.background='#F0FDF9'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#CBD5E1'; (e.currentTarget as HTMLElement).style.color='#64748B'; (e.currentTarget as HTMLElement).style.background='#F8FAFC'; }}
-                >i</button>
-              </div>
-              <div className="ov-hs-sub">Weighted across 7 health parameters</div>
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: 10 }}>
+          <div><div style={{ fontSize: 16, fontWeight: 900, color: C.text }}>Health domains</div><div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>10-domain model; unavailable data stays explicitly unscored.</div></div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(285px,1fr))', gap: 12 }}>
+          {(health?.domains ?? []).map(d => <DomainCard key={d.key} domain={d} />)}
+        </div>
+      </div>
 
-              {/* Sparkline — last 8 weeks */}
-              {d.scoreHistory.length > 1 && (
-                <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:28, marginBottom:12 }}>
-                  {d.scoreHistory.map((h: any, i: number) => {
-                    const val = h.score ?? 0;
-                    const isLast = i === d.scoreHistory.length - 1;
-                    return (
-                      <div key={i} title={`${val} — ${h.date ? new Date(h.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : ''}`}
-                        style={{ flex:1, height:`${(val/100)*26}px`, minHeight:3, borderRadius:'2px 2px 0 0',
-                          background: isLast ? scoreGradient : 'rgba(20,184,166,0.35)',
-                          transition:'height 0.6s ease' }} />
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* 7-parameter bars */}
-              <div className="ov-bar-row">
-                {d.scoreBreakdown.map((b: any) => (
-                  <div className="ov-bar-item" key={b.label}>
-                    <div className="ov-bar-lbl">
-                      <span style={{ marginRight:5 }}>{b.icon}</span>{b.label}
-                      <span style={{ marginLeft:'auto', fontSize:10, color:'#94A3B8', fontWeight:400 }}>{b.weight}%</span>
-                    </div>
-                    <div className="ov-bar-track">
-                      <div className="ov-bar-fill" style={{ width:`${b.value}%`, background:b.color }} />
-                    </div>
-                    <div className="ov-bar-score">{b.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* AI Insight */}
-          <div className="ov-insight">
-            <div className="ov-insight-icon">🤖</div>
-            <div className="ov-insight-text">
-              <strong>AI Weekly Insight:</strong> {d.aiInsight}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="ov-qa">
-            <button className="ov-qa-btn primary" onClick={() => setActiveTab('symptoms')}>➕ Log Symptom</button>
-            <button className="ov-qa-btn" onClick={() => setActivePage('medications')}>💊 Add Medication</button>
-            <button className="ov-qa-btn" onClick={() => setActiveTab('vault')}>📤 Upload Report</button>
-            <button className="ov-qa-btn" onClick={() => setActivePage('appointments')}>📅 Book Appointment</button>
-            <button className="ov-qa-btn" onClick={() => setActivePage('communities')}>🏘️ My Communities</button>
-            <button className="ov-qa-btn" onClick={() => setActiveTab('insights')}>📊 View Insights</button>
-          </div>
-
-          {/* KPI Row */}
-          <div className="ov-grid4">
-            <div className="ov-kpi teal">
-              <div className="ov-kpi-lbl">Active Conditions</div>
-              <div className="ov-kpi-val teal">{d.conditionCount}</div>
-              <div className="ov-kpi-trend">{d.conditions[0]}</div>
-            </div>
-            <div className="ov-kpi green">
-              <div className="ov-kpi-lbl">Medication Adherence</div>
-              <div className="ov-kpi-val green">{d.medicationAdherence}%</div>
-              <div className={`ov-kpi-trend ${d.medicationAdherence >= 80 ? 'up' : ''}`}>{d.adherenceTrend}</div>
-            </div>
-            <div className="ov-kpi amber">
-              <div className="ov-kpi-lbl">Upcoming Appointments</div>
-              <div className="ov-kpi-val amber">{d.upcomingAppointments}</div>
-              <div className="ov-kpi-trend">
-                {d.upcomingAppointments > 0
-                  ? `Next: ${d.nextAppointment.month} ${d.nextAppointment.date}`
-                  : 'No upcoming'}
-              </div>
-            </div>
-            <div className="ov-kpi rose">
-              <div className="ov-kpi-lbl">Active Medications</div>
-              <div className="ov-kpi-val">{d.activeMedications}</div>
-              <div className="ov-kpi-trend down">{d.medAlert}</div>
-            </div>
-            {/* ── Communities KPI — navigates to Communities tab ── */}
-            <div
-              className="ov-kpi"
-              onClick={() => setActivePage('communities')}
-              style={{ cursor: 'pointer', borderColor: d.communitiesJoined > 0 ? 'rgba(77,182,160,0.3)' : undefined }}
-              title="Go to My Communities"
-            >
-              <style>{`.ov-kpi.community::after { background: linear-gradient(90deg,#4db6a0,#0D9488); }`}</style>
-              <div className="ov-kpi-lbl" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span>🏘️</span> Communities
-              </div>
-              <div className="ov-kpi-val" style={{ color: '#0D9488' }}>{d.communitiesJoined}</div>
-              <div className="ov-kpi-trend" style={{ color: d.communitiesJoined > 0 ? '#0D9488' : undefined }}>
-                {d.communitiesJoined > 0
-                  ? `${d.communitiesJoined} joined · View →`
-                  : 'Join a community'}
-              </div>
-            </div>
-          </div>
-
-          {/* Next Appt + Active Symptoms */}
-          <div className="ov-grid2" style={{ marginBottom:0 }}>
-            <div className="ov-card">
-              <div className="ov-card-hd">
-                <div className="ov-card-title">Next Appointment</div>
-                {d.upcomingAppointments > 0
-                  ? <span className="ov-pill upcoming">Upcoming</span>
-                  : <span className="ov-pill" style={{ color:'#64748B', borderColor:'#E2EEF0' }}>None</span>
-                }
-              </div>
-              {d.upcomingAppointments === 0 ? (
-                <div style={{ textAlign:'center', padding:'20px 0', color:'#64748B' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
-                  <div style={{ fontSize:13, color:'#94A3B8', marginBottom:12 }}>No upcoming appointments</div>
-                  <button className="ov-btn teal" onClick={() => setActivePage('appointments')}>Book Appointment</button>
-                </div>
-              ) : (
-                <>
-                  <div className="ov-appt">
-                    <div className="ov-appt-date">
-                      <div className="ov-appt-day">{d.nextAppointment.date}</div>
-                      <div className="ov-appt-month">{d.nextAppointment.month}</div>
-                    </div>
-                    <div>
-                      <div className="ov-appt-doctor">{d.nextAppointment.doctor}</div>
-                      <div className="ov-appt-spec">{d.nextAppointment.spec}</div>
-                      <div className="ov-appt-meta">{d.nextAppointment.time} · {d.nextAppointment.type}</div>
-                    </div>
-                  </div>
-                  <div className="ov-appt-btns">
-                    <button className="ov-btn" style={{ flex:1 }} onClick={() => setActivePage('appointments')}>Reschedule</button>
-                    <button className="ov-btn teal" style={{ flex:1 }} onClick={() => setActivePage('appointments')}>
-                      {d.nextAppointment.type === 'Teleconsult' ? '💻 Join Call' : '🗺 Directions'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="ov-card">
-              <div className="ov-card-hd">
-                <div className="ov-card-title">Recent Symptoms</div>
-                <button className="ov-btn teal" onClick={() => setActiveTab('symptoms')}>+ Log</button>
-              </div>
-              {d.activeSymptoms.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'20px 0', color:'#64748B' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
-                  <div style={{ fontSize:13 }}>No recent symptoms logged</div>
-                </div>
-              ) : (
-                <table className="ov-tbl">
-                  <thead>
-                    <tr><th>Symptom</th><th>Severity</th><th>When</th></tr>
-                  </thead>
-                  <tbody>
-                    {d.activeSymptoms.map((s: any) => (
-                      <tr key={s.name}>
-                        <td>{s.name}</td>
-                        <td><span className={`ov-pill ${s.level}`}>{s.severity}/10</span></td>
-                        <td>{s.since}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-
-          {/* Risk Alert — only show if API provides it */}
-          {d.riskAlert && (
-            <div className="ov-risk">
-              <div style={{ fontSize:18, flexShrink:0 }}>⚠️</div>
-              <div className="ov-risk-text">
-                <strong>AI Risk Alert:</strong> {d.riskAlert}
-              </div>
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr .85fr', gap: 14 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 17 }}>
+          <div style={{ fontSize: 14, fontWeight: 900, color: C.text, marginBottom: 10 }}>What to focus on</div>
+          {(health?.recommendations?.length ?? 0) === 0 ? <div style={{ fontSize: 12, color: C.text3 }}>No recommendations available yet.</div> : (
+            <div style={{ display: 'grid', gap: 9 }}>{health?.recommendations.map((r, i) => <div key={i} style={{ fontSize: 12, lineHeight: 1.55, color: C.text2, display: 'flex', gap: 8 }}><span style={{ color: C.blue, fontWeight: 900 }}>{i + 1}.</span><span>{r}</span></div>)}</div>
           )}
-        </>
-      )}
+        </div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 17 }}>
+          <div style={{ fontSize: 14, fontWeight: 900, color: C.text, marginBottom: 8 }}>Missing data</div>
+          {(health?.missingData?.length ?? 0) === 0 ? <div style={{ fontSize: 12, color: C.green }}>All current v1 domains have usable data.</div> : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{health?.missingData.map(m => <span key={m.key} title={m.reason} style={{ padding: '5px 9px', borderRadius: 100, background: '#F1F5F9', color: C.text3, fontSize: 10, fontWeight: 700 }}>{m.label}</span>)}</div>
+          )}
+        </div>
+      </div>
 
-      {/* Health Score Info Modal */}
-      {showScoreInfo && (
-        <ScoreInfoModal
-          breakdown={d.scoreBreakdown}
-          score={scoreNum}
-          onClose={() => setShowScoreInfo(false)}
-        />
-      )}
-    </>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 17 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <div><div style={{ fontSize: 14, fontWeight: 900, color: C.text }}>Versioned score history</div><div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>Snapshots are comparable only within the same algorithm version.</div></div>
+          <span style={{ fontSize: 10, color: C.purple, fontWeight: 800 }}>{health?.algorithmVersion}</span>
+        </div>
+        <History rows={health?.history ?? []} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={() => uiStore.setActivePage('vitals')} style={{ padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', color: C.blue, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Log vitals</button>
+        <button onClick={() => uiStore.setActivePage('medications')} style={{ padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', color: C.blue, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Medication adherence</button>
+        <button onClick={() => uiStore.setActivePage('symptoms')} style={{ padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: '#fff', color: C.blue, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Track symptoms</button>
+      </div>
+    </div>
   );
 }
