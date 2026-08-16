@@ -22,43 +22,71 @@ const interp = (x: number, anchors: Array<[number, number]>) => {
   return a[a.length - 1][1];
 };
 
+/**
+ * HC-HSI 2.0 lifestyle normalization.
+ * Stored activity values are TOTAL MINUTES PER WEEK:
+ * moderate-equivalent minutes = moderate + 2 * vigorous.
+ *
+ * Fruit/vegetable intake remains useful health context, but the current
+ * single-field diet proxy is intentionally NOT included in the numeric
+ * Lifestyle score. A broader India-adapted dietary assessment is required
+ * before diet contributes numerically.
+ */
 function normalizeActivityDomain(base: any) {
   const lifestyle = (base?.domains ?? []).find((d: any) => d?.key === 'lifestyle');
+  if (!lifestyle) return;
+
   const activity = lifestyle?.components?.find((c: any) => c?.key === 'activity');
-  if (!lifestyle || !activity || !activity.value) return;
+  const diet = lifestyle?.components?.find((c: any) => c?.key === 'diet');
 
-  const match = String(activity.value).match(/([0-9.]+)\s+min moderate\s*\+\s*([0-9.]+)\s+min vigorous/i);
-  if (!match) return;
+  // Keep the optional diet value visible as context, but do not score it.
+  if (diet) {
+    diet.score = null;
+    diet.status = 'NOT_APPLICABLE';
+    diet.explanation = 'Context only in HC-HSI 2.0. Fruit and vegetable intake is recorded, but a single diet field is not used as a complete diet-quality score.';
+  }
 
-  const moderate = Number(match[1]);
-  const vigorous = Number(match[2]);
-  if (!Number.isFinite(moderate) || !Number.isFinite(vigorous)) return;
+  if (activity?.value) {
+    const match = String(activity.value).match(/([0-9.]+)\s+min moderate\s*\+\s*([0-9.]+)\s+min vigorous/i);
+    if (match) {
+      const moderate = Number(match[1]);
+      const vigorous = Number(match[2]);
+      if (Number.isFinite(moderate) && Number.isFinite(vigorous)) {
+        const equivalent = moderate + 2 * vigorous;
+        const activityScore = clamp(interp(equivalent, [
+          [0, 30],
+          [30, 40],
+          [60, 50],
+          [90, 62],
+          [120, 76],
+          [150, 90],
+          [225, 97],
+          [300, 100],
+          [450, 100],
+        ]));
 
-  const equivalent = moderate + 2 * vigorous;
-  const activityScore = clamp(interp(equivalent, [
-    [0, 30],
-    [30, 40],
-    [60, 50],
-    [90, 62],
-    [120, 76],
-    [150, 90],
-    [225, 97],
-    [300, 100],
-    [450, 100],
-  ]));
+        activity.score = activityScore;
+        activity.status = domainStatus(activityScore);
+        activity.explanation = `Uses ${equivalent} moderate-equivalent minutes/week (${moderate} moderate + 2 × ${vigorous} vigorous). The adult aerobic-health reference is 150–300 moderate minutes/week, 75–150 vigorous minutes/week, or an equivalent combination.`;
+      }
+    }
+  }
 
-  activity.score = activityScore;
-  activity.status = domainStatus(activityScore);
-  activity.explanation = `Uses ${equivalent} moderate-equivalent minutes/week (${moderate} moderate + 2 × ${vigorous} vigorous). The adult aerobic-health reference is 150–300 moderate minutes/week, 75–150 vigorous minutes/week, or an equivalent combination.`;
-
-  const componentWeights: Record<string, number> = { tobacco: 50, activity: 35, diet: 15 };
+  // Lifestyle score currently reflects two strong, interpretable inputs only:
+  // tobacco exposure and weekly aerobic physical activity.
+  const componentWeights: Record<string, number> = { tobacco: 55, activity: 45 };
   const scored = (lifestyle.components ?? [])
     .filter((c: any) => c?.score != null && componentWeights[c.key] != null)
     .map((c: any) => ({ score: Number(c.score), weight: componentWeights[c.key] }));
   const totalWeight = scored.reduce((sum: number, p: any) => sum + p.weight, 0);
+
   if (totalWeight > 0) {
     lifestyle.score = clamp(scored.reduce((sum: number, p: any) => sum + p.score * p.weight, 0) / totalWeight);
     lifestyle.status = domainStatus(lifestyle.score);
+    lifestyle.explanation = 'Lifestyle Health currently reflects tobacco exposure and weekly aerobic physical activity. Diet and alcohol remain health context until broader validated assessments are implemented.';
+  } else {
+    lifestyle.score = null;
+    lifestyle.status = 'NO_DATA';
   }
 }
 
