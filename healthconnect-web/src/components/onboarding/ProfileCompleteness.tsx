@@ -3,7 +3,7 @@
 // Patient completion is based only on stable patient-profile data.
 // Account/security and clinical/Health Score data are intentionally excluded.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const C = {
   teal: '#14B8A6', tealDk: '#0D9488', green: '#22C55E', amber: '#F59E0B', rose: '#F43F5E',
@@ -51,64 +51,76 @@ export function useProfileScore(profile: any, role: 'PATIENT' | 'DOCTOR' | 'HOSP
   sections: ProfileSection[];
   total: number;
 } {
+  const [eventProfile, setEventProfile] = useState<any>(null);
+
+  useEffect(() => {
+    setEventProfile(null);
+  }, [profile]);
+
+  useEffect(() => {
+    if (role !== 'PATIENT') return;
+    const handler = (event: Event) => {
+      const updated = (event as CustomEvent)?.detail;
+      if (!updated) return;
+      // Existing layout components own their profile object locally. Updating its
+      // fields plus local hook state lets the sidebar reflect a profile save
+      // immediately without forcing a full page refresh.
+      if (profile && typeof profile === 'object') Object.assign(profile, updated);
+      setEventProfile(updated);
+    };
+    window.addEventListener('hc:patient-profile-updated', handler);
+    return () => window.removeEventListener('hc:patient-profile-updated', handler);
+  }, [profile, role]);
+
+  const effectiveProfile = role === 'PATIENT' && eventProfile ? eventProfile : profile;
+
   return useMemo(() => {
-    if (!profile) return { score: 0, sections: [], total: 0 };
+    if (!effectiveProfile) return { score: 0, sections: [], total: 0 };
 
     let sections: ProfileSection[] = [];
 
     if (role === 'PATIENT') {
-      const serverCompletion = profile?.completion;
+      const serverCompletion = effectiveProfile?.completion;
       if (serverCompletion && Array.isArray(serverCompletion.missing)) {
         const missing = new Set(serverCompletion.missing.map((item: any) => item.key));
-        sections = PATIENT_CORE.map((item) => ({
-          ...item,
-          points: 1,
-          done: !missing.has(item.key),
-          action: 'profile',
-        }));
-        return {
-          score: Number(serverCompletion.percentage ?? 0),
-          sections,
-          total: PATIENT_CORE.length,
-        };
+        sections = PATIENT_CORE.map((item) => ({ ...item, points: 1, done: !missing.has(item.key), action: 'profile' }));
+        return { score: Number(serverCompletion.percentage ?? 0), sections, total: PATIENT_CORE.length };
       }
-
-      // Transitional fallback while API/web processes are restarted during deployment.
-      sections = fallbackPatientSections(profile);
+      sections = fallbackPatientSections(effectiveProfile);
     }
 
     if (role === 'DOCTOR') {
       sections = [
-        { key: 'basic', label: 'Phone & gender', points: 10, done: !!(profile.phone && profile.gender), action: 'profile' },
-        { key: 'spec', label: 'Specialization & city', points: 15, done: !!(profile.specialization && profile.city), action: 'profile' },
-        { key: 'license', label: 'Medical license number', points: 15, done: !!profile.medicalLicenseNumber, action: 'profile' },
-        { key: 'qual', label: 'Education / degree', points: 10, done: !!(profile.qualification?.length > 0), action: 'profile' },
-        { key: 'experience', label: 'Years of experience', points: 5, done: !!profile.experienceYears, action: 'profile' },
-        { key: 'fee', label: 'Consultation fee set', points: 10, done: !!profile.consultationFee, action: 'profile' },
-        { key: 'availability', label: 'Availability schedule', points: 15, done: !!(profile.availabilitySchedule || profile.availability?.length > 0), action: 'availability' },
-        { key: 'bio', label: 'Bio / about you', points: 10, done: !!profile.bio, action: 'profile' },
-        { key: 'photo', label: 'Profile photo', points: 5, done: !!profile.profilePhotoUrl, action: 'profile' },
-        { key: 'languages', label: 'Languages spoken', points: 5, done: !!(profile.languagesSpoken?.length > 0), action: 'profile' },
+        { key: 'basic', label: 'Phone & gender', points: 10, done: !!(effectiveProfile.phone && effectiveProfile.gender), action: 'profile' },
+        { key: 'spec', label: 'Specialization & city', points: 15, done: !!(effectiveProfile.specialization && effectiveProfile.city), action: 'profile' },
+        { key: 'license', label: 'Medical license number', points: 15, done: !!effectiveProfile.medicalLicenseNumber, action: 'profile' },
+        { key: 'qual', label: 'Education / degree', points: 10, done: !!(effectiveProfile.qualification?.length > 0), action: 'profile' },
+        { key: 'experience', label: 'Years of experience', points: 5, done: !!effectiveProfile.experienceYears, action: 'profile' },
+        { key: 'fee', label: 'Consultation fee set', points: 10, done: !!effectiveProfile.consultationFee, action: 'profile' },
+        { key: 'availability', label: 'Availability schedule', points: 15, done: !!(effectiveProfile.availabilitySchedule || effectiveProfile.availability?.length > 0), action: 'availability' },
+        { key: 'bio', label: 'Bio / about you', points: 10, done: !!effectiveProfile.bio, action: 'profile' },
+        { key: 'photo', label: 'Profile photo', points: 5, done: !!effectiveProfile.profilePhotoUrl, action: 'profile' },
+        { key: 'languages', label: 'Languages spoken', points: 5, done: !!(effectiveProfile.languagesSpoken?.length > 0), action: 'profile' },
       ];
     }
 
     if (role === 'HOSPITAL') {
       sections = [
-        { key: 'basic', label: 'Phone & hospital type', points: 15, done: !!(profile.phone && profile.hospitalType), action: 'profile' },
-        { key: 'address', label: 'Full address & city', points: 15, done: !!(profile.address && profile.city), action: 'profile' },
-        { key: 'reg', label: 'Registration number', points: 20, done: !!profile.registrationNumber, action: 'profile' },
-        { key: 'beds', label: 'Bed count', points: 10, done: !!profile.bedCount, action: 'profile' },
-        { key: 'specs', label: 'Specialties offered', points: 15, done: !!(profile.specialties?.length > 0), action: 'profile' },
-        { key: 'photo', label: 'Hospital photo', points: 10, done: !!profile.profilePhotoUrl, action: 'profile' },
-        { key: 'website', label: 'Website', points: 5, done: !!profile.website, action: 'profile' },
-        { key: 'accred', label: 'Accreditations', points: 10, done: !!(profile.accreditations?.length > 0), action: 'profile' },
+        { key: 'basic', label: 'Phone & hospital type', points: 15, done: !!(effectiveProfile.phone && effectiveProfile.hospitalType), action: 'profile' },
+        { key: 'address', label: 'Full address & city', points: 15, done: !!(effectiveProfile.address && effectiveProfile.city), action: 'profile' },
+        { key: 'reg', label: 'Registration number', points: 20, done: !!effectiveProfile.registrationNumber, action: 'profile' },
+        { key: 'beds', label: 'Bed count', points: 10, done: !!effectiveProfile.bedCount, action: 'profile' },
+        { key: 'specs', label: 'Specialties offered', points: 15, done: !!(effectiveProfile.specialties?.length > 0), action: 'profile' },
+        { key: 'photo', label: 'Hospital photo', points: 10, done: !!effectiveProfile.profilePhotoUrl, action: 'profile' },
+        { key: 'website', label: 'Website', points: 5, done: !!effectiveProfile.website, action: 'profile' },
+        { key: 'accred', label: 'Accreditations', points: 10, done: !!(effectiveProfile.accreditations?.length > 0), action: 'profile' },
       ];
     }
 
     const total = sections.reduce((sum, section) => sum + section.points, 0);
     const earned = sections.filter((section) => section.done).reduce((sum, section) => sum + section.points, 0);
     return { score: total ? Math.round((earned / total) * 100) : 0, sections, total };
-  }, [profile, role]);
+  }, [effectiveProfile, role]);
 }
 
 function scoreColor(score: number): string {
