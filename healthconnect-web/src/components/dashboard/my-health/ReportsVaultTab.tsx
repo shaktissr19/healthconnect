@@ -1,377 +1,82 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { patientAPI, doctorAPI } from '@/lib/api';
+import { useEffect, useRef, useState } from 'react';
+import { doctorAPI, patientAPI } from '@/lib/api';
 
-const TYPE_ICONS: Record<string, string> = {
-  LAB:'🧪', SCAN:'🩻', PRESCRIPTION:'💊', DISCHARGE:'🏥',
-  VACCINATION:'💉', IMAGING:'🫁', CARDIOLOGY:'❤️', OTHER:'📄',
-};
-const TYPE_LABELS: Record<string, string> = {
-  LAB:'Lab Report', SCAN:'Scan', PRESCRIPTION:'Prescription',
-  DISCHARGE:'Discharge Summary', VACCINATION:'Vaccination',
-  IMAGING:'Imaging', CARDIOLOGY:'Cardiology', OTHER:'Other',
-};
+const TYPES = ['LAB','SCAN','PRESCRIPTION','DISCHARGE','VACCINATION','INSURANCE','OTHER'] as const;
+const ICONS:Record<string,string> = { LAB:'🧪',SCAN:'🩻',PRESCRIPTION:'💊',DISCHARGE:'🏥',VACCINATION:'💉',INSURANCE:'🛡️',OTHER:'📄' };
+const LABELS:Record<string,string> = { LAB:'Lab Report',SCAN:'Scan / Imaging',PRESCRIPTION:'Prescription',DISCHARGE:'Discharge Summary',VACCINATION:'Vaccination',INSURANCE:'Insurance',OTHER:'Other' };
+const fmtDate = (value?:string) => value ? new Date(value).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—';
+const fmtSize = (bytes?:number) => !bytes ? '—' : bytes>=1024*1024 ? `${(bytes/1024/1024).toFixed(1)} MB` : `${Math.round(bytes/1024)} KB`;
+const guessType = (name:string) => { const n=name.toLowerCase(); if(/lab|blood|urine/.test(n))return'LAB';if(/scan|mri|ct|xray|x-ray|imaging/.test(n))return'SCAN';if(/prescription|\brx\b/.test(n))return'PRESCRIPTION';if(/discharge/.test(n))return'DISCHARGE';if(/vaccine|vaccination/.test(n))return'VACCINATION';if(/insurance|policy/.test(n))return'INSURANCE';return'OTHER'; };
 
-function fmtSize(bytes?: number) {
-  if (!bytes) return '—';
-  return bytes > 1024*1024 ? `${(bytes/1024/1024).toFixed(1)} MB` : `${Math.round(bytes/1024)} KB`;
-}
-function fmtDate(d?: string) {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }); }
-  catch { return '—'; }
-}
-function guessType(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes('lab') || n.includes('blood') || n.includes('urine')) return 'LAB';
-  if (n.includes('scan') || n.includes('mri')  || n.includes('ct'))    return 'SCAN';
-  if (n.includes('xray') || n.includes('x-ray')|| n.includes('chest')) return 'IMAGING';
-  if (n.includes('ecg')  || n.includes('echo') || n.includes('cardiac'))return 'CARDIOLOGY';
-  if (n.includes('prescription') || n.includes('rx'))                   return 'PRESCRIPTION';
-  if (n.includes('discharge'))                                           return 'DISCHARGE';
-  return 'OTHER';
-}
-
-// ── Share Modal ───────────────────────────────────────────────────────────────
-function ShareModal({ report, onClose, onShared }: { report: any; onClose: () => void; onShared: () => void }) {
-  const [doctors,   setDoctors]   = useState<any[]>([]);
-  const [search,    setSearch]    = useState('');
-  const [selected,  setSelected]  = useState<string>('');
-  const [expiresIn, setExpiresIn] = useState('7'); // days
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
-
-  useEffect(() => {
-    doctorAPI.getFeatured().then(res => {
-      const d = res?.data?.data ?? res?.data ?? {};
-      setDoctors(Array.isArray(d) ? d : d.doctors ?? []);
-    }).catch(() => {});
-  }, []);
-
-  const handleShare = async () => {
-    if (!selected) { setError('Please select a doctor.'); return; }
-    setSaving(true);
-    try {
-      const expiresAt = new Date(Date.now() + Number(expiresIn) * 86400000).toISOString();
-      await patientAPI.shareReport(report.id, { doctorId: selected, expiresAt });
-      onShared();
-    } catch (e: any) {
-      setError(e?.response?.data?.message ?? 'Failed to share. Please try again.');
-    }
-    setSaving(false);
-  };
-
-  const filtered = doctors.filter(d =>
-    !search || `${d.firstName} ${d.lastName} ${d.specialization}`.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#0C1525', border:'1px solid rgba(20,184,166,0.2)', borderRadius:16, padding:28, width:'100%', maxWidth:460, maxHeight:'90vh', overflowY:'auto' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-          <div style={{ fontFamily:'Syne,sans-serif', fontSize:17, fontWeight:700, color:'#E2E8F0' }}>↗ Share Report</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748B', cursor:'pointer', fontSize:20 }}>✕</button>
-        </div>
-
-        <div style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#94A3B8' }}>
-          {TYPE_ICONS[report.type] ?? '📄'} {report.name ?? 'Report'} · {TYPE_LABELS[report.type] ?? report.type}
-        </div>
-
-        <input placeholder="Search doctors..." value={search} onChange={e => setSearch(e.target.value)}
-          style={{ width:'100%', padding:'9px 14px', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:9, color:'#E2E8F0', fontSize:13, marginBottom:12, boxSizing:'border-box', outline:'none' }} />
-
-        <div style={{ maxHeight:200, overflowY:'auto', marginBottom:14, border:'1px solid rgba(255,255,255,0.06)', borderRadius:10 }}>
-          {filtered.length === 0 ? (
-            <div style={{ color:'#64748B', fontSize:13, padding:'16px', textAlign:'center' }}>No doctors found</div>
-          ) : (
-            filtered.map((doc: any) => (
-              <div key={doc.id} onClick={() => setSelected(doc.id)}
-                style={{ display:'flex', gap:12, padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid rgba(255,255,255,0.04)', background: selected===doc.id ? 'rgba(20,184,166,0.1)' : 'transparent', transition:'background 0.15s' }}>
-                <div style={{ width:32, height:32, borderRadius:8, background:'linear-gradient(135deg,#0D9488,#8B5CF6)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>👨‍⚕️</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color: selected===doc.id ? '#14B8A6' : '#E2E8F0' }}>
-                    Dr. {doc.firstName} {doc.lastName}
-                    {selected===doc.id && <span style={{ marginLeft:8, color:'#14B8A6', fontSize:12 }}>✓</span>}
-                  </div>
-                  <div style={{ fontSize:11, color:'#64748B' }}>{doc.specialization}</div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:'block', fontSize:11, color:'#64748B', marginBottom:8, textTransform:'uppercase', letterSpacing:'.06em', fontFamily:'JetBrains Mono,monospace' }}>Access expires in</label>
-          <div style={{ display:'flex', gap:8 }}>
-            {[['1','1 day'],['7','7 days'],['30','30 days'],['90','90 days']].map(([val, lbl]) => (
-              <button key={val} onClick={() => setExpiresIn(val)}
-                style={{ flex:1, padding:'7px 4px', borderRadius:8, border:`1px solid ${expiresIn===val ? 'rgba(20,184,166,0.4)' : 'rgba(255,255,255,0.08)'}`, background: expiresIn===val ? 'rgba(20,184,166,0.12)' : 'rgba(255,255,255,0.04)', color: expiresIn===val ? '#14B8A6' : '#64748B', fontSize:12, cursor:'pointer', fontWeight:600 }}>
-                {lbl}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {error && <div style={{ color:'#F43F5E', fontSize:12, marginBottom:12 }}>{error}</div>}
-
-        <div style={{ display:'flex', gap:10 }}>
-          <button onClick={handleShare} disabled={saving || !selected}
-            style={{ flex:1, padding:'10px', background: !selected ? 'rgba(20,184,166,0.3)' : 'linear-gradient(135deg,#0D9488,#14B8A6)', color:'#fff', border:'none', borderRadius:9, fontWeight:700, cursor: !selected ? 'not-allowed' : 'pointer', fontSize:13 }}>
-            {saving ? 'Sharing...' : '↗ Share with Doctor'}
-          </button>
-          <button onClick={onClose} style={{ padding:'10px 18px', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:9, color:'#94A3B8', cursor:'pointer', fontSize:13 }}>Cancel</button>
-        </div>
-
-        <div style={{ marginTop:12, fontSize:11, color:'#475569', lineHeight:1.5 }}>
-          🔒 DPDP compliant — shared access is logged and auto-expires. You can revoke access anytime.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function ReportsVaultTab() {
-  const [reports,    setReports]    = useState<any[]>([]);
-  const [summary,    setSummary]    = useState<Record<string, number>>({});
-  const [activeView, setActiveView] = useState<'vault'|'access-log'>('vault');
-  const [filter,     setFilter]     = useState('All');
-  const [loading,    setLoading]    = useState(true);
-  const [uploading,  setUploading]  = useState(false);
-  const [dragOver,   setDragOver]   = useState(false);
-  const [page,       setPage]       = useState(1);
-  const [total,      setTotal]      = useState(0);
-  const [shareReport, setShareReport] = useState<any>(null);
-  const fileRef                     = useRef<HTMLInputElement>(null);
+  const [reports,setReports] = useState<any[]>([]);
+  const [summary,setSummary] = useState<Record<string,number>>({});
+  const [view,setView] = useState<'vault'|'access'>('vault');
+  const [filter,setFilter] = useState('All');
+  const [loading,setLoading] = useState(true);
+  const [uploading,setUploading] = useState(false);
+  const [dragging,setDragging] = useState(false);
+  const [page,setPage] = useState(1);
+  const [total,setTotal] = useState(0);
+  const [sharing,setSharing] = useState<any|null>(null);
+  const [message,setMessage] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = (p = 1, type = filter) => {
-    if (p === 1) setLoading(true);
-    const params: Record<string, any> = { page: p, limit: 12 };
-    if (type !== 'All') params.type = type;
-
-    patientAPI.getReports(params)
-      .then((res: any) => {
-        const inner = res?.data?.data ?? res?.data ?? {};
-        const newReports = Array.isArray(inner.reports) ? inner.reports : Array.isArray(inner) ? inner : [];
-        if (p === 1) { setReports(newReports); } else { setReports(prev => [...prev, ...newReports]); }
-        const rawSummary = inner.summary ?? {};
-        setSummary(rawSummary && typeof rawSummary === 'object' && !Array.isArray(rawSummary) ? rawSummary : {});
-        setTotal(inner.total ?? newReports.length);
-      })
-      .catch(() => { setReports([]); setTotal(0); })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { setPage(1); load(1, filter); }, [filter]); // eslint-disable-line
-
-  const handleUpload = async (file: File) => {
-    if (!file) return;
-    setUploading(true);
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('name', file.name.replace(/\.[^.]+$/, ''));
-    fd.append('type', guessType(file.name));
+  const load = async (nextPage=1,nextFilter=filter) => {
+    if(nextPage===1)setLoading(true);
     try {
-      await patientAPI.uploadReport(fd);
-      load(1, filter);
-    } catch {}
-    setUploading(false);
+      const params:any={page:nextPage,limit:12}; if(nextFilter!=='All')params.type=nextFilter;
+      const res:any=await patientAPI.getReports(params);
+      const data=res?.data?.data??res?.data??{};
+      const items=Array.isArray(data)?data:Array.isArray(data.reports)?data.reports:[];
+      setReports(prev=>nextPage===1?items:[...prev,...items]);
+      const raw=data.summary;
+      if(Array.isArray(raw)) setSummary(Object.fromEntries(raw.map((item:any)=>[item.type,Number(item.count)||0])));
+      else if(raw&&typeof raw==='object') setSummary(raw);
+      else setSummary({});
+      setTotal(Number(data.total??items.length));
+    } catch(e:any){setMessage(e?.response?.data?.message??'Unable to load reports.');if(nextPage===1)setReports([]);}finally{setLoading(false);}
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleUpload(file);
+  useEffect(()=>{setPage(1);load(1,filter);},[filter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const upload = async (file:File) => {
+    if(!file)return;
+    if(file.size>20*1024*1024){setMessage('File must be 20 MB or smaller.');return;}
+    setUploading(true);setMessage('');
+    const data=new FormData();data.append('file',file);data.append('name',file.name.replace(/\.[^.]+$/,''));data.append('type',guessType(file.name));data.append('reportDate',new Date().toISOString());
+    try{await patientAPI.uploadReport(data);setMessage('✓ Report uploaded');await load(1,filter);}catch(e:any){setMessage(e?.response?.data?.message??'Unable to upload report.');}finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}
   };
 
-  const typeKeys = Object.keys(TYPE_LABELS);
-  const types    = ['All', ...typeKeys];
+  const remove = async (report:any) => {
+    if(!confirm(`Delete ${report.name ?? 'this report'}?`))return;
+    try{await patientAPI.deleteReport(report.id);setMessage('✓ Report deleted');await load(1,filter);}catch(e:any){setMessage(e?.response?.data?.message??'Unable to delete report.');}
+  };
 
-  const accessLog = reports.flatMap((r: any) =>
-    Array.isArray(r.shares) ? r.shares.map((s: any) => ({ report: r, share: s })) : []
-  );
+  const accessRows = reports.flatMap(report => Array.isArray(report.shares)?report.shares.map((share:any)=>({report,share})):[]);
 
-  return (
-    <>
-      <style>{`
-        .rv-topbar  { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
-        .rv-views   { display:flex; gap:8px; }
-        .rv-vbtn    { padding:7px 16px; border-radius:9px; cursor:pointer; font-size:12px; font-weight:600; transition:all 0.2s; font-family:'Plus Jakarta Sans',sans-serif; }
-        .rv-filters { display:flex; gap:6px; flex-wrap:wrap; }
-        .rv-fbtn    { padding:4px 12px; border-radius:100px; cursor:pointer; font-size:11px; font-weight:600; transition:all 0.2s; font-family:'JetBrains Mono',monospace; border:1px solid transparent; }
-        .rv-zone    { border:2px dashed; border-radius:14px; padding:28px; text-align:center; cursor:pointer; transition:all 0.2s; margin-bottom:20px; }
-        .rv-grid    { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
-        .rv-card    { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:18px; transition:box-shadow 0.2s; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
-        .rv-card:hover { box-shadow:0 4px 16px rgba(13,148,136,0.1); border-color:#b2ddd8; }
-        .rv-icon    { width:44px; height:44px; border-radius:12px; background:rgba(13,148,136,0.08); border:1px solid rgba(13,148,136,0.2); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
-        .rv-name    { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:#0F2D2A; }
-        .rv-meta    { font-size:11px; color:#4B6E6A; margin-top:3px; font-family:'JetBrains Mono',monospace; }
-        .rv-btns    { display:flex; gap:8px; margin-top:14px; }
-        .rv-btn     { flex:1; padding:7px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:'Plus Jakarta Sans',sans-serif; }
-        .rv-shares  { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
-        .rv-stag    { background:rgba(139,92,246,0.1); color:#7C3AED; font-size:10px; padding:2px 8px; border-radius:100px; border:1px solid rgba(139,92,246,0.2); font-family:'JetBrains Mono',monospace; }
-        .rv-empty   { color:#4B6E6A; font-size:13px; padding:50px 0; text-align:center; }
-        .rv-skel    { height:160px; border-radius:14px; background:linear-gradient(90deg,#e8f5f2 25%,#f0faf8 50%,#e8f5f2 75%); background-size:200% 100%; animation:rv-sh 1.5s infinite; }
-        @keyframes rv-sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-      `}</style>
+  return <>
+    <style>{`.rv-card{background:#fff;border:1px solid #E2EEF0;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.05)}.rv-btn{padding:8px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#fff}.rv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}@media(max-width:700px){.rv-grid{grid-template-columns:1fr}}`}</style>
+    {message&&<div style={{marginBottom:14,padding:'9px 12px',borderRadius:9,background:message.startsWith('✓')?'#F0FDF4':'#FFF7ED',color:message.startsWith('✓')?'#15803D':'#B45309',fontSize:12,fontWeight:600}}>{message}</div>}
+    {Object.keys(summary).length>0&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{Object.entries(summary).filter(([,count])=>count>0).map(([type,count])=><div key={type} style={{background:'#fff',border:'1px solid #E2EEF0',borderRadius:9,padding:'6px 11px',fontSize:12,color:'#4B6E6A'}}>{ICONS[type]??'📄'} <strong style={{color:'#0F2D2A'}}>{count}</strong> {LABELS[type]??type}</div>)}</div>}
 
-      {/* Summary badges */}
-      {Object.keys(summary).length > 0 && (
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16 }}>
-          {Object.entries(summary).map(([type, count]: any) => (
-            <div key={type} style={{ background:'#FFFFFF', border:'1px solid #E2EEF0', borderRadius:10, padding:'6px 12px', fontSize:12, color:'#4B6E6A', display:'flex', alignItems:'center', gap:6, boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
-              <span>{TYPE_ICONS[type] ?? '📄'}</span>
-              <span style={{ color:'#0F2D2A', fontWeight:700 }}>{count}</span>
-              <span>{TYPE_LABELS[type] ?? type}</span>
-            </div>
-          ))}
-        </div>
-      )}
+    <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center',flexWrap:'wrap',marginBottom:18}}><div style={{display:'flex',gap:8}}><button onClick={()=>setView('vault')} className="rv-btn" style={{border:`1px solid ${view==='vault'?'#0D9488':'#E2EEF0'}`,color:view==='vault'?'#0D9488':'#4B6E6A',background:view==='vault'?'#F0FDF9':'#fff'}}>📁 Vault</button><button onClick={()=>setView('access')} className="rv-btn" style={{border:`1px solid ${view==='access'?'#0D9488':'#E2EEF0'}`,color:view==='access'?'#0D9488':'#4B6E6A',background:view==='access'?'#F0FDF9':'#fff'}}>🔒 Shared Access</button></div>{view==='vault'&&<div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{['All',...TYPES].map(type=><button key={type} onClick={()=>setFilter(type)} style={{padding:'5px 10px',borderRadius:100,border:`1px solid ${filter===type?'#0D9488':'#E2EEF0'}`,background:filter===type?'#F0FDF9':'#fff',color:filter===type?'#0D9488':'#4B6E6A',fontSize:11,fontWeight:600,cursor:'pointer'}}>{type==='All'?'All':`${ICONS[type]} ${LABELS[type]}`}</button>)}</div>}</div>
 
-      <div className="rv-topbar">
-        <div className="rv-views">
-          {(['vault','access-log'] as const).map(v => (
-            <button key={v} className="rv-vbtn" onClick={() => setActiveView(v)}
-              style={{ background:activeView===v ? 'rgba(13,148,136,0.1)' : '#fff', color:activeView===v ? '#0D9488' : '#4B6E6A', border:`1px solid ${activeView===v ? 'rgba(13,148,136,0.3)' : '#E2EEF0'}` }}>
-              {v === 'vault' ? '📁 Vault' : '🔒 Access Log'}
-            </button>
-          ))}
-        </div>
-        {activeView === 'vault' && (
-          <div className="rv-filters">
-            {types.map(t => (
-              <button key={t} className="rv-fbtn" onClick={() => setFilter(t)}
-                style={{ background:filter===t ? 'rgba(13,148,136,0.1)' : '#fff', color:filter===t ? '#0D9488' : '#4B6E6A', borderColor:filter===t ? 'rgba(13,148,136,0.3)' : '#E2EEF0' }}>
-                {t === 'All' ? 'All' : `${TYPE_ICONS[t] ?? ''} ${TYPE_LABELS[t] ?? t}`}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+    {view==='vault'?<>
+      <div onClick={()=>fileRef.current?.click()} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);const file=e.dataTransfer.files?.[0];if(file)upload(file);}} style={{border:`2px dashed ${dragging?'#0D9488':'#B2DDD8'}`,background:dragging?'#F0FDF9':'#FAFFFE',borderRadius:14,padding:26,textAlign:'center',cursor:'pointer',marginBottom:20}}><input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{display:'none'}} onChange={e=>{const file=e.target.files?.[0];if(file)upload(file);}}/><div style={{fontSize:30}}>{uploading?'⏳':'📤'}</div><div style={{fontWeight:700,color:'#0F2D2A',fontSize:13,marginTop:5}}>{uploading?'Uploading…':'Drop a report here or click to upload'}</div><div style={{fontSize:11,color:'#64748B',marginTop:3}}>PDF, JPG or PNG · Max 20 MB</div></div>
+      {loading?<div style={{padding:40,textAlign:'center',color:'#64748B'}}>Loading reports…</div>:reports.length===0?<div className="rv-card" style={{textAlign:'center',padding:45,color:'#64748B'}}>📂<div style={{marginTop:8}}>No reports found.</div></div>:<><div className="rv-grid">{reports.map(report=><div key={report.id} className="rv-card"><div style={{display:'flex',gap:12,alignItems:'flex-start'}}><div style={{width:44,height:44,borderRadius:11,background:'#F0FDF9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>{ICONS[report.type]??'📄'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,color:'#0F2D2A',fontSize:14,overflow:'hidden',textOverflow:'ellipsis'}}>{report.name??'Report'}</div><div style={{fontSize:11,color:'#64748B',marginTop:3}}>{LABELS[report.type]??report.type} · {fmtSize(report.fileSize)} · {fmtDate(report.reportDate??report.createdAt)}</div></div></div>{report.description&&<div style={{fontSize:12,color:'#4B6E6A',marginTop:10}}>{report.description}</div>}{Array.isArray(report.shares)&&report.shares.length>0&&<div style={{fontSize:11,color:'#7C3AED',marginTop:9}}>Shared with {report.shares.length} doctor{report.shares.length===1?'':'s'}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7,marginTop:14}}><button className="rv-btn" onClick={()=>report.fileUrl&&window.open(report.fileUrl,'_blank','noopener,noreferrer')} style={{border:'1px solid #A7F3D0',color:'#047857'}}>Open</button><button className="rv-btn" onClick={()=>setSharing(report)} style={{border:'1px solid #DDD6FE',color:'#7C3AED'}}>Share</button><button className="rv-btn" onClick={()=>remove(report)} style={{border:'1px solid #FECDD3',color:'#BE123C'}}>Delete</button></div></div>)}</div>{reports.length<total&&<div style={{textAlign:'center',marginTop:16}}><button onClick={()=>{const next=page+1;setPage(next);load(next,filter);}} className="rv-btn" style={{border:'1px solid #E2EEF0',color:'#4B6E6A'}}>Load more ({total-reports.length} remaining)</button></div>}</>}
+    </>:<div className="rv-card" style={{padding:0,overflow:'hidden'}}><div style={{padding:'14px 18px',borderBottom:'1px solid #E2EEF0',fontWeight:700,color:'#0F2D2A'}}>Shared report access</div>{accessRows.length===0?<div style={{padding:40,textAlign:'center',color:'#64748B'}}>No report sharing activity in the loaded reports.</div>:accessRows.map(({report,share}:any)=><div key={share.id??`${report.id}-${share.doctorId}`} style={{padding:'13px 18px',borderBottom:'1px solid #F1F5F9',display:'flex',alignItems:'center',gap:12}}><span>🔒</span><div style={{flex:1}}><div style={{fontSize:13,color:'#0F2D2A'}}><strong>{share.doctor?.firstName?`Dr. ${share.doctor.firstName} ${share.doctor.lastName??''}`:'Doctor'}</strong> can access <strong>{report.name}</strong></div><div style={{fontSize:11,color:'#64748B',marginTop:2}}>Shared {fmtDate(share.createdAt)} · Expires {fmtDate(share.expiresAt)}</div></div><button onClick={async()=>{if(!confirm('Revoke this doctor’s access to the report?'))return;try{await patientAPI.revokeReportShare(report.id,share.doctorId);setMessage('✓ Report access revoked');await load(1,filter);}catch(e:any){setMessage(e?.response?.data?.message??'Unable to revoke access.');}}} className="rv-btn" style={{border:'1px solid #FECDD3',color:'#BE123C'}}>Revoke</button></div>)}</div>}
 
-      {activeView === 'vault' ? (
-        <>
-          {/* Upload zone */}
-          <div className="rv-zone"
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileRef.current?.click()}
-            style={{ borderColor:dragOver ? '#0D9488' : '#b2ddd8', background:dragOver ? 'rgba(13,148,136,0.05)' : '#FAFFFE' }}>
-            <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display:'none' }}
-              onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); }} />
-            <div style={{ fontSize:32, marginBottom:8 }}>{uploading ? '⏳' : '📤'}</div>
-            <div style={{ fontWeight:600, color:'#0F2D2A', fontSize:13, marginBottom:4 }}>
-              {uploading ? 'Uploading...' : 'Drop report here or click to upload'}
-            </div>
-            <div style={{ color:'#4B6E6A', fontSize:12 }}>PDF, JPG, PNG — Max 20MB</div>
-          </div>
+    {sharing&&<ShareReportModal report={sharing} onClose={()=>setSharing(null)} onShared={async()=>{setSharing(null);setMessage('✓ Report shared');await load(1,filter);}}/>}
+  </>;
+}
 
-          {/* Reports */}
-          {loading ? (
-            <div className="rv-grid">{[1,2,3].map(i => <div key={i} className="rv-skel" />)}</div>
-          ) : reports.length === 0 ? (
-            <div className="rv-empty">
-              <div style={{ fontSize:40, marginBottom:12 }}>📂</div>
-              <div style={{ color:'#94A3B8', fontWeight:600, marginBottom:6 }}>No reports found</div>
-              <div>Upload your first medical report above</div>
-            </div>
-          ) : (
-            <>
-              <div className="rv-grid">
-                {reports.map((r: any, i: number) => (
-                  <div key={r.id ?? i} className="rv-card">
-                    <div style={{ display:'flex', gap:12, marginBottom:10 }}>
-                      <div className="rv-icon">{TYPE_ICONS[r.type] ?? '📄'}</div>
-                      <div style={{ flex:1 }}>
-                        <div className="rv-name">{r.name ?? r.fileName ?? 'Unnamed Report'}</div>
-                        <div className="rv-meta">
-                          {TYPE_LABELS[r.type] ?? r.type ?? 'Report'} · {fmtSize(r.fileSize)} · {fmtDate(r.uploadedAt ?? r.createdAt)}
-                        </div>
-                      </div>
-                      {r.status && (
-                        <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:100, height:'fit-content', flexShrink:0, fontFamily:'JetBrains Mono,monospace',
-                          background: r.status==='NORMAL' ? 'rgba(34,197,94,0.1)' : 'rgba(244,63,94,0.1)',
-                          color:      r.status==='NORMAL' ? '#22C55E' : '#F43F5E',
-                          border:`1px solid ${r.status==='NORMAL' ? 'rgba(34,197,94,0.3)' : 'rgba(244,63,94,0.3)'}` }}>
-                          {r.status}
-                        </span>
-                      )}
-                    </div>
-                    {r.notes && <div style={{ fontSize:12, color:'#64748B', marginBottom:8 }}>{r.notes}</div>}
-                    {Array.isArray(r.shares) && r.shares.length > 0 && (
-                      <div className="rv-shares">
-                        {r.shares.map((s: any, j: number) => (
-                          <span key={j} className="rv-stag">
-                            {s.doctor?.firstName ? `Dr. ${s.doctor.firstName} ${s.doctor.lastName ?? ''}` : 'Shared'}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="rv-btns">
-                      <button className="rv-btn"
-                        style={{ background:'rgba(20,184,166,0.1)', border:'1px solid rgba(20,184,166,0.2)', color:'#14B8A6' }}
-                        onClick={() => r.fileUrl && window.open(r.fileUrl, '_blank')}>
-                        ⬇ Download
-                      </button>
-                      <button className="rv-btn"
-                        style={{ background:'rgba(139,92,246,0.08)', border:'1px solid rgba(139,92,246,0.2)', color:'#8B5CF6' }}
-                        onClick={() => setShareReport(r)}>
-                        ↗ Share
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {reports.length < total && (
-                <div style={{ textAlign:'center', marginTop:16 }}>
-                  <button onClick={() => { const next = page+1; setPage(next); load(next, filter); }}
-                    style={{ padding:'9px 24px', borderRadius:9, border:'1px solid #E2EEF0', background:'#fff', color:'#4B6E6A', fontWeight:600, cursor:'pointer', fontSize:13 }}>
-                    Load more ({total - reports.length} remaining)
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      ) : (
-        /* Access Log */
-        <div style={{ background:'#FFFFFF', border:'1px solid #E2EEF0', borderRadius:14, overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
-          <div style={{ padding:'14px 20px', borderBottom:'1px solid #E2EEF0', fontSize:12, fontWeight:700, color:'#0F2D2A', fontFamily:'JetBrains Mono,monospace', textTransform:'uppercase', letterSpacing:'.08em' }}>
-            DPDP-Compliant Access Log
-          </div>
-          {accessLog.length === 0 ? (
-            <div className="rv-empty">No sharing activity yet.</div>
-          ) : (
-            accessLog.map((entry: any, i: number) => (
-              <div key={i} style={{ padding:'14px 20px', borderBottom:'1px solid #F1F5F9', display:'flex', gap:14, alignItems:'center' }}>
-                <span style={{ fontSize:16 }}>🔒</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, color:'#0F2D2A' }}>
-                    <span style={{ color:'#0D9488', fontWeight:600 }}>
-                      {entry.share?.doctor?.firstName ? `Dr. ${entry.share.doctor.firstName} ${entry.share.doctor.lastName ?? ''}` : 'Doctor'}
-                    </span>{' '}shared access to{' '}
-                    <span style={{ fontWeight:600 }}>{entry.report?.name ?? 'Report'}</span>
-                  </div>
-                  <div style={{ fontSize:11, color:'#4B6E6A', marginTop:2, fontFamily:'JetBrains Mono,monospace' }}>
-                    Shared {fmtDate(entry.share?.sharedAt)} · Expires {fmtDate(entry.share?.expiresAt)}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {shareReport && (
-        <ShareModal
-          report={shareReport}
-          onClose={() => setShareReport(null)}
-          onShared={() => { setShareReport(null); load(1, filter); }}
-        />
-      )}
-    </>
-  );
+function ShareReportModal({report,onClose,onShared}:{report:any;onClose:()=>void;onShared:()=>void}) {
+  const [doctors,setDoctors]=useState<any[]>([]);const [search,setSearch]=useState('');const [doctorId,setDoctorId]=useState('');const [days,setDays]=useState(7);const [saving,setSaving]=useState(false);const [error,setError]=useState('');
+  useEffect(()=>{doctorAPI.getFeatured().then((res:any)=>{const data=res?.data?.data??res?.data??{};setDoctors(Array.isArray(data)?data:data.doctors??[]);}).catch(()=>setDoctors([]));},[]);
+  const filtered=doctors.filter(doc=>!search||`${doc.firstName} ${doc.lastName} ${doc.specialization}`.toLowerCase().includes(search.toLowerCase()));
+  const share=async()=>{if(!doctorId){setError('Select a doctor.');return;}setSaving(true);setError('');try{await patientAPI.shareReport(report.id,{doctorId,expiresInDays:days});onShared();}catch(e:any){setError(e?.response?.data?.message??'Unable to share report.');}finally{setSaving(false);}};
+  return <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(15,23,42,.65)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}><div style={{background:'#fff',borderRadius:16,padding:24,width:'100%',maxWidth:470,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 60px rgba(0,0,0,.25)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{margin:0,color:'#0F2D2A'}}>Share Report</h3><button onClick={onClose} style={{border:'none',background:'none',fontSize:20,cursor:'pointer'}}>×</button></div><div style={{fontSize:12,color:'#64748B',margin:'8px 0 14px'}}>{report.name}</div><input placeholder="Search doctors" value={search} onChange={e=>setSearch(e.target.value)} style={{width:'100%',padding:'9px 12px',boxSizing:'border-box',border:'1px solid #E2EEF0',borderRadius:9,marginBottom:10}}/><div style={{maxHeight:190,overflowY:'auto',border:'1px solid #E2EEF0',borderRadius:10,marginBottom:14}}>{filtered.length===0?<div style={{padding:18,textAlign:'center',color:'#64748B',fontSize:12}}>No doctors found.</div>:filtered.map(doc=><div key={doc.id} onClick={()=>setDoctorId(doc.id)} style={{padding:'9px 12px',borderBottom:'1px solid #F1F5F9',cursor:'pointer',background:doctorId===doc.id?'#F0FDF9':'#fff'}}><div style={{fontSize:13,fontWeight:700,color:doctorId===doc.id?'#0D9488':'#0F2D2A'}}>Dr. {doc.firstName} {doc.lastName} {doctorId===doc.id?'✓':''}</div><div style={{fontSize:11,color:'#64748B'}}>{doc.specialization}</div></div>)}</div><div style={{fontSize:11,fontWeight:700,color:'#64748B',marginBottom:6}}>ACCESS DURATION</div><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:14}}>{[1,7,30,90].map(value=><button key={value} onClick={()=>setDays(value)} style={{padding:7,border:`1px solid ${days===value?'#0D9488':'#E2EEF0'}`,background:days===value?'#F0FDF9':'#fff',color:days===value?'#0D9488':'#64748B',borderRadius:8,fontWeight:600,cursor:'pointer'}}>{value}d</button>)}</div>{error&&<div style={{fontSize:12,color:'#BE123C',marginBottom:10}}>{error}</div>}<div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:8}}><button onClick={onClose} className="rv-btn" style={{border:'1px solid #E2EEF0'}}>Cancel</button><button onClick={share} disabled={saving||!doctorId} className="rv-btn" style={{border:'none',background:'linear-gradient(135deg,#0D9488,#14B8A6)',color:'#fff',opacity:doctorId?1:.5}}>{saving?'Sharing…':'Share with Doctor'}</button></div><div style={{fontSize:10,color:'#64748B',marginTop:10}}>Access expires automatically and can be revoked from Shared Access.</div></div></div>;
 }
