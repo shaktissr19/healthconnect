@@ -1,25 +1,61 @@
 import { z } from 'zod';
 
+const optionalTrimmedString = (max = 255) => z.string().trim().max(max).optional();
+const optionalNullableTrimmedString = (max = 255) => z.string().trim().max(max).nullable().optional();
+const indianMobile = z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number');
+const pinCode = z.string().regex(/^\d{6}$/, 'PIN code must contain exactly 6 digits');
+
+const isValidDateOnly = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
+
+const dateOnly = z.string()
+  .refine(isValidDateOnly, 'Use a valid date in YYYY-MM-DD format');
+
+const dateOfBirth = dateOnly.refine((value) => {
+  const dob = new Date(`${value}T00:00:00.000Z`);
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const oldestUtc = Date.UTC(today.getUTCFullYear() - 120, today.getUTCMonth(), today.getUTCDate());
+  return dob.getTime() <= todayUtc && dob.getTime() >= oldestUtc;
+}, 'Date of birth must be in the past and within the last 120 years');
+
 export const updateProfileSchema = z.object({
-  firstName: z.string().min(1).optional(),
-  lastName: z.string().min(1).optional(),
-  dateOfBirth: z.string().datetime().optional(),
+  firstName: z.string().trim().min(1, 'First name is required').max(100).optional(),
+  middleName: optionalNullableTrimmedString(100),
+  lastName: z.string().trim().min(1, 'Last name is required').max(100).optional(),
+  preferredName: optionalNullableTrimmedString(100),
+  dateOfBirth: dateOfBirth.optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']).optional(),
-  phone: z.string().regex(/^\d{10}$/).optional(),
+  preferredPronouns: optionalNullableTrimmedString(80),
+  maritalStatus: optionalNullableTrimmedString(50),
+  phone: indianMobile.optional(),
+  alternatePhone: indianMobile.nullable().optional(),
   bloodGroup: z.enum([
     'A_POSITIVE', 'A_NEGATIVE', 'B_POSITIVE', 'B_NEGATIVE',
     'AB_POSITIVE', 'AB_NEGATIVE', 'O_POSITIVE', 'O_NEGATIVE', 'UNKNOWN'
   ]).optional(),
   rhFactor: z.enum(['POSITIVE', 'NEGATIVE', 'UNKNOWN']).optional(),
-  addressLine1: z.string().optional(),
-  addressLine2: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  pinCode: z.string().regex(/^\d{6}$/).optional(),
-  languagePreference: z.string().optional(),
-  insuranceProvider: z.string().optional(),
-  insurancePolicyNumber: z.string().optional(),
-});
+  addressLine1: optionalNullableTrimmedString(200),
+  addressLine2: optionalNullableTrimmedString(200),
+  city: z.string().trim().min(1, 'City is required when provided').max(100).optional(),
+  district: z.string().trim().min(1, 'District is required when provided').max(100).optional(),
+  state: z.string().trim().min(1, 'State/UT is required when provided').max(100).optional(),
+  pinCode: pinCode.nullable().optional(),
+  country: z.string().trim().min(1).max(100).optional(),
+  languagePreference: z.string().trim().min(2).max(20).optional(),
+  secondaryLanguages: z.array(z.string().trim().min(2).max(50)).max(10).optional(),
+  preferredContactMethod: z.enum(['APP', 'SMS', 'EMAIL', 'CALL']).nullable().optional(),
+  accessibilityNeeds: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+  insuranceProvider: optionalNullableTrimmedString(150),
+  insurancePolicyNumber: optionalNullableTrimmedString(150),
+  insuranceExpiry: dateOnly.nullable().optional(),
+  governmentScheme: optionalNullableTrimmedString(150),
+  governmentSchemeId: optionalNullableTrimmedString(150),
+}).strict();
 
 export const conditionSchema = z.object({
   name: z.string().min(1, 'Condition name is required'),
@@ -120,12 +156,18 @@ export const vitalSchema = z.object({
 });
 
 export const emergencyContactSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  relationship: z.string().min(1, 'Relationship is required'),
-  phone: z.string().regex(/^\d{10}$/, 'Invalid phone number'),
-  email: z.string().email().optional(),
+  name: z.string().trim().min(1, 'Name is required').max(120),
+  relationship: z.string().trim().min(1, 'Relationship is required').max(80),
+  phone: indianMobile,
+  alternatePhone: indianMobile.nullable().optional(),
+  email: z.string().trim().email().nullable().optional(),
   isPrimary: z.boolean().optional(),
-});
+}).strict();
+
+export const updateEmergencyContactSchema = emergencyContactSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  'Provide at least one field to update',
+);
 
 export const consentSchema = z.object({
   doctorId: z.string().uuid(),
