@@ -25,6 +25,8 @@ const RH = [{v:'UNKNOWN',l:'Unknown / not provided'},{v:'POSITIVE',l:'Positive (
 const dateOnly = (value?: string | null) => value ? String(value).slice(0, 10) : '';
 const csvToArray = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
 const arrayToCsv = (value?: string[] | null) => Array.isArray(value) ? value.join(', ') : '';
+const hasCommunicationDetails = (profile: any) => Boolean(profile?.preferredContactMethod || (profile?.secondaryLanguages?.length ?? 0) > 0 || (profile?.accessibilityNeeds?.length ?? 0) > 0);
+const hasCoverageDetails = (profile: any) => Boolean(profile?.insuranceProvider || profile?.insurancePolicyNumber || profile?.insuranceExpiry || profile?.governmentScheme || profile?.governmentSchemeId);
 
 function Field({ title, required, children, help }: { title: string; required?: boolean; children: React.ReactNode; help?: string }) {
   return <div><label style={label}>{title}{required && <span style={{ color: C.rose }}> *</span>}</label>{children}{help && <div style={{ marginTop: 5, fontSize: 10.5, color: C.text3, lineHeight: 1.4 }}>{help}</div>}</div>;
@@ -130,12 +132,17 @@ export default function ProfilePage() {
   const fullName = [profile?.firstName, profile?.middleName, profile?.lastName].filter(Boolean).join(' ') || 'Patient';
   const snapshot = profile?.medicalSnapshot ?? {};
   const contacts = profile?.emergencyContacts ?? [];
+  const communicationAdded = hasCommunicationDetails(profile);
+  const coverageAdded = hasCoverageDetails(profile);
+  const optionalRemaining = [!communicationAdded, !coverageAdded].filter(Boolean).length;
 
   const sectionStatus = useMemo(() => ({
     personal: completion?.sections?.personal?.complete ? { label: 'Core ready', color: C.green, bg: '#ECFDF3' } : { label: `${completion?.sections?.personal?.completed ?? 0}/${completion?.sections?.personal?.total ?? 3} core ready` },
     contact: completion?.sections?.contact?.complete ? { label: 'Core ready', color: C.green, bg: '#ECFDF3' } : { label: `${completion?.sections?.contact?.completed ?? 0}/${completion?.sections?.contact?.total ?? 4} core ready` },
     emergency: completion?.sections?.emergency?.complete ? { label: 'Primary contact ready', color: C.green, bg: '#ECFDF3' } : { label: 'Primary contact needed', color: C.amber, bg: '#FFF7ED' },
-  }), [completion]);
+    communication: communicationAdded ? { label: 'Added', color: C.green, bg: '#ECFDF3' } : { label: 'Optional', color: C.text3, bg: '#F1F5F9' },
+    coverage: coverageAdded ? { label: 'Added', color: C.green, bg: '#ECFDF3' } : { label: 'Optional', color: C.text3, bg: '#F1F5F9' },
+  }), [completion, communicationAdded, coverageAdded]);
 
   if (loading) return <div style={{ display: 'grid', gap: 14 }}>{[1,2,3].map((item) => <div key={item} style={{ height: 110, borderRadius: 16, background: '#EEF1F3' }} />)}</div>;
   if (!profile) return <div style={{ ...card, padding: 24, color: C.rose }}>Unable to load your profile.</div>;
@@ -147,7 +154,7 @@ export default function ProfilePage() {
 
       <div className="pp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
         <div><h1 style={{ margin: 0, fontSize: 27, color: C.text, fontWeight: 850 }}>👤 My Profile</h1><p style={{ margin: '5px 0 0', color: C.text3, fontSize: 13 }}>Personal, contact and emergency information used across HealthConnect.</p></div>
-        <div style={{ padding: '7px 12px', borderRadius: 99, background: completion?.coreComplete ? '#ECFDF3' : '#FFF7ED', color: completion?.coreComplete ? C.green : C.amber, fontSize: 11.5, fontWeight: 800 }}>{completion?.coreComplete ? '✓ Profile setup complete' : `${completion?.percentage ?? 0}% core profile complete`}</div>
+        <div style={{ padding: '7px 12px', borderRadius: 99, background: completion?.coreComplete ? '#ECFDF3' : '#FFF7ED', color: completion?.coreComplete ? C.green : C.amber, fontSize: 11.5, fontWeight: 800 }}>{completion?.coreComplete ? '✓ Core profile complete' : `${completion?.percentage ?? 0}% core profile complete`}</div>
       </div>
 
       <div className="pp-summary" style={{ ...card, padding: '20px 22px', display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -155,9 +162,16 @@ export default function ProfilePage() {
         <div style={{ flex: 1 }}><div style={{ fontSize: 20, fontWeight: 850, color: C.text }}>{fullName}</div><div style={{ marginTop: 4, display: 'flex', gap: 9, flexWrap: 'wrap', color: C.text3, fontSize: 11.5 }}><span>{profile.registrationId}</span><span>•</span><span>{profile.email}</span>{profile.isEmailVerified && <span style={{ color: C.green }}>✓ verified</span>}{profile.bloodGroup && profile.bloodGroup !== 'UNKNOWN' && <span>• {BLOOD_DISPLAY[profile.bloodGroup]} Blood</span>}</div></div>
       </div>
 
-      {!completion?.coreComplete && (
+      {!completion?.coreComplete ? (
         <div style={{ ...card, padding: '16px 18px', borderLeft: `4px solid ${C.amber}`, background: '#FFFBF3' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}><div><div style={{ fontSize: 13.5, fontWeight: 850, color: C.text }}>Complete {completion?.missingCount ?? missing.length} remaining core detail{(completion?.missingCount ?? missing.length) === 1 ? '' : 's'}</div><div style={{ marginTop: 3, fontSize: 11.5, color: C.text3 }}>Only personal, location and primary emergency-contact details count toward Profile Completion.</div></div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{missing.slice(0,4).map((item:any)=><span key={item.key} style={{ padding: '4px 8px', borderRadius: 99, background: '#FFF', border: '1px solid #F2D6A7', color: C.amber, fontSize: 10.5, fontWeight: 700 }}>{item.label}</span>)}</div></div>
+        </div>
+      ) : (
+        <div style={{ ...card, padding: '15px 18px', borderLeft: `4px solid ${C.green}`, background: '#F7FCF9' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div><div style={{ fontSize: 13.5, fontWeight: 850, color: C.text }}>✓ Essential profile details complete</div><div style={{ marginTop: 3, fontSize: 11.5, color: C.text3 }}>Communication preferences and coverage information are optional and can be added whenever relevant.</div></div>
+            {optionalRemaining > 0 && <span style={{ padding: '4px 9px', borderRadius: 99, background: '#EEF6FA', color: C.blue, fontSize: 10.5, fontWeight: 750 }}>{optionalRemaining} optional section{optionalRemaining === 1 ? '' : 's'} available</span>}
+          </div>
         </div>
       )}
 
@@ -177,7 +191,7 @@ export default function ProfilePage() {
         <SaveRow saving={saving==='personal'} error={saving===''?error:''} onSave={()=>save('personal',{firstName:profile.firstName,lastName:profile.lastName,middleName:profile.middleName||null,preferredName:profile.preferredName||null,dateOfBirth:dateOnly(profile.dateOfBirth),gender:profile.gender,preferredPronouns:profile.preferredPronouns||null,maritalStatus:profile.maritalStatus||null,bloodGroup:profile.bloodGroup??'UNKNOWN',rhFactor:profile.rhFactor??'UNKNOWN'})}/>
       </SectionCard>
 
-      <SectionCard icon="📍" title="Contact & Address" subtitle="Location used for patient services and city-based discovery" status={sectionStatus.contact} expanded={expanded==='contact'} onToggle={()=>setExpanded(expanded==='contact'?'':'contact')}>
+      <SectionCard icon="📍" title="Contact & Address" subtitle="Location used for patient services and nearby-care discovery" status={sectionStatus.contact} expanded={expanded==='contact'} onToggle={()=>setExpanded(expanded==='contact'?'':'contact')}>
         <div className="pp-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Field title="Mobile number" required><input value={profile.phone ?? ''} onChange={e=>set('phone',e.target.value.replace(/\D/g,'').slice(0,10))} inputMode="numeric" style={input}/></Field>
           <Field title="Alternate mobile"><input value={profile.alternatePhone ?? ''} onChange={e=>set('alternatePhone',e.target.value.replace(/\D/g,'').slice(0,10))} inputMode="numeric" style={input}/></Field>
@@ -185,7 +199,7 @@ export default function ProfilePage() {
           <Field title="Preferred contact method"><select value={profile.preferredContactMethod ?? ''} onChange={e=>set('preferredContactMethod',e.target.value)} style={input}><option value="">No preference</option>{CONTACT_METHODS.map(x=><option key={x.v} value={x.v}>{x.l}</option>)}</select></Field>
           <Field title="Address line 1"><input value={profile.addressLine1 ?? ''} onChange={e=>set('addressLine1',e.target.value)} style={input}/></Field>
           <Field title="Address line 2 / landmark"><input value={profile.addressLine2 ?? ''} onChange={e=>set('addressLine2',e.target.value)} style={input}/></Field>
-          <Field title="City" required><input value={profile.city ?? ''} onChange={e=>set('city',e.target.value)} placeholder="City" style={input}/></Field>
+          <Field title="City / Town" required><input value={profile.city ?? ''} onChange={e=>set('city',e.target.value)} placeholder="City or town" style={input}/></Field>
           <Field title="District" required><input value={profile.district ?? ''} onChange={e=>set('district',e.target.value)} placeholder="District" style={input}/></Field>
           <Field title="State / UT" required><input value={profile.state ?? ''} onChange={e=>set('state',e.target.value)} placeholder="State / UT" style={input}/></Field>
           <Field title="PIN code"><input value={profile.pinCode ?? ''} onChange={e=>set('pinCode',e.target.value.replace(/\D/g,'').slice(0,6))} inputMode="numeric" style={input}/></Field>
@@ -213,7 +227,8 @@ export default function ProfilePage() {
         {error&&expanded==='emergency'&&<div style={{marginTop:12,color:C.rose,fontSize:12}}>⚠️ {error}</div>}
       </SectionCard>
 
-      <SectionCard icon="💬" title="Communication & Accessibility" subtitle="Language, contact and accessibility preferences" expanded={expanded==='communication'} onToggle={()=>setExpanded(expanded==='communication'?'':'communication')}>
+      <SectionCard icon="💬" title="Communication & Accessibility" subtitle="Optional language, contact and accessibility preferences" status={sectionStatus.communication} expanded={expanded==='communication'} onToggle={()=>setExpanded(expanded==='communication'?'':'communication')}>
+        <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, background: '#F4F8FB', color: C.text3, fontSize: 11 }}>Optional. Add preferences only when they are useful to you; this section does not affect Core Profile Completion.</div>
         <div className="pp-grid2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
           <Field title="Preferred language"><input value={profile.languagePreference??'en'} onChange={e=>set('languagePreference',e.target.value)} placeholder="en" style={input}/></Field>
           <Field title="Secondary languages" help="Comma separated, e.g. Hindi, Punjabi"><input value={secondaryLanguages} onChange={e=>setSecondaryLanguages(e.target.value)} style={input}/></Field>
@@ -222,7 +237,8 @@ export default function ProfilePage() {
         <SaveRow saving={saving==='communication'} error={saving===''?error:''} onSave={()=>save('communication',{languagePreference:profile.languagePreference??'en',secondaryLanguages:csvToArray(secondaryLanguages),accessibilityNeeds:csvToArray(accessibilityNeeds)})}/>
       </SectionCard>
 
-      <SectionCard icon="🛡️" title="Coverage & Health IDs" subtitle="Insurance and government health-scheme information" expanded={expanded==='coverage'} onToggle={()=>setExpanded(expanded==='coverage'?'':'coverage')}>
+      <SectionCard icon="🛡️" title="Coverage & Health IDs" subtitle="Optional insurance and government health-scheme information" status={sectionStatus.coverage} expanded={expanded==='coverage'} onToggle={()=>setExpanded(expanded==='coverage'?'':'coverage')}>
+        <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, background: '#F4F8FB', color: C.text3, fontSize: 11 }}>Optional. Add coverage details if applicable; leaving this section empty does not reduce Profile Completion.</div>
         <div className="pp-grid2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
           <Field title="Insurance provider"><input value={profile.insuranceProvider??''} onChange={e=>set('insuranceProvider',e.target.value)} style={input}/></Field>
           <Field title="Policy / member number"><input value={profile.insurancePolicyNumber??''} onChange={e=>set('insurancePolicyNumber',e.target.value)} style={input}/></Field>
