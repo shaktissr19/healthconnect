@@ -1,0 +1,45 @@
+# HealthConnect India repository hygiene
+
+# Dependencies
+**/node_modules/
+
+# Generated build output
+**/dist/
+**/.next/
+**/out/
+**/build/
+**/coverage/
+
+# Environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs and runtime files
+**/logs/
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime uploads (never source-controlled)
+healthconnect-api/uploads/
+healthconnect-web/uploads/
+
+# TypeScript / framework caches
+**/*.tsbuildinfo
+**/.turbo/
+**/.cache/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary / backup files
+*.tmp
+*.temp
+*.bak
+*~
