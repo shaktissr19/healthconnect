@@ -1,7 +1,15 @@
-# Health Score module boundary
+# Health Score module
 
-HC-HSI 2.0 is frozen functionally. During project restructuring, Health Score is the first feature used to establish the module pattern because its behavior is already validated.
+HC-HSI 2.0 is functionally frozen. This module now owns the canonical Health Score controller and service boundary.
 
-For the first structural stage this module exposes compatibility exports only. Existing controllers/services remain in their current locations until their import graph has been fully audited and the API build has been validated.
+## Structure
 
-No Health Score algorithm, endpoint, database schema, migration, request payload, or response contract should change as part of this refactor.
+- `controller.ts` — HTTP handlers for current score, refresh, history, and health-assessment inputs.
+- `service.ts` — canonical public service exports.
+- `engine/healthScore.v2_1.service.ts` — validated HC-HSI 2.0 base engine.
+- `engine/healthScore.v2_2.service.ts` — finalized normalization/current-score layer.
+- `lib/prisma.ts` — local compatibility adapter to the shared Prisma singleton; it exists only to preserve the frozen engine source byte-for-byte during relocation.
+
+Legacy import paths under `src/controllers/healthScore.controller.ts` and `src/services/healthScore*.service.ts` remain as compatibility re-exports so existing routes and Patient code keep the same behavior while the rest of the backend is migrated incrementally.
+
+No Health Score algorithm, endpoint, database schema, migration, request payload, or response contract is changed by this refactor.
