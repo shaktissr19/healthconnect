@@ -23,7 +23,7 @@ export const symptomCreateSchema = z.object({
   name: z.string().trim().min(1, 'Symptom name is required').max(200),
   severity: z.number().int().min(1).max(10),
   loggedAt: dateTime.optional(),
-  startedAt: dateTime.optional(), // backward-compatible alias
+  startedAt: dateTime.optional(),
   triggers: triggerInput,
   notes: optionalText(),
 }).transform(({ startedAt, ...value }) => ({
@@ -117,9 +117,17 @@ export const therapyCreateSchema = z.object({
 export const reportShareSchema = z.object({
   doctorId: z.string().uuid('Select a valid doctor'),
   expiresInDays: z.number().int().min(1).max(365).optional(),
-  expiresAt: dateTime.optional(), // accepted for older clients
+  expiresAt: dateTime.optional(),
 }).transform(value => {
   if (value.expiresInDays || !value.expiresAt) return value;
   const delta = new Date(value.expiresAt).getTime() - Date.now();
   return { doctorId: value.doctorId, expiresInDays: Math.max(1, Math.min(365, Math.ceil(delta / 86400000))) };
+});
+
+export const consentGrantSchema = z.object({
+  doctorId: z.string().uuid('Select a valid doctor'),
+  accessScope: z.array(z.string().trim().min(1).max(100)).min(1).max(30),
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+  expiresAt: dateTime.optional(),
+  grantReason: optionalText(500),
 });
