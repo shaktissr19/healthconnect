@@ -3,8 +3,24 @@ import { getPatient, prisma } from './_shared';
 
 export const getConsents = async (userId: string) => {
   const patient = await getPatient(userId);
+  const now = new Date();
+
+  // Keep stored status aligned with time-limited access before returning active grants.
+  await prisma.patientConsent.updateMany({
+    where: {
+      patientId: patient.id,
+      status: 'ACTIVE',
+      expiresAt: { lt: now },
+    },
+    data: { status: 'EXPIRED' },
+  });
+
   return prisma.patientConsent.findMany({
-    where: { patientId: patient.id },
+    where: {
+      patientId: patient.id,
+      status: 'ACTIVE',
+      OR: [{ expiresAt: null }, { expiresAt: { gte: now } }],
+    },
     include: {
       doctor: {
         select: {
@@ -24,32 +40,44 @@ export const grantConsent = async (userId: string, data: {
   doctorId: string;
   accessScope: string[];
   expiresInDays?: number;
+  expiresAt?: string;
   grantReason?: string;
 }) => {
   const patient = await getPatient(userId);
   const doctor = await prisma.doctorProfile.findUnique({ where: { id: data.doctorId } });
   if (!doctor) throw ApiError.notFound('Doctor not found');
 
-  const expiresAt = data.expiresInDays
-    ? new Date(Date.now() + data.expiresInDays * 86400000)
-    : new Date(Date.now() + 90 * 86400000);
+  const expiresAt = data.expiresAt
+    ? new Date(data.expiresAt)
+    : new Date(Date.now() + (data.expiresInDays ?? 90) * 86400000);
 
-  return prisma.patientConsent.upsert({
-    where: { patientId_doctorId: { patientId: patient.id, doctorId: data.doctorId } } as any,
-    create: {
+  const existing = await prisma.patientConsent.findFirst({
+    where: { patientId: patient.id, doctorId: data.doctorId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (existing) {
+    return prisma.patientConsent.update({
+      where: { id: existing.id },
+      data: {
+        accessScope: data.accessScope,
+        status: 'ACTIVE',
+        grantReason: data.grantReason,
+        expiresAt,
+        revokedAt: null,
+      },
+      include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
+    });
+  }
+
+  return prisma.patientConsent.create({
+    data: {
       patientId: patient.id,
       doctorId: data.doctorId,
       accessScope: data.accessScope,
       status: 'ACTIVE',
       grantReason: data.grantReason,
       expiresAt,
-    },
-    update: {
-      accessScope: data.accessScope,
-      status: 'ACTIVE',
-      grantReason: data.grantReason,
-      expiresAt,
-      revokedAt: null,
     },
     include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
   });
@@ -68,9 +96,7 @@ export const revokeConsent = async (userId: string, consentId: string) => {
 
 export const getSettings = async (userId: string) => {
   let settings = await prisma.userSettings.findUnique({ where: { userId } });
-  if (!settings) {
-    settings = await prisma.userSettings.create({ data: { userId } });
-  }
+  if (!settings) settings = await prisma.userSettings.create({ data: { userId } });
   return settings;
 };
 
@@ -90,10 +116,8 @@ export const updateSettings = async (
     language: string;
     timezone: string;
   }>,
-) => {
-  return prisma.userSettings.upsert({
-    where: { userId },
-    create: { userId, ...data },
-    update: data,
-  });
-};
+) => prisma.userSettings.upsert({
+  where: { userId },
+  create: { userId, ...data },
+  update: data,
+});
