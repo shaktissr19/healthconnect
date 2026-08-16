@@ -17,7 +17,7 @@ const BLOOD_GROUPS = [
   {v:'UNKNOWN',l:'Unknown / not provided'}, {v:'O_POSITIVE',l:'O+'},{v:'O_NEGATIVE',l:'O-'},{v:'A_POSITIVE',l:'A+'},{v:'A_NEGATIVE',l:'A-'},
   {v:'B_POSITIVE',l:'B+'},{v:'B_NEGATIVE',l:'B-'},{v:'AB_POSITIVE',l:'AB+'},{v:'AB_NEGATIVE',l:'AB-'},
 ];
-const BLOOD_DISPLAY: Record<string,string> = { O_POSITIVE:'O+',O_NEGATIVE:'O-',A_POSITIVE:'A+',A_NEGATIVE:'A-',B_POSITIVE:'B+',B_NEGATIVE:'B-',AB_POSITIVE:'AB+',AB_NEGATIVE:'AB+',UNKNOWN:'Unknown' };
+const BLOOD_DISPLAY: Record<string,string> = { O_POSITIVE:'O+',O_NEGATIVE:'O-',A_POSITIVE:'A+',A_NEGATIVE:'A-',B_POSITIVE:'B+',B_NEGATIVE:'B-',AB_POSITIVE:'AB+',AB_NEGATIVE:'AB-',UNKNOWN:'Unknown' };
 const GENDERS = [{v:'MALE',l:'Male'},{v:'FEMALE',l:'Female'},{v:'OTHER',l:'Other'},{v:'PREFER_NOT_TO_SAY',l:'Prefer not to say'}];
 const CONTACT_METHODS = [{v:'APP',l:'HealthConnect app'},{v:'SMS',l:'SMS'},{v:'EMAIL',l:'Email'},{v:'CALL',l:'Phone call'}];
 const RH = [{v:'UNKNOWN',l:'Unknown / not provided'},{v:'POSITIVE',l:'Positive (+)'},{v:'NEGATIVE',l:'Negative (-)'}];
