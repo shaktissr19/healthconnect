@@ -1,24 +1,9 @@
 // src/app/layout.tsx — Root Layout
 import type { Metadata, Viewport } from 'next';
-import { Poppins, Nunito } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import AuthTransportBootstrap from '@/components/AuthTransportBootstrap';
-
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-heading',
-  display: 'swap',
-});
-
-const nunito = Nunito({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-body',
-  display: 'swap',
-});
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -46,7 +31,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${poppins.variable} ${nunito.variable}`}>
+    <html lang="en">
       <body>
         {/* Configures credential cookies + automatic access-token refresh. */}
         <AuthTransportBootstrap />
