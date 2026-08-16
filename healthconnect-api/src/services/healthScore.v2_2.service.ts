@@ -22,12 +22,6 @@ const interp = (x: number, anchors: Array<[number, number]>) => {
   return a[a.length - 1][1];
 };
 
-/**
- * Correct the legacy v2.1 activity curve at the canonical layer.
- * Stored values are TOTAL MINUTES PER WEEK:
- * moderate-equivalent minutes = moderate + 2 * vigorous.
- * Near-zero activity should not receive a mid-range wellness score.
- */
 function normalizeActivityDomain(base: any) {
   const lifestyle = (base?.domains ?? []).find((d: any) => d?.key === 'lifestyle');
   const activity = lifestyle?.components?.find((c: any) => c?.key === 'activity');
@@ -136,6 +130,8 @@ function finalize(base: any) {
     if (!recommendations.includes(msg)) recommendations.unshift(msg);
   }
 
+  const normalizedLifestyle = (base?.domains ?? []).find((d: any) => d?.key === 'lifestyle')?.score ?? base?.lifestyleFactors ?? 0;
+
   return {
     ...base,
     score,
@@ -150,6 +146,7 @@ function finalize(base: any) {
         ? 'PROVISIONAL'
         : 'INSUFFICIENT_DATA',
     assessmentMessage,
+    lifestyleFactors: normalizedLifestyle,
     scoreBasis: {
       scoreableDomains: scoreable.length,
       availableWeight: scoreWeight,
