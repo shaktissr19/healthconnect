@@ -74,3 +74,20 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+// Patient profile updates happen inside the persistent dashboard shell. Keep
+// display identity synchronized without requiring a page refresh or re-login.
+if (typeof window !== 'undefined') {
+  window.addEventListener('hc:patient-profile-updated', (event: Event) => {
+    const profile = (event as CustomEvent)?.detail;
+    const current = useAuthStore.getState().user;
+    if (!profile || !current || current.role !== 'PATIENT') return;
+    useAuthStore.setState({
+      user: {
+        ...current,
+        firstName: profile.firstName ?? current.firstName,
+        lastName: profile.lastName ?? current.lastName,
+      },
+    });
+  });
+}
