@@ -326,22 +326,34 @@ model PatientProfile {
   id                     String     @id @default(uuid())
   userId                 String     @unique
   firstName              String
+  middleName             String?
   lastName               String
+  preferredName          String?
   phone                  String?
+  alternatePhone         String?
   dateOfBirth            DateTime?
   gender                 Gender?
+  preferredPronouns      String?
+  maritalStatus          String?
   bloodGroup             BloodGroup @default(UNKNOWN)
   rhFactor               RhFactor   @default(UNKNOWN)
   profilePhotoUrl        String?
   addressLine1           String?
   addressLine2           String?
   city                   String?
+  district               String?
   state                  String?
   pinCode                String?
   country                String     @default("India")
   languagePreference     String     @default("en")
+  secondaryLanguages     String[]   @default([])
+  preferredContactMethod String?
+  accessibilityNeeds     String[]   @default([])
   insuranceProvider      String?
   insurancePolicyNumber  String?
+  insuranceExpiry        DateTime?
+  governmentScheme       String?
+  governmentSchemeId     String?
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
 
@@ -362,6 +374,9 @@ model PatientProfile {
   hospitalizationHistory HospitalizationHistory[]
 
   @@index([userId])
+  @@index([city])
+  @@index([district])
+  @@index([state])
   @@map("patient_profiles")
 }
 
@@ -372,9 +387,9 @@ model DoctorProfile {
   id                   String   @id @default(uuid())
   userId               String   @unique
   firstName            String
-  lastName             String
-  phone                String?
-  profilePhotoUrl      String?
+  lastName              String
+  phone                 String?
+  profilePhotoUrl       String?
   specialization       String?
   subSpecializations   String[] @default([])
   qualification        String[] @default([])
@@ -389,7 +404,7 @@ model DoctorProfile {
   city                 String?
   state                String?
   pinCode              String?
-  bio                  String?
+  bio                   String?
   isVerified           Boolean  @default(false)
   verifiedAt           DateTime?
   isAvailableOnline    Boolean  @default(true)
@@ -466,8 +481,8 @@ model HospitalProfile {
   name               String
   phone              String?
   email              String?
-  website            String?
-  logoUrl            String?
+  website             String?
+  logoUrl             String?
   addressLine1       String?
   city               String?
   state              String?
@@ -588,11 +603,11 @@ model Surgery {
   surgeon       String?
   outcome       String?
   complications String?
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient        PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@index([patientId])
   @@map("surgeries")
@@ -829,17 +844,18 @@ model ReportShare {
 // TABLE 20: emergency_contacts
 // ============================================================
 model EmergencyContact {
-  id           String         @id @default(uuid())
-  patientId    String
-  name         String
-  relationship String
-  phone        String
-  email        String?
-  isPrimary    Boolean        @default(false)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id             String         @id @default(uuid())
+  patientId      String
+  name           String
+  relationship   String
+  phone          String
+  alternatePhone String?
+  email          String?
+  isPrimary      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient        PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@index([patientId])
   @@map("emergency_contacts")
@@ -1425,7 +1441,7 @@ model CommunityRequest {
   updatedAt     DateTime               @updatedAt
 
   requester     User?   @relation("RequestedBy", fields: [requestedBy], references: [id], onDelete: SetNull)
-  reviewer      User?   @relation("ReviewedBy",  fields: [reviewedBy],  references: [id], onDelete: SetNull)
+  reviewer      User?   @relation("ReviewedBy",  fields: [reviewedBy], references: [id], onDelete: SetNull)
 
   @@index([requestedBy])
   @@index([status])
