@@ -180,7 +180,7 @@ export const addSurgery = async (userId: string, data: {
 }) => {
   const patient = await getPatient(userId);
   const procedureName = data.procedureName ?? data.name;
-  if (!procedureName) throw ApiError.validationError?.('Procedure name is required') ?? new Error('Procedure name is required');
+  if (!procedureName) throw ApiError.unprocessable('Procedure name is required');
   return prisma.surgery.create({
     data: {
       patientId: patient.id,
@@ -245,7 +245,7 @@ export const addVaccination = async (userId: string, data: {
 }) => {
   const patient = await getPatient(userId);
   const administered = data.dateAdministered ?? data.administeredDate;
-  if (!administered) throw new Error('Vaccination date is required');
+  if (!administered) throw ApiError.unprocessable('Vaccination date is required');
   return prisma.vaccination.create({
     data: {
       patientId: patient.id,
@@ -314,7 +314,7 @@ export const addFamilyHistory = async (userId: string, data: {
 }) => {
   const patient = await getPatient(userId);
   const conditionName = data.conditionName ?? data.condition;
-  if (!conditionName) throw new Error('Condition name is required');
+  if (!conditionName) throw ApiError.unprocessable('Condition name is required');
   return prisma.familyHistory.create({
     data: {
       patientId: patient.id,
