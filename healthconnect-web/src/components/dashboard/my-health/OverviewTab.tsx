@@ -1,565 +1,556 @@
 'use client';
-import { useState } from 'react';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, patientAPI } from '@/lib/api';
 import { useUIStore } from '@/store/uiStore';
 
-// ── HEALTH SCORE WEIGHTS (must sum to 100) ────────────────────────────────────
-// Clinically meaningful weighting — vitals dominate, lifestyle is a bonus signal
-const SCORE_PARAMS = [
-  { key:'vitalsScore',           label:'Vitals',               icon:'💓', weight:25, color:'linear-gradient(90deg,#EF4444,#F97316)', desc:'BP, blood sugar, heart rate, SpO2 in normal range' },
-  { key:'medicationAdherence',   label:'Medication Adherence', icon:'💊', weight:22, color:'linear-gradient(90deg,#0D9488,#14B8A6)', desc:'Doses taken on time in last 30 days' },
-  { key:'symptomBurden',         label:'Symptom Burden',       icon:'🩺', weight:18, color:'linear-gradient(90deg,#B45309,#F59E0B)', desc:'Inverse of symptom frequency × severity' },
-  { key:'appointmentRegularity', label:'Appointments',         icon:'📅', weight:15, color:'linear-gradient(90deg,#7C3AED,#8B5CF6)', desc:'Scheduled appointments attended' },
-  { key:'conditionControl',      label:'Condition Control',    icon:'📋', weight:10, color:'linear-gradient(90deg,#0F766E,#0D9488)', desc:'Active vs managed vs resolved conditions' },
-  { key:'lifestyleFactors',      label:'Lifestyle',            icon:'🌱', weight:7,  color:'linear-gradient(90deg,#16A34A,#22C55E)', desc:'Sleep, exercise & diet tracking' },
-  { key:'engagementScore',       label:'Self-monitoring',      icon:'📊', weight:3,  color:'linear-gradient(90deg,#1D4ED8,#3B82F6)', desc:'Frequency of logging vitals & symptoms' },
-];
-
-// ── MOCK FALLBACK DATA ────────────────────────────────────────────────────────
-const MOCK = {
-  healthScore: 72,
-  healthScoreTrend: 'stable',
-  weekDelta: 0,
-  conditions: [] as string[],
-  conditionCount: 0,
-  medicationAdherence: 0,
-  adherenceTrend: '',
-  upcomingAppointments: 0,
-  nextAppointment: { doctor: '—', spec: '—', date: '—', month: '—', time: '—', type: '—' },
-  activeMedications: 0,
-  medAlert: 'No active alerts',
-  scoreBreakdown: SCORE_PARAMS.map(p => ({ ...p, value: 0 })),
-  aiInsight: 'Your health data is being analysed. Check back soon for personalised insights.',
-  activeSymptoms: [] as any[],
-  riskAlert: null as string | null,
-  communitiesJoined: 0,
-  scoreHistory: [] as { score: number; date: string }[],
+type Domain = {
+  key: string;
+  label: string;
+  weight: number;
+  score: number | null;
+  status: string;
+  confidence: number;
+  latestValue?: string | null;
+  explanation: string;
+  source: string;
+  components?: Array<{
+    key?: string;
+    label: string;
+    score: number | null;
+    confidence: number;
+    status: string;
+    value?: string | null;
+    explanation: string;
+  }>;
 };
 
-// ── Merge API response shape → display shape ─────────────────────────────────
-// Dashboard response: { profile, healthScore:{score,medicationAdherence,...,trend},
-//   kpis:{upcomingAppointmentsCount,activeMedicationsCount,activeConditionsCount,
-//         medicationAdherencePct,refillAlertsCount,recentSymptomsCount,communitiesJoined,totalReports},
-//   upcomingAppointments:[{id,scheduledAt,type,status,doctor:{firstName,lastName,specialization}}],
-//   recentSymptoms:[{id,name,severity,loggedAt}] (optional)
-// }
-function merge(apiData: any) {
-  if (!apiData) return MOCK;
+type Alert = {
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  code: string;
+  title: string;
+  message: string;
+  observedAt?: string | null;
+};
 
-  const hs   = apiData.healthScore   ?? {};
-  const kpis = apiData.kpis          ?? {};
-  const next = apiData.upcomingAppointments?.[0] ?? null;
-  const recentSymptoms = apiData.recentSymptoms ?? [];
+type ReadinessItem = { key: string; label: string; complete: boolean; reason: string };
 
-  const scoreNum = typeof hs === 'number' ? hs : (hs.score ?? MOCK.healthScore);
-
-  // 7-parameter breakdown — map API fields + compute weighted display
-  const scoreBreakdown = SCORE_PARAMS.map(p => ({
-    ...p,
-    value: hs[p.key] ?? (
-      // Fallback mappings for older API shapes
-      p.key === 'symptomBurden'  ? (hs.symptomFrequency  ?? 0) :
-      p.key === 'vitalsScore'    ? (hs.vitals             ?? 0) :
-      p.key === 'conditionControl'? (hs.conditionControl  ?? 0) :
-      p.key === 'engagementScore' ? (hs.engagement        ?? 0) : 0
-    ),
-  }));
-
-  // Week-over-week delta from score history
-  const history: { score: number; date: string }[] = hs.history ?? apiData.scoreHistory ?? [];
-  let weekDelta = 0;
-  if (history.length >= 2) {
-    const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    weekDelta = (sorted[0]?.score ?? scoreNum) - (sorted[1]?.score ?? scoreNum);
-  }
-
-  // Next appointment
-  let nextAppt = MOCK.nextAppointment;
-  if (next) {
-    const dt   = new Date(next.scheduledAt);
-    const docF = next.doctor?.firstName ?? '';
-    const docL = next.doctor?.lastName  ?? '';
-    const spec = next.doctor?.specialization ?? '';
-    nextAppt = {
-      doctor: `Dr. ${docF} ${docL}`.trim(),
-      spec,
-      date:   String(dt.getDate()),
-      month:  dt.toLocaleDateString('en-IN', { month: 'short' }),
-      time:   dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-      type:   next.type === 'TELECONSULT' ? 'Teleconsult' : next.type === 'HOME_VISIT' ? 'Home Visit' : 'In-person',
-    };
-  }
-
-  const refillCount  = kpis.refillAlertsCount     ?? 0;
-  const activeCount  = kpis.activeMedicationsCount ?? 0;
-  let medAlert = MOCK.medAlert;
-  if (refillCount > 0) medAlert = `${refillCount} refill${refillCount > 1 ? 's' : ''} needed`;
-  else if (activeCount > 0) medAlert = `${activeCount} active prescription${activeCount > 1 ? 's' : ''}`;
-
-  const activeSymptoms = recentSymptoms.slice(0, 3).map((s: any) => ({
-    name:     s.name,
-    severity: s.severity ?? 5,
-    level:    s.severity >= 7 ? 'severe' : s.severity >= 4 ? 'moderate' : 'mild',
-    since:    s.loggedAt
-      ? new Date(s.loggedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-      : 'Recently',
-  }));
-
-  const adherencePct = kpis.medicationAdherencePct ?? hs.medicationAdherence ?? 0;
-  const adherenceTrend = adherencePct >= 85 ? 'Good adherence' : adherencePct >= 70 ? 'Fair adherence' : 'Needs improvement';
-  const conditionCount = kpis.activeConditionsCount ?? 0;
-  const conditionLabel = conditionCount === 0 ? 'No active conditions'
-    : conditionCount === 1 ? '1 active condition'
-    : `${conditionCount} active conditions`;
-
-  return {
-    healthScore:          scoreNum,
-    healthScoreTrend:     hs.trend ?? 'stable',
-    weekDelta,
-    conditions:           [conditionLabel],
-    conditionCount,
-    medicationAdherence:  adherencePct,
-    adherenceTrend,
-    upcomingAppointments: kpis.upcomingAppointmentsCount ?? 0,
-    nextAppointment:      nextAppt,
-    activeMedications:    activeCount,
-    medAlert,
-    scoreBreakdown,
-    aiInsight:            apiData.aiInsight ?? MOCK.aiInsight,
-    activeSymptoms,
-    riskAlert:            apiData.riskAlert ?? null,
-    communitiesJoined:    kpis.communitiesJoined ?? 0,
-    scoreHistory:         history.slice(-8),
+type HealthScore = {
+  score: number | null;
+  status: string;
+  scoreType?: 'COMPLETE' | 'PROVISIONAL' | 'INSUFFICIENT_DATA';
+  provisional?: boolean;
+  assessmentMessage?: string;
+  confidence: number;
+  dataCoverage: number;
+  algorithmVersion: string;
+  assessmentLevel: string;
+  assessmentReadiness: {
+    complete: boolean;
+    completed: number;
+    total: number;
+    percent: number;
+    items: ReadinessItem[];
   };
-}
-
-// ── Score Info Modal ──────────────────────────────────────────────────────────
-function ScoreInfoModal({ breakdown, score, onClose }: { breakdown: any[]; score: number; onClose: () => void }) {
-  const getStatus = (val: number) => val >= 80 ? { label:'Good', color:'#16A34A' } : val >= 60 ? { label:'Fair', color:'#D97706' } : val >= 1 ? { label:'Needs work', color:'#DC2626' } : { label:'No data', color:'#94A3B8' };
-  const getImprovement = (key: string, val: number): string => {
-    if (val >= 80) return '✓ On track';
-    const tips: Record<string, string> = {
-      vitalsScore:           'Log BP, blood sugar & heart rate readings regularly',
-      medicationAdherence:   'Set reminders to take medications on time',
-      symptomBurden:         'Track and manage your symptoms consistently',
-      appointmentRegularity: 'Book and attend scheduled doctor appointments',
-      conditionControl:      'Work with your doctor to move conditions to Managed',
-      lifestyleFactors:      'Track sleep, exercise and diet habits daily',
-      engagementScore:       'Log vitals and symptoms at least once a week',
-    };
-    return tips[key] ?? 'Keep improving';
+  riskContext: {
+    ageYears: number | null;
+    screeningRecommendations: Array<{ code: string; priority: string; message: string }>;
   };
+  domains: Domain[];
+  alerts: Alert[];
+  limitations?: Array<{ code: string; title: string; message: string; severity: string }>;
+};
 
+type Lifestyle = {
+  heightCm: number | null;
+  waistCm: number | null;
+  moderateActivityMinWeek: number | null;
+  vigorousActivityMinWeek: number | null;
+  sleepHoursAvg: number | null;
+  tobaccoStatus: string | null;
+  fruitVegServingsDay: number | null;
+  medicationStatus: string | null;
+  conditionStatus: string | null;
+  familyHistoryStatus: string | null;
+  alcoholStatus: string | null;
+};
+
+type DomainAction = { label: string; onClick: () => void };
+type Focus = { title: string; text: string };
+type AssessmentSection = 'vitals' | 'details' | 'records';
+
+const C = {
+  blue: '#1A6BB5',
+  cyan: '#16A6B6',
+  green: '#15803D',
+  amber: '#B45309',
+  red: '#BE123C',
+  muted: '#6B8194',
+  border: '#DDE8F1',
+  ink: '#142B40',
+};
+
+const unwrap = <T,>(r: any): T => (r?.data?.data ?? r?.data ?? {}) as T;
+const scoreColor = (n: number | null) => n == null ? C.muted : n >= 85 ? C.green : n >= 70 ? C.blue : n >= 55 ? C.amber : C.red;
+const statusLabel = (s: string) => ({
+  STRONG: 'Strong',
+  GOOD: 'Good',
+  NEEDS_ATTENTION: 'Needs attention',
+  NEEDS_REVIEW: 'Needs review',
+  NOT_APPLICABLE: 'Not applicable',
+  ESTABLISHING: 'Establishing',
+  NO_DATA: 'Needs data',
+} as Record<string, string>)[s] ?? s.replace(/_/g, ' ');
+
+const iconFor = (k: string) => ({
+  cardiovascular: '❤',
+  metabolic_body: '◈',
+  lifestyle: '◉',
+  sleep_recovery: '☾',
+  condition_control: '✚',
+  treatment_care: '◆',
+  symptoms_function: '≈',
+} as Record<string, string>)[k] ?? '•';
+
+function Gauge({ score }: { score: number | null }) {
+  const value = score ?? 0;
+  const r = 58;
+  const c = 2 * Math.PI * r;
+  const o = c - (Math.max(0, Math.min(100, value)) / 100) * c;
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000, padding:20 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:580, maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 60px rgba(0,0,0,0.2)' }}>
-        {/* Header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, paddingBottom:16, borderBottom:'1px solid #E2EEF0' }}>
-          <div>
-            <div style={{ fontSize:17, fontWeight:800, color:'#0F2D2A', marginBottom:3 }}>How Your Health Score is Calculated</div>
-            <div style={{ fontSize:12, color:'#64748B' }}>7 weighted parameters — updated after every data change</div>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#94A3B8', lineHeight:1 }}>✕</button>
-        </div>
-
-        {/* Overall score */}
-        <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:20, padding:'14px 18px', background:'#F0FDF9', borderRadius:14, border:'1px solid rgba(13,148,136,0.2)' }}>
-          <div style={{ fontSize:42, fontWeight:900, color: score>=80?'#16A34A':score>=60?'#0D9488':'#D97706', lineHeight:1 }}>{score}</div>
-          <div>
-            <div style={{ fontWeight:700, fontSize:15, color:'#0F2D2A' }}>Overall Health Score</div>
-            <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>= Σ (parameter_score × weight%) across all 7 parameters</div>
-          </div>
-        </div>
-
-        {/* Formula */}
-        <div style={{ background:'#F8FFFE', border:'1px solid #E2EEF0', borderRadius:12, padding:'12px 16px', marginBottom:20, fontFamily:'JetBrains Mono, monospace', fontSize:11, color:'#4B6E6A', lineHeight:1.8 }}>
-          <div style={{ fontWeight:700, color:'#0F2D2A', marginBottom:6, fontFamily:'inherit' }}>Score Formula:</div>
-          {breakdown.map(p => (
-            <div key={p.key} style={{ display:'flex', gap:8 }}>
-              <span style={{ color:'#0D9488', minWidth:22 }}>{p.value}</span>
-              <span style={{ color:'#94A3B8' }}>×</span>
-              <span style={{ color:'#7C3AED', minWidth:32 }}>{p.weight}%</span>
-              <span style={{ color:'#64748B' }}>= {Math.round(p.value * p.weight / 100)}</span>
-              <span style={{ color:'#CBD5E1' }}>({p.label})</span>
-            </div>
-          ))}
-          <div style={{ borderTop:'1px solid #E2EEF0', paddingTop:8, marginTop:8, fontWeight:700, color:'#0F2D2A' }}>
-            Total = {score} / 100
-          </div>
-        </div>
-
-        {/* Parameter breakdown */}
-        <div style={{ fontSize:13, fontWeight:700, color:'#0F2D2A', marginBottom:12 }}>Parameter Breakdown</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {breakdown.map(p => {
-            const status = getStatus(p.value);
-            const tip    = getImprovement(p.key, p.value);
-            return (
-              <div key={p.key} style={{ background:'#F8FFFE', border:'1px solid #E2EEF0', borderRadius:12, padding:'12px 14px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                  <span style={{ fontSize:18 }}>{p.icon}</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ fontWeight:700, fontSize:13, color:'#0F2D2A' }}>{p.label}</span>
-                      <span style={{ fontSize:10, padding:'1px 7px', borderRadius:100, fontWeight:700, color:status.color, background:`${status.color}15`, border:`1px solid ${status.color}30` }}>{status.label}</span>
-                      <span style={{ marginLeft:'auto', fontSize:11, color:'#94A3B8', fontFamily:'JetBrains Mono,monospace' }}>weight: {p.weight}%</span>
-                    </div>
-                    <div style={{ fontSize:11, color:'#64748B', marginTop:2 }}>{p.desc}</div>
-                  </div>
-                  <div style={{ textAlign:'right', flexShrink:0 }}>
-                    <div style={{ fontSize:22, fontWeight:800, color: p.value>=80?'#16A34A':p.value>=60?'#D97706':p.value>0?'#DC2626':'#94A3B8', lineHeight:1 }}>{p.value}</div>
-                    <div style={{ fontSize:10, color:'#94A3B8' }}>/100</div>
-                  </div>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <div style={{ flex:1, height:5, background:'#E2EEF0', borderRadius:3, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:`${p.value}%`, background:p.color, borderRadius:3, transition:'width 0.8s ease' }} />
-                  </div>
-                  <div style={{ fontSize:11, color: p.value>=80?'#16A34A':'#64748B', fontWeight:600, whiteSpace:'nowrap', minWidth:120, textAlign:'right' }}>{tip}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footer note */}
-        <div style={{ marginTop:18, padding:'10px 14px', background:'rgba(124,58,237,0.06)', border:'1px solid rgba(124,58,237,0.15)', borderRadius:10, fontSize:12, color:'#6D28D9', lineHeight:1.6 }}>
-          💡 <strong>Note:</strong> Vitals (25%) and Medication Adherence (22%) have the highest clinical weight. Logging vitals regularly is the fastest way to improve your score.
-        </div>
-      </div>
+    <div className="hc-gauge">
+      <svg width="154" height="154">
+        <circle cx="77" cy="77" r={r} fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="12" />
+        <circle cx="77" cy="77" r={r} fill="none" stroke={score == null ? 'rgba(255,255,255,.24)' : '#fff'} strokeWidth="12" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={o} transform="rotate(-90 77 77)" />
+      </svg>
+      <div className="hc-gauge-center"><strong>{score ?? '—'}</strong><span>HEALTH SCORE</span></div>
     </div>
   );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-export default function OverviewTab({ data, loading }: { data: any; loading: boolean }) {
-  const { setActiveTab, setActivePage } = useUIStore();
-  const [showScoreInfo, setShowScoreInfo] = useState(false);
-  const d = merge(data);
+function suggestedFocus(d?: Domain): Focus | null {
+  if (!d || d.score == null || d.score >= 85) return null;
+  const scored = (d.components ?? []).filter(c => c.score != null).sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+  const low = scored[0];
+  const value = low?.value ? ` Current: ${low.value}.` : '';
 
-  // SVG ring: r=38, circumference=2π×38≈238.76
-  const circ   = 238.76;
-  const scoreNum = typeof d.healthScore === 'number' ? d.healthScore : 0;
-  const offset = circ * (1 - scoreNum / 100);
+  if (d.key === 'lifestyle') {
+    if (low?.key === 'activity') return {
+      title: 'Suggested focus — Physical activity',
+      text: `Physical activity is the biggest opportunity within Lifestyle Health.${value} Build up gradually toward at least 150 moderate-equivalent minutes per week, as appropriate for your health and ability.`,
+    };
+    if (low?.key === 'tobacco') return {
+      title: 'Suggested focus — Tobacco exposure',
+      text: `Tobacco exposure is the main modifiable Lifestyle Health concern.${value} Reducing and stopping smoked or smokeless tobacco can substantially improve long-term health risk.`,
+    };
+    return { title: 'Suggested focus — Lifestyle Health', text: `Lifestyle Health is currently your lowest measured domain at ${d.score}/100. Review physical activity and tobacco exposure for the biggest scoreable opportunities.` };
+  }
 
-  const scoreLabel = scoreNum >= 80 ? 'Good' : scoreNum >= 60 ? 'Fair' : 'Needs Attention';
-  const scoreGradient = scoreNum >= 80 ? '#22C55E' : scoreNum >= 60 ? '#14B8A6' : '#F59E0B';
+  if (d.key === 'cardiovascular') {
+    if (low?.key === 'blood_pressure') return { title: 'Suggested focus — Blood pressure', text: `Blood pressure is the main opportunity within Cardiovascular Health.${value} Repeat readings on different days improve certainty and help show whether the pattern is persistent.` };
+    if (low?.key === 'lipids') return { title: 'Suggested focus — Blood lipids', text: `Blood lipids are the main opportunity within Cardiovascular Health.${value} Review the structured result and clinical context with your clinician when appropriate.` };
+  }
+
+  if (d.key === 'metabolic_body') {
+    if (low?.key === 'glucose') return { title: 'Suggested focus — Glucose / HbA1c', text: `Glucose control is the main opportunity within Metabolic & Body Health.${value} Interpretation depends on whether the value is HbA1c, fasting, post-meal or random.` };
+    if (low?.key === 'bmi') return { title: 'Suggested focus — Body composition', text: `Body composition is the main opportunity within Metabolic & Body Health.${value} BMI is a screening measure; waist and metabolic results add useful context.` };
+    if (low?.key === 'waist') return { title: 'Suggested focus — Waist circumference', text: `Central adiposity is the main opportunity within Metabolic & Body Health.${value} Use it together with BMI and metabolic results rather than as a diagnosis by itself.` };
+  }
+
+  if (d.key === 'sleep_recovery') return { title: 'Suggested focus — Sleep', text: `Sleep & Recovery is currently ${d.score}/100.${value} Review your usual nightly sleep duration and consistency.` };
+  if (d.key === 'treatment_care') return { title: 'Suggested focus — Treatment & Care', text: `Treatment & Care is currently ${d.score}/100.${value} Review prescribed medicines and adherence logs; this domain applies only when regular treatment is actually prescribed.` };
+  if (d.key === 'condition_control') return { title: 'Suggested focus — Condition control', text: `Known Condition Control is currently ${d.score}/100.${value} HealthConnect scores only supported, measurable control indicators and does not invent scores for unsupported conditions.` };
+  if (d.key === 'symptoms_function') return { title: 'Suggested focus — Symptoms & function', text: `Recent symptom burden is currently the lowest measured area.${value} Update unresolved or significant symptoms so the assessment reflects your current state.` };
+  return { title: `Suggested focus — ${d.label}`, text: `${d.label} is currently your lowest measurable domain at ${d.score}/100. Open the domain details to see the measurements contributing to it.` };
+}
+
+function AssessmentForm({
+  afterSave,
+  open,
+  setOpen,
+  formRef,
+  readiness,
+  onOpenVitals,
+  onOpenHistory,
+  onOpenMedications,
+}: {
+  afterSave: () => Promise<void>;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  formRef: any;
+  readiness: HealthScore['assessmentReadiness'] | undefined;
+  onOpenVitals: () => void;
+  onOpenHistory: () => void;
+  onOpenMedications: () => void;
+}) {
+  const empty: Lifestyle = {
+    heightCm: null,
+    waistCm: null,
+    moderateActivityMinWeek: null,
+    vigorousActivityMinWeek: null,
+    sleepHoursAvg: null,
+    tobaccoStatus: null,
+    fruitVegServingsDay: null,
+    medicationStatus: null,
+    conditionStatus: null,
+    familyHistoryStatus: null,
+    alcoholStatus: null,
+  };
+
+  const [f, setF] = useState<Lifestyle>(empty);
+  const [active, setActive] = useState<AssessmentSection | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    api.get('/patient/health-score/lifestyle')
+      .then(r => setF({ ...empty, ...unwrap<Lifestyle>(r) }))
+      .catch(() => setMsg('Unable to load assessment inputs.'))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open) setActive(prev => prev ?? 'details');
+  }, [open]);
+
+  const set = (k: keyof Lifestyle, v: any) => setF(p => ({ ...p, [k]: v === '' ? null : v }));
+
+  const save = async () => {
+    setSaving(true);
+    setMsg('');
+    try {
+      await api.put('/patient/health-score/lifestyle', f);
+      await afterSave();
+      setMsg('✓ Saved and Health Score recalculated.');
+    } catch (e: any) {
+      setMsg(e?.response?.data?.message ?? 'Unable to save assessment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const number = (label: string, key: keyof Lifestyle, ph: string, opts: { optional?: boolean; unit?: string; help?: string; min?: number; max?: number; step?: number } = {}) => (
+    <label className="hc-field">
+      <span>{label}{opts.optional && <em> optional</em>}</span>
+      <div className="hc-input-unit">
+        <input type="number" min={opts.min} max={opts.max} step={opts.step} value={(f[key] as number | null) ?? ''} placeholder={ph} onChange={e => set(key, e.target.value === '' ? null : Number(e.target.value))} />
+        {opts.unit && <b>{opts.unit}</b>}
+      </div>
+      {opts.help && <small className="hc-help">{opts.help}</small>}
+    </label>
+  );
+
+  const select = (label: string, key: keyof Lifestyle, opts: Array<[string, string]>, help?: string) => (
+    <label className="hc-field">
+      <span>{label}</span>
+      <select value={(f[key] as string | null) ?? ''} onChange={e => set(key, e.target.value)}>
+        <option value="">Select</option>
+        {opts.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+      </select>
+      {help && <small className="hc-help">{help}</small>}
+    </label>
+  );
+
+  const remaining = Math.max(0, (readiness?.total ?? 10) - (readiness?.completed ?? 0));
+  const item = (key: string) => readiness?.items?.find(i => i.key === key);
+  const issue = (key: string) => {
+    const x = item(key);
+    return x && !x.complete ? x.reason : '';
+  };
+  const doneCount = (keys: string[]) => keys.filter(k => item(k)?.complete).length;
+  const detailKeys = ['body_composition', 'tobacco', 'activity', 'sleep'];
+  const recordKeys = ['conditions', 'medications', 'family_history'];
+  const declarationIssues = recordKeys.map(k => item(k)).filter((x): x is ReadinessItem => !!x && !x.complete);
+
+  const moderate = f.moderateActivityMinWeek ?? 0;
+  const vigorous = f.vigorousActivityMinWeek ?? 0;
+  const equivalent = moderate + 2 * vigorous;
+  const activityText = equivalent >= 300
+    ? 'At or above the upper end of the adult aerobic reference'
+    : equivalent >= 150
+      ? 'Meets the adult aerobic reference'
+      : equivalent > 0
+        ? 'Below the adult aerobic reference'
+        : 'No weekly aerobic activity entered';
+
+  const toggle = (section: AssessmentSection) => {
+    setActive(prev => {
+      const next = prev === section ? null : section;
+      setOpen(next != null);
+      return next;
+    });
+    setMsg('');
+  };
+
+  const row = (key: AssessmentSection, icon: string, title: string, subtitle: string, status: string, complete: boolean) => (
+    <button className="hc-assess-row" onClick={() => toggle(key)}>
+      <span className="hc-assess-icon">{icon}</span>
+      <span className="hc-assess-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+      <span className={`hc-assess-status${complete ? ' done' : ''}`}>{status}</span>
+      <span className="hc-assess-chevron">{active === key ? '−' : '+'}</span>
+    </button>
+  );
 
   return (
-    <>
-      <style>{`
-        .ov-grid2  { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .ov-grid4  { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 20px; }
-        @media(max-width:1200px) { .ov-grid4 { grid-template-columns: repeat(3,1fr); } }
-        @media(max-width:800px)  { .ov-grid4 { grid-template-columns: 1fr 1fr; } }
-        @media(max-width:720px)  { .ov-grid4, .ov-grid2 { grid-template-columns: 1fr; } }
-        .ov-hs { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:16px 20px; display:flex; align-items:center; gap:20px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
-        .ov-hs-ring { position:relative; flex-shrink:0; }
-        .ov-hs-ring svg { transform:rotate(-90deg); }
-        .ov-hs-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .ov-hs-num   { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; line-height:1; }
-        .ov-hs-label { font-size:9px; color:#64748B; text-transform:uppercase; }
-        .ov-hs-title { font-family:'Syne',sans-serif; font-weight:800; font-size:15px; color:#0F2D2A; margin-bottom:4px; }
-        .ov-hs-sub   { font-size:12px; color:#64748B; margin-bottom:12px; }
-        .ov-bar-row  { display:flex; flex-direction:column; gap:10px; flex:1; }
-        .ov-bar-item { display:flex; align-items:center; gap:10px; }
-        .ov-bar-lbl  { font-size:12px; color:#4B6E6A; width:190px; flex-shrink:0; font-weight:500; display:flex; align-items:center; gap:0; }
-        .ov-bar-track { flex:1; height:7px; background:#E2EEF0; border-radius:3px; overflow:hidden; }
-        .ov-bar-fill  { height:100%; border-radius:3px; transition:width 1s ease; }
-        .ov-bar-score { font-size:12px; color:#0F2D2A; width:28px; text-align:right; font-weight:700; }
-        .ov-insight { background:#F5F3FF; border:1px solid #DDD6FE; border-radius:12px; padding:14px 16px; display:flex; align-items:flex-start; gap:12px; margin-bottom:20px; }
-        .ov-insight-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
-        .ov-insight-text { font-size:13px; color:#4B5563; line-height:1.6; }
-        .ov-insight-text strong { color:#7C3AED; }
-        .ov-qa { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
-        .ov-qa-btn { padding:9px 16px; border-radius:9px; border:1.5px solid #E2EEF0; background:#FFFFFF; color:#4B6E6A; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; font-family:'Plus Jakarta Sans',sans-serif; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-        .ov-qa-btn:hover { border-color:#0D9488; color:#0D9488; background:#F0FDF9; }
-        .ov-qa-btn.primary { background:linear-gradient(135deg,#0D9488,#14B8A6); border-color:transparent; color:#fff; box-shadow:0 2px 10px rgba(13,148,136,0.3); }
-        .ov-qa-btn.primary:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(20,184,166,0.4); }
-        .ov-kpi { min-height:0; background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:14px; position:relative; overflow:hidden; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
-        .ov-kpi:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
-        .ov-kpi::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; }
-        .ov-kpi.teal::after  { background:linear-gradient(90deg,#0D9488,#14B8A6); }
-        .ov-kpi.green::after { background:#22C55E; }
-        .ov-kpi.amber::after { background:#F59E0B; }
-        .ov-kpi.rose::after  { background:#F43F5E; }
-        .ov-kpi-lbl  { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; font-weight:600; }
-        .ov-kpi-val  { font-family:'Syne',sans-serif; font-size:32px; font-weight:800; color:#0F2D2A; line-height:1; margin-bottom:5px; }
-        .ov-kpi-val.teal  { color:#0D9488; }
-        .ov-kpi-val.green { color:#16A34A; }
-        .ov-kpi-val.amber { color:#D97706; }
-        .ov-kpi-trend { font-size:12px; color:#64748B; font-weight:500; }
-        .ov-kpi-trend.up   { color:#16A34A; font-weight:600; }
-        .ov-kpi-trend.down { color:#DC2626; font-weight:600; }
-        .ov-card { background:#FFFFFF; border:1px solid #E2EEF0; border-radius:14px; padding:20px; transition:box-shadow 0.2s; box-shadow:0 1px 6px rgba(0,0,0,0.05); }
-        .ov-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
-        .ov-card-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-        .ov-card-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; color:#0F2D2A; }
-        .ov-appt { display:flex; gap:16px; align-items:flex-start; }
-        .ov-appt-date { background:#F0FDF9; border:1.5px solid #99F6E4; border-radius:10px; padding:10px 14px; text-align:center; flex-shrink:0; min-width:58px; }
-        .ov-appt-day   { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:#0D9488; line-height:1; }
-        .ov-appt-month { font-size:9px; color:#64748B; text-transform:uppercase; font-weight:600; }
-        .ov-appt-doctor { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; color:#0F2D2A; margin-bottom:2px; }
-        .ov-appt-spec   { font-size:12px; color:#0D9488; margin-bottom:6px; font-weight:600; }
-        .ov-appt-meta   { font-size:12px; color:#64748B; }
-        .ov-appt-btns   { display:flex; gap:8px; margin-top:14px; }
-        .ov-tbl { width:100%; border-collapse:collapse; }
-        .ov-tbl th { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:.07em; padding:8px 10px; border-bottom:2px solid #E2EEF0; text-align:left; font-weight:700; }
-        .ov-tbl td { padding:10px 10px; font-size:13px; color:#4B6E6A; border-bottom:1px solid #F1F5F9; }
-        .ov-tbl tr:last-child td { border-bottom:none; }
-        .ov-tbl tr:hover td { background:#F8FFFE; color:#0F2D2A; }
-        .ov-pill { display:inline-flex; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:700; border:1px solid; }
-        .ov-pill.upcoming  { background:rgba(13,148,136,0.1); color:#0D9488; border-color:rgba(13,148,136,0.3); }
-        .ov-pill.mild      { background:rgba(22,163,74,0.1);  color:#16A34A; border-color:rgba(22,163,74,0.3); }
-        .ov-pill.moderate  { background:rgba(217,119,6,0.1); color:#D97706; border-color:rgba(217,119,6,0.3); }
-        .ov-pill.severe    { background:rgba(220,38,38,0.1);  color:#DC2626; border-color:rgba(220,38,38,0.3); }
-        .ov-risk { background:#FFF5F5; border:1px solid #FECACA; border-radius:12px; padding:14px 16px; display:flex; align-items:flex-start; gap:12px; margin-top:20px; }
-        .ov-risk-text { font-size:13px; color:#374151; line-height:1.6; }
-        .ov-risk-text strong { color:#DC2626; }
-        .ov-btn { padding:7px 14px; border-radius:9px; border:1.5px solid #E2EEF0; background:#FFFFFF; color:#4B6E6A; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:'Plus Jakarta Sans',sans-serif; }
-        .ov-btn:hover { border-color:#0D9488; color:#0D9488; }
-        .ov-btn.teal { background:linear-gradient(135deg,#0D9488,#14B8A6); border-color:transparent; color:#fff; }
-        .ov-btn.teal:hover { box-shadow:0 4px 14px rgba(20,184,166,0.35); }
-        .ov-loading { display:flex; flex-direction:column; gap:16px; }
-        .ov-skel { border-radius:14px; height:160px; background:#F0FDF9; animation:ov-shimmer 1.5s infinite; }
-        @keyframes ov-shimmer { 0%,100%{opacity:0.6} 50%{opacity:1} }
-      `}</style>
-
-      {loading && (
-        <div className="ov-loading">
-          <div className="ov-skel" style={{ height: 140 }} />
-          <div className="ov-skel" style={{ height: 80 }} />
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
-            {[1,2,3,4].map(i => <div key={i} className="ov-skel" style={{ height:100 }} />)}
-          </div>
+    <section ref={formRef} className="hc-assessment">
+      <div className="hc-card hc-assess-summary">
+        <div>
+          <small>HEALTH ASSESSMENT</small>
+          <strong>{readiness?.percent ?? 0}% complete <span>· {remaining} remaining</span></strong>
+          <p>Complete missing information to make your Health Score more comprehensive.</p>
         </div>
-      )}
+      </div>
 
-      {!loading && (
-        <>
-          {/* Health Score Widget */}
-          <div className="ov-hs">
-            <div className="ov-hs-ring">
-              <svg width="90" height="90" viewBox="0 0 90 90">
-                <circle cx="45" cy="45" r="38" fill="none" stroke="#E2EEF0" strokeWidth="8" />
-                <circle cx="45" cy="45" r="38" fill="none" stroke={scoreGradient} strokeWidth="8"
-                  strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} />
-              </svg>
-              <div className="ov-hs-center">
-                <div className="ov-hs-num" style={{ color: scoreGradient }}>{scoreNum}</div>
-                <div className="ov-hs-label">/100</div>
+      {loading ? <div className="hc-card hc-muted">Loading assessment…</div> : <div className="hc-assess-list">
+        <div className={`hc-assess-card${active === 'vitals' ? ' active' : ''}`}>
+          {row('vitals', '📊', 'Vitals', 'Blood pressure, weight, glucose/HbA1c and measured readings', item('blood_pressure')?.complete ? 'BP available' : 'Needs BP', !!item('blood_pressure')?.complete)}
+          {active === 'vitals' && <div className="hc-assess-panel">
+            <div className="hc-source-line">
+              <div><b>Measured health data is managed in Vitals</b><span>HealthConnect automatically uses your latest supported measurements.</span></div>
+              <button onClick={onOpenVitals}>Open Vitals →</button>
+            </div>
+            <div className="hc-mini-statuses">
+              <span className={item('blood_pressure')?.complete ? 'done' : ''}>Blood pressure {item('blood_pressure')?.complete ? '✓' : 'missing'}</span>
+              <span>Weight + height → BMI</span>
+              <span>Glucose/HbA1c → metabolic health</span>
+            </div>
+          </div>}
+        </div>
+
+        <div className={`hc-assess-card${active === 'details' ? ' active' : ''}`}>
+          {row('details', '✍', 'Health Details', 'Body measurements, sleep, activity and tobacco', `${doneCount(detailKeys)}/${detailKeys.length} core ready`, doneCount(detailKeys) === detailKeys.length)}
+          {active === 'details' && <div className="hc-assess-panel">
+            <div className="hc-form-grid two">
+              {number('Height', 'heightCm', '165', { unit: 'cm', min: 80, max: 250, step: 1, help: 'Used with your latest weight from Vitals for BMI.' })}
+              {number('Waist circumference', 'waistCm', '85', { optional: true, unit: 'cm', min: 30, max: 250, step: 1, help: 'Optional body-composition context.' })}
+              {number('Usual sleep', 'sleepHoursAvg', '7.5', { unit: 'hours/night', min: 0, max: 24, step: .5, help: 'Average nightly sleep over a typical week.' })}
+              {select('Tobacco exposure', 'tobaccoStatus', [['NEVER', 'Never used tobacco'], ['FORMER', 'Former user'], ['CURRENT', 'Current — smoked or smokeless tobacco'], ['SECONDHAND', 'Second-hand exposure']], 'Includes cigarette, bidi, gutkha and khaini.')}
+            </div>
+
+            <div className="hc-subhead"><b>Weekly physical activity</b><span>Enter total minutes for the whole week.</span></div>
+            <div className="hc-form-grid two">
+              {number('Moderate activity', 'moderateActivityMinWeek', '150', { unit: 'min/week', min: 0, max: 10000, step: 5, help: 'Example: brisk walking 30 min × 5 days = 150.' })}
+              {number('Vigorous activity', 'vigorousActivityMinWeek', '75', { unit: 'min/week', min: 0, max: 10000, step: 5, help: 'Example: running 25 min × 3 days = 75.' })}
+            </div>
+            <div className="hc-activity-summary"><b>{equivalent} moderate-equivalent min/week</b><span>{activityText}. Vigorous minutes count approximately double.</span></div>
+
+            <details className="hc-optional">
+              <summary>Optional health context</summary>
+              <div className="hc-form-grid two">
+                {number('Fruit & vegetable intake', 'fruitVegServingsDay', '5', { optional: true, unit: 'servings/day', min: 0, max: 30, step: 1, help: 'Context only; does not change the current numeric score.' })}
+                {select('Alcohol use', 'alcoholStatus', [['NONE', 'None'], ['OCCASIONAL', 'Occasional'], ['REGULAR', 'Regular'], ['UNKNOWN', 'Prefer not to say / unknown']], 'Context only; not part of the current numeric score.')}
               </div>
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:2 }}>
-                <div className="ov-hs-title">Health Score — {scoreLabel}</div>
-                {/* Week-over-week delta badge */}
-                {d.weekDelta !== 0 && (
-                  <span style={{
-                    fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:100,
-                    background: d.weekDelta > 0 ? 'rgba(34,197,94,0.12)' : 'rgba(220,38,38,0.1)',
-                    color:      d.weekDelta > 0 ? '#16A34A' : '#DC2626',
-                    border:     `1px solid ${d.weekDelta > 0 ? 'rgba(34,197,94,0.3)' : 'rgba(220,38,38,0.25)'}`,
-                  }}>
-                    {d.weekDelta > 0 ? `↑ +${d.weekDelta}` : `↓ ${d.weekDelta}`} this week
-                  </span>
-                )}
-                {/* ℹ️ Info button */}
-                <button onClick={() => setShowScoreInfo(true)}
-                  title="How is this score calculated?"
-                  style={{ width:22, height:22, borderRadius:'50%', border:'1.5px solid #CBD5E1', background:'#F8FAFC', color:'#64748B', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.2s', lineHeight:1 }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor='#0D9488'; (e.currentTarget as HTMLElement).style.color='#0D9488'; (e.currentTarget as HTMLElement).style.background='#F0FDF9'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor='#CBD5E1'; (e.currentTarget as HTMLElement).style.color='#64748B'; (e.currentTarget as HTMLElement).style.background='#F8FAFC'; }}
-                >i</button>
-              </div>
-              <div className="ov-hs-sub">Weighted across 7 health parameters</div>
+            </details>
 
-              {/* Sparkline — last 8 weeks */}
-              {d.scoreHistory.length > 1 && (
-                <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:28, marginBottom:12 }}>
-                  {d.scoreHistory.map((h: any, i: number) => {
-                    const val = h.score ?? 0;
-                    const isLast = i === d.scoreHistory.length - 1;
-                    return (
-                      <div key={i} title={`${val} — ${h.date ? new Date(h.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : ''}`}
-                        style={{ flex:1, height:`${(val/100)*26}px`, minHeight:3, borderRadius:'2px 2px 0 0',
-                          background: isLast ? scoreGradient : 'rgba(20,184,166,0.35)',
-                          transition:'height 0.6s ease' }} />
-                    );
-                  })}
-                </div>
-              )}
+            <div className="hc-save-row">
+              <button className="hc-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save health details & recalculate'}</button>
+              {msg && <span className={msg.startsWith('✓') ? 'ok' : 'err'}>{msg}</span>}
+            </div>
+          </div>}
+        </div>
 
-              {/* 7-parameter bars */}
-              <div className="ov-bar-row">
-                {d.scoreBreakdown.map((b: any) => (
-                  <div className="ov-bar-item" key={b.label}>
-                    <div className="ov-bar-lbl">
-                      <span style={{ marginRight:5 }}>{b.icon}</span>{b.label}
-                      <span style={{ marginLeft:'auto', fontSize:10, color:'#94A3B8', fontWeight:400 }}>{b.weight}%</span>
-                    </div>
-                    <div className="ov-bar-track">
-                      <div className="ov-bar-fill" style={{ width:`${b.value}%`, background:b.color }} />
-                    </div>
-                    <div className="ov-bar-score">{b.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* AI Insight */}
-          <div className="ov-insight">
-            <div className="ov-insight-icon">🤖</div>
-            <div className="ov-insight-text">
-              <strong>AI Weekly Insight:</strong> {d.aiInsight}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="ov-qa">
-            <button className="ov-qa-btn primary" onClick={() => setActiveTab('symptoms')}>➕ Log Symptom</button>
-            <button className="ov-qa-btn" onClick={() => setActivePage('medications')}>💊 Add Medication</button>
-            <button className="ov-qa-btn" onClick={() => setActiveTab('vault')}>📤 Upload Report</button>
-            <button className="ov-qa-btn" onClick={() => setActivePage('appointments')}>📅 Book Appointment</button>
-            <button className="ov-qa-btn" onClick={() => setActivePage('communities')}>🏘️ My Communities</button>
-            <button className="ov-qa-btn" onClick={() => setActiveTab('insights')}>📊 View Insights</button>
-          </div>
-
-          {/* KPI Row */}
-          <div className="ov-grid4">
-            <div className="ov-kpi teal">
-              <div className="ov-kpi-lbl">Active Conditions</div>
-              <div className="ov-kpi-val teal">{d.conditionCount}</div>
-              <div className="ov-kpi-trend">{d.conditions[0]}</div>
-            </div>
-            <div className="ov-kpi green">
-              <div className="ov-kpi-lbl">Medication Adherence</div>
-              <div className="ov-kpi-val green">{d.medicationAdherence}%</div>
-              <div className={`ov-kpi-trend ${d.medicationAdherence >= 80 ? 'up' : ''}`}>{d.adherenceTrend}</div>
-            </div>
-            <div className="ov-kpi amber">
-              <div className="ov-kpi-lbl">Upcoming Appointments</div>
-              <div className="ov-kpi-val amber">{d.upcomingAppointments}</div>
-              <div className="ov-kpi-trend">
-                {d.upcomingAppointments > 0
-                  ? `Next: ${d.nextAppointment.month} ${d.nextAppointment.date}`
-                  : 'No upcoming'}
-              </div>
-            </div>
-            <div className="ov-kpi rose">
-              <div className="ov-kpi-lbl">Active Medications</div>
-              <div className="ov-kpi-val">{d.activeMedications}</div>
-              <div className="ov-kpi-trend down">{d.medAlert}</div>
-            </div>
-            {/* ── Communities KPI — navigates to Communities tab ── */}
-            <div
-              className="ov-kpi"
-              onClick={() => setActivePage('communities')}
-              style={{ cursor: 'pointer', borderColor: d.communitiesJoined > 0 ? 'rgba(77,182,160,0.3)' : undefined }}
-              title="Go to My Communities"
-            >
-              <style>{`.ov-kpi.community::after { background: linear-gradient(90deg,#4db6a0,#0D9488); }`}</style>
-              <div className="ov-kpi-lbl" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span>🏘️</span> Communities
-              </div>
-              <div className="ov-kpi-val" style={{ color: '#0D9488' }}>{d.communitiesJoined}</div>
-              <div className="ov-kpi-trend" style={{ color: d.communitiesJoined > 0 ? '#0D9488' : undefined }}>
-                {d.communitiesJoined > 0
-                  ? `${d.communitiesJoined} joined · View →`
-                  : 'Join a community'}
-              </div>
-            </div>
-          </div>
-
-          {/* Next Appt + Active Symptoms */}
-          <div className="ov-grid2" style={{ marginBottom:0 }}>
-            <div className="ov-card">
-              <div className="ov-card-hd">
-                <div className="ov-card-title">Next Appointment</div>
-                {d.upcomingAppointments > 0
-                  ? <span className="ov-pill upcoming">Upcoming</span>
-                  : <span className="ov-pill" style={{ color:'#64748B', borderColor:'#E2EEF0' }}>None</span>
-                }
-              </div>
-              {d.upcomingAppointments === 0 ? (
-                <div style={{ textAlign:'center', padding:'20px 0', color:'#64748B' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
-                  <div style={{ fontSize:13, color:'#94A3B8', marginBottom:12 }}>No upcoming appointments</div>
-                  <button className="ov-btn teal" onClick={() => setActivePage('appointments')}>Book Appointment</button>
-                </div>
-              ) : (
-                <>
-                  <div className="ov-appt">
-                    <div className="ov-appt-date">
-                      <div className="ov-appt-day">{d.nextAppointment.date}</div>
-                      <div className="ov-appt-month">{d.nextAppointment.month}</div>
-                    </div>
-                    <div>
-                      <div className="ov-appt-doctor">{d.nextAppointment.doctor}</div>
-                      <div className="ov-appt-spec">{d.nextAppointment.spec}</div>
-                      <div className="ov-appt-meta">{d.nextAppointment.time} · {d.nextAppointment.type}</div>
-                    </div>
-                  </div>
-                  <div className="ov-appt-btns">
-                    <button className="ov-btn" style={{ flex:1 }} onClick={() => setActivePage('appointments')}>Reschedule</button>
-                    <button className="ov-btn teal" style={{ flex:1 }} onClick={() => setActivePage('appointments')}>
-                      {d.nextAppointment.type === 'Teleconsult' ? '💻 Join Call' : '🗺 Directions'}
-                    </button>
-                  </div>
-                </>
-              )}
+        <div className={`hc-assess-card${active === 'records' ? ' active' : ''}`}>
+          {row('records', '📋', 'Medical Records', 'Conditions, medicines and family history', `${doneCount(recordKeys)}/${recordKeys.length} declarations ready`, doneCount(recordKeys) === recordKeys.length)}
+          {active === 'records' && <div className="hc-assess-panel">
+            <div className="hc-record-note">Confirm what applies to you. The actual records remain in Medical History and Medications.</div>
+            <div className="hc-form-grid three">
+              {select('Known chronic condition', 'conditionStatus', [['NONE', 'No known chronic condition'], ['KNOWN', 'Yes — recorded in Medical History'], ['UNKNOWN', 'Not sure / needs review']], issue('conditions') ? `Check: ${issue('conditions')}` : 'A diagnosis does not automatically lower the score.')}
+              {select('Regular prescribed medication', 'medicationStatus', [['NONE', 'No regular medication prescribed'], ['TAKING_PRESCRIBED', 'Yes — currently taking prescribed medication'], ['UNKNOWN', 'Not sure / needs review']], issue('medications') ? `Check: ${issue('medications')}` : 'No prescribed medicine means Treatment & Care is N/A.')}
+              {select('Family medical history', 'familyHistoryStatus', [['NONE', 'No known relevant family history'], ['RECORDED', 'Yes — recorded in Medical History'], ['UNKNOWN', 'Not sure']], issue('family_history') ? `Check: ${issue('family_history')}` : 'Used for risk context, not direct score deduction.')}
             </div>
 
-            <div className="ov-card">
-              <div className="ov-card-hd">
-                <div className="ov-card-title">Recent Symptoms</div>
-                <button className="ov-btn teal" onClick={() => setActiveTab('symptoms')}>+ Log</button>
-              </div>
-              {d.activeSymptoms.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'20px 0', color:'#64748B' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
-                  <div style={{ fontSize:13 }}>No recent symptoms logged</div>
-                </div>
-              ) : (
-                <table className="ov-tbl">
-                  <thead>
-                    <tr><th>Symptom</th><th>Severity</th><th>When</th></tr>
-                  </thead>
-                  <tbody>
-                    {d.activeSymptoms.map((s: any) => (
-                      <tr key={s.name}>
-                        <td>{s.name}</td>
-                        <td><span className={`ov-pill ${s.level}`}>{s.severity}/10</span></td>
-                        <td>{s.since}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
+            {declarationIssues.length > 0 && <div className="hc-declaration-warning">
+              <b>Check your declarations</b>
+              {declarationIssues.map(i => <span key={i.key}>{i.reason}</span>)}
+            </div>}
 
-          {/* Risk Alert — only show if API provides it */}
-          {d.riskAlert && (
-            <div className="ov-risk">
-              <div style={{ fontSize:18, flexShrink:0 }}>⚠️</div>
-              <div className="ov-risk-text">
-                <strong>AI Risk Alert:</strong> {d.riskAlert}
-              </div>
+            <div className="hc-record-actions">
+              <button onClick={onOpenHistory}>Open Medical History</button>
+              <button onClick={onOpenMedications}>Open Medications</button>
             </div>
-          )}
-        </>
-      )}
-
-      {/* Health Score Info Modal */}
-      {showScoreInfo && (
-        <ScoreInfoModal
-          breakdown={d.scoreBreakdown}
-          score={scoreNum}
-          onClose={() => setShowScoreInfo(false)}
-        />
-      )}
-    </>
+            <div className="hc-save-row">
+              <button className="hc-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save declarations & recalculate'}</button>
+              {msg && <span className={msg.startsWith('✓') ? 'ok' : 'err'}>{msg}</span>}
+            </div>
+          </div>}
+        </div>
+      </div>}
+    </section>
   );
+}
+
+function DomainRow({ d, actions }: { d: Domain; actions: DomainAction[] }) {
+  const [open, setOpen] = useState(false);
+  const primary = actions[0];
+  return (
+    <div className={`hc-domain-card${open ? ' active' : ''}`}>
+      <div className="hc-domain-head">
+        <button className="hc-domain-toggle" onClick={() => setOpen(v => !v)}>
+          <span className="hc-domain-icon">{iconFor(d.key)}</span>
+          <span className="hc-domain-main"><strong>{d.label}</strong><small>{d.latestValue ?? d.explanation}</small></span>
+          <span className="hc-domain-score" style={{ color: scoreColor(d.score) }}>{d.score ?? '—'}<small>{d.score == null ? statusLabel(d.status) : '/100'}</small></span>
+        </button>
+        {primary && <button className="hc-domain-update" onClick={primary.onClick}>{d.score == null ? 'Add data' : 'Update'}</button>}
+        <button className="hc-chevron" onClick={() => setOpen(v => !v)}>{open ? '−' : '+'}</button>
+      </div>
+      <div className="hc-domain-bar"><i style={{ width: `${d.score ?? 0}%`, background: scoreColor(d.score) }} /></div>
+      {open && <div className="hc-domain-detail">
+        <div className="hc-domain-meta"><b>{statusLabel(d.status)}</b><span>Reliability {d.confidence}%</span><span>Weight {d.weight}%</span></div>
+        <p>{d.explanation}</p>
+        <small>Source: {d.source}</small>
+        {actions.length > 1 && <div className="hc-domain-actions">{actions.map(a => <button key={a.label} onClick={a.onClick}>{a.label}</button>)}</div>}
+        {d.components?.length ? <div className="hc-components">{d.components.map((c, i) => <div key={i}><span>{c.label}</span><b style={{ color: scoreColor(c.score) }}>{c.score ?? statusLabel(c.status)}</b><small>{c.value ?? c.explanation}</small></div>)}</div> : null}
+      </div>}
+    </div>
+  );
+}
+
+export default function OverviewTab({ loading: parentLoading }: { data?: any; loading?: boolean }) {
+  const uiStore = useUIStore() as any;
+  const [h, setH] = useState<HealthScore | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [assessmentOpen, setAssessmentOpen] = useState(false);
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  const publishScore = useCallback((x: HealthScore) => {
+    if (typeof window !== 'undefined' && x.score != null) {
+      window.dispatchEvent(new CustomEvent('hcDashUpdate', { detail: { healthScore: x.score } }));
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const x = unwrap<HealthScore>(await patientAPI.getHealthScore());
+      setH(x);
+      publishScore(x);
+      if (x.score == null) setAssessmentOpen(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Unable to load Health Score.');
+    } finally {
+      setLoading(false);
+    }
+  }, [publishScore]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setError('');
+    try {
+      const x = unwrap<HealthScore>(await patientAPI.refreshHealthScore());
+      setH(x);
+      publishScore(x);
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Unable to recalculate Health Score.');
+      throw e;
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const alerts = useMemo(() => h?.alerts?.filter(a => a.severity !== 'INFO') ?? [], [h]);
+  if (loading || parentLoading) return <div style={{ height: 420, borderRadius: 22, background: '#EDF4F8' }} />;
+
+  const ready = h?.assessmentReadiness;
+  const incomplete = ready?.items?.filter(i => !i.complete) ?? [];
+  const remaining = Math.max(0, (ready?.total ?? 10) - (ready?.completed ?? 0));
+  const lowestDomain = h?.domains?.filter(d => d.score != null).sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
+  const focus = suggestedFocus(lowestDomain);
+  const scoreType = h?.scoreType ?? (ready?.complete ? 'COMPLETE' : h?.score != null ? 'PROVISIONAL' : 'INSUFFICIENT_DATA');
+
+  const openForm = () => {
+    setAssessmentOpen(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+  };
+  const goPage = (page: string) => uiStore.setActivePage(page);
+  const goTab = (tab: string) => uiStore.setActiveTab(tab);
+
+  const actionsFor = (d: Domain): DomainAction[] => {
+    switch (d.key) {
+      case 'cardiovascular': return [{ label: 'Log / update vitals', onClick: () => goPage('vitals') }];
+      case 'metabolic_body': return [{ label: 'Update body details', onClick: openForm }, { label: 'Log weight / glucose', onClick: () => goPage('vitals') }];
+      case 'lifestyle': return [{ label: 'Update lifestyle', onClick: openForm }];
+      case 'sleep_recovery': return [{ label: 'Update sleep', onClick: openForm }];
+      case 'condition_control': return [{ label: 'My Conditions', onClick: () => goTab('conditions') }, { label: 'Medical History', onClick: () => goTab('history') }];
+      case 'treatment_care': return [{ label: 'Open medications', onClick: () => goPage('medications') }, { label: 'Treatments', onClick: () => goTab('treatments') }];
+      case 'symptoms_function': return [{ label: 'Log symptoms', onClick: () => goPage('symptoms') }, { label: 'Symptoms Tracker', onClick: () => goTab('symptoms') }];
+      default: return [];
+    }
+  };
+
+  const heroTitle = h?.score == null ? 'Add health data to start your score' : scoreType === 'COMPLETE' ? `${statusLabel(h?.status ?? '')} health status` : 'Current Health Score';
+  const heroMessage = h?.score == null
+    ? 'No measurable scoreable health domain is available yet. Log a supported vital or add health assessment information to start your score.'
+    : scoreType === 'COMPLETE'
+      ? 'Your core health assessment is complete.'
+      : 'Based on the measurable health information currently available. Add remaining details to make the assessment more complete.';
+
+  return <div className="hc-wrap"><style>{`
+    .hc-wrap{display:grid;gap:18px;color:${C.ink}}.hc-card{background:#fff;border:1px solid ${C.border};border-radius:18px;box-shadow:0 8px 24px rgba(18,57,91,.055)}.hc-muted{padding:16px;color:${C.muted};font-size:12px}
+    .hc-hero{background:linear-gradient(135deg,#103A5D,#176C91 58%,#1596A6);color:#fff;border-radius:23px;padding:24px;display:grid;grid-template-columns:170px 1fr;gap:24px;align-items:center;box-shadow:0 16px 36px rgba(16,58,93,.16)}
+    .hc-gauge{position:relative;width:154px;height:154px}.hc-gauge-center{position:absolute;inset:0;display:grid;place-content:center;text-align:center}.hc-gauge-center strong{font-size:43px;line-height:1}.hc-gauge-center span{font-size:9px;letter-spacing:.08em;opacity:.78;margin-top:5px;font-weight:800}
+    .hc-eyebrow{font-size:9px;font-weight:850;letter-spacing:.09em;opacity:.7}.hc-hero h2{font-size:25px;margin:5px 0}.hc-hero p{font-size:12.5px;line-height:1.5;max-width:720px;color:rgba(255,255,255,.9);margin:0}.hc-completion{margin-top:14px;max-width:680px}.hc-completion-head{display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-bottom:6px}.hc-completion-head b{color:#fff}.hc-completion-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}.hc-completion-bar i{display:block;height:100%;border-radius:99px;background:#8DE5EE}.hc-meta{font-size:10px;opacity:.78;margin-top:7px}.hc-actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}.hc-btn{border-radius:9px;padding:9px 13px;font-size:11.5px;font-weight:800;cursor:pointer}.hc-btn.white{border:0;background:#fff;color:#15557A}.hc-btn.ghost{border:1px solid rgba(255,255,255,.32);background:rgba(255,255,255,.1);color:#fff}
+    .hc-alert{padding:12px 14px;border-radius:13px;font-size:11.5px;line-height:1.45}.hc-alert.CRITICAL{background:#FFF1F2;border:1px solid #FDA4AF;color:#881337}.hc-alert.WARNING{background:#FFF7ED;border:1px solid #FED7AA;color:#7C2D12}.hc-next{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px}.hc-next span{font-size:11px;color:${C.muted}}.hc-next b{color:${C.ink}}.hc-next button{border:0;background:#EEF6FA;color:${C.blue};border-radius:9px;padding:8px 12px;font-size:10.5px;font-weight:800;cursor:pointer}
+    .hc-assessment{display:grid;gap:13px;scroll-margin-top:145px}.hc-assess-summary{padding:17px 20px}.hc-assess-summary small{display:block;color:${C.blue};font-size:8.5px;font-weight:900;letter-spacing:.11em}.hc-assess-summary strong{display:block;font-size:17px;margin-top:4px}.hc-assess-summary strong span{color:${C.muted};font-weight:700}.hc-assess-summary p{margin:4px 0 0;font-size:10.5px;color:${C.muted}}
+    .hc-assess-list{display:grid;gap:13px}.hc-assess-card{background:#fff;border:1px solid ${C.border};border-radius:18px;box-shadow:0 8px 22px rgba(18,57,91,.055);overflow:hidden;transition:.18s ease}.hc-assess-card:hover{transform:translateY(-1px);box-shadow:0 11px 28px rgba(18,57,91,.075)}.hc-assess-card.active{border-color:#BCD9EA;box-shadow:0 12px 30px rgba(18,57,91,.08)}
+    .hc-assess-row{width:100%;border:0;background:#fff;display:grid;grid-template-columns:46px 1fr auto 28px;align-items:center;gap:14px;padding:17px 19px;text-align:left;cursor:pointer}.hc-assess-icon{width:42px;height:42px;border-radius:12px;background:#F0F7FB;display:grid;place-items:center;font-size:18px}.hc-assess-copy strong,.hc-assess-copy small{display:block}.hc-assess-copy strong{font-size:15px;color:${C.ink}}.hc-assess-copy small{font-size:10.5px;color:${C.muted};margin-top:3px}.hc-assess-status{font-size:9.5px;font-weight:850;color:${C.blue};background:#EFF7FC;border-radius:99px;padding:6px 10px;white-space:nowrap}.hc-assess-status.done{color:${C.green};background:#ECFDF3}.hc-assess-chevron{width:25px;height:25px;border-radius:50%;background:#F3F7FA;color:${C.blue};display:grid;place-items:center;font-size:16px;font-weight:800}
+    .hc-assess-panel{border-top:1px solid ${C.border};background:#FCFEFF;padding:18px 20px 20px}.hc-source-line{display:flex;align-items:center;justify-content:space-between;gap:18px;background:#F3F8FB;border:1px solid #E3EDF4;border-radius:12px;padding:13px 14px}.hc-source-line b,.hc-source-line span{display:block}.hc-source-line b{font-size:11.5px}.hc-source-line span{font-size:9.7px;color:${C.muted};line-height:1.45;margin-top:3px}.hc-source-line button,.hc-record-actions button{border:1px solid #CFE2F2;background:#fff;color:${C.blue};border-radius:9px;padding:8px 11px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap}.hc-mini-statuses{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.hc-mini-statuses span{font-size:9.3px;color:${C.muted};background:#F1F5F8;border-radius:99px;padding:6px 9px}.hc-mini-statuses span.done{color:${C.green};background:#ECFDF3}
+    .hc-form-grid{display:grid;gap:14px 12px}.hc-form-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.hc-form-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.hc-field>span{display:block;font-size:9.5px;font-weight:800;color:${C.muted};margin-bottom:5px}.hc-field em{font-style:normal;font-weight:500}.hc-field select{width:100%;box-sizing:border-box;border:1px solid ${C.border};border-radius:10px;padding:10px;background:#fff;color:${C.ink};font-size:11.5px}.hc-input-unit{display:flex;align-items:center;border:1px solid ${C.border};border-radius:10px;background:#fff;overflow:hidden}.hc-input-unit input{min-width:0;flex:1;border:0;outline:0;background:transparent;padding:10px;color:${C.ink};font-size:11.5px}.hc-input-unit b{font-size:9px;color:${C.muted};padding:0 9px;white-space:nowrap}.hc-help{display:block;font-size:8.8px!important;font-weight:500!important;line-height:1.4;color:${C.muted};margin-top:5px}.hc-subhead{margin:16px 0 9px}.hc-subhead b,.hc-subhead span{display:block}.hc-subhead b{font-size:11.5px}.hc-subhead span{font-size:9.4px;color:${C.muted};margin-top:2px}.hc-activity-summary{margin-top:11px;background:#EEF9FB;border:1px solid #CBEAF0;border-radius:11px;padding:10px 12px}.hc-activity-summary b,.hc-activity-summary span{display:block}.hc-activity-summary b{font-size:10px;color:#116475}.hc-activity-summary span{font-size:9px;color:${C.muted};line-height:1.4;margin-top:2px}.hc-optional{margin-top:14px;border-top:1px solid ${C.border};padding-top:11px}.hc-optional summary{cursor:pointer;color:${C.blue};font-size:10px;font-weight:800;margin-bottom:10px}.hc-record-note{font-size:9.7px;color:${C.muted};line-height:1.45;margin-bottom:12px}.hc-declaration-warning{margin-top:11px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:11px;padding:10px 12px;color:#9A3412}.hc-declaration-warning b,.hc-declaration-warning span{display:block}.hc-declaration-warning b{font-size:10.5px;margin-bottom:4px}.hc-declaration-warning span{font-size:9.3px;line-height:1.45;margin-top:2px}.hc-record-actions{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}.hc-save-row{display:flex;align-items:center;gap:9px;margin-top:13px}.hc-primary{background:linear-gradient(135deg,#176AA8,#1596A6);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-size:11px;font-weight:800;cursor:pointer}.hc-save-row .ok{color:${C.green};font-size:10.5px}.hc-save-row .err{color:${C.red};font-size:10.5px}
+    .hc-section-title{margin:2px 0 10px}.hc-section-title h3{font-size:18px;margin:0 0 4px}.hc-section-title span{font-size:10.5px;color:${C.muted}}.hc-domain-list{display:grid;gap:12px}.hc-domain-card{background:#fff;border:1px solid ${C.border};border-radius:17px;box-shadow:0 7px 20px rgba(18,57,91,.05);overflow:hidden;transition:.18s ease}.hc-domain-card:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(18,57,91,.075)}.hc-domain-card.active{border-color:#C2DCEC}.hc-domain-head{display:flex;align-items:center;background:#fff}.hc-domain-toggle{flex:1;min-width:0;border:0;background:#fff;display:flex;gap:13px;align-items:center;padding:15px 10px 15px 17px;text-align:left;cursor:pointer}.hc-domain-icon{width:42px;height:42px;border-radius:12px;background:#EEF6FA;color:${C.blue};display:grid;place-items:center;flex:0 0 auto;font-size:17px}.hc-domain-main{flex:1;min-width:0}.hc-domain-main strong,.hc-domain-main small{display:block}.hc-domain-main strong{font-size:14px}.hc-domain-main small{font-size:10.5px;color:${C.muted};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hc-domain-score{font-size:23px;font-weight:900;text-align:right;min-width:76px}.hc-domain-score small{font-size:7.5px;text-transform:uppercase;margin-left:2px}.hc-domain-update{border:1px solid #CFE2F2;background:#F7FBFE;color:${C.blue};border-radius:9px;padding:7px 10px;font-size:9.5px;font-weight:800;cursor:pointer;white-space:nowrap}.hc-chevron{border:0;background:#fff;color:${C.blue};width:36px;font-size:18px;font-weight:800;cursor:pointer}.hc-domain-bar{height:4px;background:#EEF3F7;margin:0 17px 14px;border-radius:99px;overflow:hidden}.hc-domain-bar i{display:block;height:100%;border-radius:99px}.hc-domain-detail{border-top:1px solid ${C.border};background:#FCFEFF;padding:14px 18px 17px 72px;font-size:10.5px;line-height:1.5;color:${C.muted}}.hc-domain-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hc-domain-meta span{background:#F1F5F8;border-radius:99px;padding:4px 7px;font-size:8.8px}.hc-domain-detail p{margin:7px 0 5px}.hc-domain-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.hc-domain-actions button{border:1px solid #CFE2F2;background:#F5FAFE;color:${C.blue};border-radius:8px;padding:6px 8px;font-size:9.5px;font-weight:750;cursor:pointer}.hc-components{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:7px;margin-top:9px}.hc-components>div{background:#F5F9FC;border:1px solid #E7EFF5;border-radius:10px;padding:9px}.hc-components span,.hc-components small,.hc-components b{display:block}.hc-components b{font-size:15px;margin:2px 0}.hc-risk{padding:15px 17px}.hc-risk h4{margin:0 0 5px;font-size:13px}.hc-risk p,.hc-risk li{font-size:10.5px;line-height:1.5;color:${C.muted}}.hc-risk ul{margin:6px 0 0;padding-left:17px}.hc-focus{padding:15px 17px;border-left:4px solid ${C.blue}}.hc-focus h4{margin:0 0 5px;font-size:13px}.hc-focus p{font-size:10.8px;line-height:1.55;color:${C.muted};margin:0}
+    @media(max-width:900px){.hc-hero{grid-template-columns:1fr;text-align:center}.hc-gauge{margin:auto}.hc-completion{margin-left:auto;margin-right:auto}.hc-actions{justify-content:center}.hc-form-grid.two,.hc-form-grid.three{grid-template-columns:1fr}.hc-assess-row{grid-template-columns:42px 1fr auto 26px}.hc-assess-copy small{display:none}.hc-domain-update{display:none}.hc-source-line{align-items:flex-start;flex-direction:column}.hc-domain-detail{padding-left:18px}}
+  `}</style>
+
+  {error && <div className="hc-alert CRITICAL">{error}</div>}
+
+  <section className="hc-hero">
+    <Gauge score={h?.score ?? null} />
+    <div>
+      <div className="hc-eyebrow">HC-HSI 2.0 · DECISION SUPPORT, NOT A DIAGNOSIS</div>
+      <h2>{heroTitle}</h2>
+      <p>{heroMessage}</p>
+      <div className="hc-completion">
+        <div className="hc-completion-head"><span>Health assessment <b>{ready?.percent ?? 0}% complete</b></span><span>{remaining > 0 ? `${remaining} detail${remaining === 1 ? '' : 's'} remaining` : 'Complete'}</span></div>
+        <div className="hc-completion-bar"><i style={{ width: `${ready?.percent ?? 0}%` }} /></div>
+        <div className="hc-meta">{scoreType === 'PROVISIONAL' ? 'Current score uses the measurable health data available today and will update as more information is added.' : scoreType === 'COMPLETE' ? 'All 10 core assessment areas are complete.' : 'Add a supported health measurement to start the score.'}</div>
+      </div>
+      <div className="hc-actions">
+        {!ready?.complete && <button className="hc-btn white" onClick={openForm}>Update assessment</button>}
+        <button className="hc-btn ghost" onClick={refresh} disabled={refreshing}>{refreshing ? 'Recalculating…' : '↻ Recalculate'}</button>
+      </div>
+    </div>
+  </section>
+
+  {alerts.map(a => <div key={`${a.code}-${a.observedAt}`} className={`hc-alert ${a.severity}`}><b>⚠ {a.title}</b> — {a.message}</div>)}
+
+  {incomplete.length > 0 && <div className="hc-card hc-next"><span><b>Next assessment detail:</b> {incomplete[0].label} — {incomplete[0].reason}</span><button onClick={openForm}>Add detail</button></div>}
+
+  <AssessmentForm
+    formRef={formRef}
+    open={assessmentOpen}
+    setOpen={setAssessmentOpen}
+    readiness={ready}
+    afterSave={refresh}
+    onOpenVitals={() => goPage('vitals')}
+    onOpenHistory={() => goTab('history')}
+    onOpenMedications={() => goPage('medications')}
+  />
+
+  <section>
+    <div className="hc-section-title"><h3>Your health domains</h3><span>Open a domain to see what contributes to the score or where to add missing data.</span></div>
+    <div className="hc-domain-list">{h?.domains?.map(d => <DomainRow key={d.key} d={d} actions={actionsFor(d)} />)}</div>
+  </section>
+
+  {(h?.riskContext?.screeningRecommendations?.length || h?.limitations?.length) ? <section className="hc-card hc-risk">
+    <h4>Risk & screening context</h4>
+    {h?.limitations?.map(l => <p key={l.code}><b>{l.title}:</b> {l.message}</p>)}
+    {h?.riskContext?.screeningRecommendations?.length ? <ul>{h.riskContext.screeningRecommendations.map(r => <li key={r.code}>{r.message}</li>)}</ul> : null}
+  </section> : null}
+
+  {focus && <section className="hc-card hc-focus"><h4>{focus.title}</h4><p>{focus.text}</p></section>}
+  </div>;
 }

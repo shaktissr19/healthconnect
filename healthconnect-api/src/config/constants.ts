@@ -5,34 +5,43 @@ export const CONSTANTS = {
     DOCTOR: 'HCD',
     HOSPITAL: 'HCH',
   },
-  
+
   // Pagination defaults
   PAGINATION: {
     DEFAULT_PAGE: 1,
     DEFAULT_LIMIT: 20,
     MAX_LIMIT: 100,
   },
-  
+
   // File upload limits
   FILE_UPLOAD: {
     MAX_SIZE: 20 * 1024 * 1024, // 20MB
     ALLOWED_TYPES: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
   },
-  
-  // Health score weights
+
+  // HealthConnect Health Status Index v1.0 domain weights (sum = 100).
+  // Missing domains are excluded from the normalized score and reduce confidence/coverage.
   HEALTH_SCORE: {
-    MEDICATION_ADHERENCE_WEIGHT: 0.30,
-    SYMPTOM_FREQUENCY_WEIGHT: 0.25,
-    APPOINTMENT_REGULARITY_WEIGHT: 0.25,
-    LIFESTYLE_FACTORS_WEIGHT: 0.20,
+    ALGORITHM_VERSION: 'HC-HSI-1.0',
+    BLOOD_PRESSURE_WEIGHT: 15,
+    GLUCOSE_METABOLIC_WEIGHT: 12,
+    BODY_COMPOSITION_WEIGHT: 8,
+    LIPIDS_WEIGHT: 10,
+    MEDICATION_ADHERENCE_WEIGHT: 10,
+    CONDITION_CONTROL_WEIGHT: 12,
+    SYMPTOM_BURDEN_WEIGHT: 10,
+    PHYSICAL_ACTIVITY_WEIGHT: 8,
+    SLEEP_RECOVERY_WEIGHT: 7,
+    LIFESTYLE_NUTRITION_TOBACCO_WEIGHT: 8,
+    MINIMUM_COVERAGE_FOR_SCORE: 25,
   },
-  
+
   // Consent defaults
   CONSENT: {
     DEFAULT_EXPIRY_DAYS: 30,
     MAX_EXPIRY_DAYS: 365,
   },
-  
+
   // Appointment slots
   APPOINTMENT: {
     DEFAULT_DURATION: 30, // minutes
@@ -42,31 +51,21 @@ export const CONSTANTS = {
 };
 
 export const ERROR_CODES = {
-  // Auth errors
   AUTH_REQUIRED: 'AUTH_REQUIRED',
   INVALID_TOKEN: 'INVALID_TOKEN',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
   ACCESS_DENIED: 'ACCESS_DENIED',
-  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
-  
-  // Validation errors
   VALIDATION_FAILED: 'VALIDATION_FAILED',
   INVALID_INPUT: 'INVALID_INPUT',
-  
-  // Resource errors
   NOT_FOUND: 'NOT_FOUND',
   ALREADY_EXISTS: 'ALREADY_EXISTS',
   EMAIL_ALREADY_EXISTS: 'EMAIL_ALREADY_EXISTS',
-  
-  // Business logic errors
   INVALID_ROLE: 'INVALID_ROLE',
   SUBSCRIPTION_REQUIRED: 'SUBSCRIPTION_REQUIRED',
   CONSENT_REQUIRED: 'CONSENT_REQUIRED',
   CONSENT_EXPIRED: 'CONSENT_EXPIRED',
   SLOT_NOT_AVAILABLE: 'SLOT_NOT_AVAILABLE',
   APPOINTMENT_CONFLICT: 'APPOINTMENT_CONFLICT',
-  
-  // Server errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
 };
