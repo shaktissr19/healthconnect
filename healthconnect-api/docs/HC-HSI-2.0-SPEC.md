@@ -92,7 +92,9 @@ Glucose/HbA1c is entered through Vitals / supported structured results.
 Waist circumference is an optional central-adiposity risk marker using South-Asian sex-specific context. It is entered in the Health Assessment form. Missing waist does not directly reduce the Health Score.
 
 ## Lifestyle Health
-### Tobacco (50%; core)
+Lifestyle Health intentionally uses two clear, interpretable numeric components in HC-HSI-2.0. Diet and alcohol remain context until broader structured assessments are implemented.
+
+### Tobacco (55%; core)
 - Never: highest score
 - Former: reduced residual-risk score
 - Second-hand exposure: materially reduced score
@@ -100,7 +102,7 @@ Waist circumference is an optional central-adiposity risk marker using South-Asi
 
 The patient UI includes Indian tobacco exposure such as cigarette, bidi and smokeless products including gutkha and khaini.
 
-### Physical activity (35%; core)
+### Physical activity (45%; core)
 Activity values are **total minutes per week**, never an arbitrary level such as 1/2/3.
 
 - `moderateActivityMinWeek` = total moderate-intensity minutes in a usual week.
@@ -124,10 +126,10 @@ The canonical progressive activity curve is approximately:
 
 This aligns the product score with the WHO adult aerobic-activity recommendation of 150–300 minutes of moderate activity, 75–150 minutes of vigorous activity, or an equivalent combination each week. It is not an all-or-none score.
 
-### Diet proxy (15%; optional)
-Fruit/vegetable servings/day is currently a limited proxy. It is intentionally a small component until a fuller India-adapted diet assessment is implemented.
+### Diet context (not numerically scored in HC-HSI-2.0)
+Fruit/vegetable servings/day is stored as optional context only. A single fruit/vegetable field is not treated as a complete diet-quality score, because doing so would create false precision and would reward users who simply left an optional scored diet field blank. A fuller India-adapted structured dietary assessment can be added in a future version.
 
-Alcohol is captured as context but is not numerically scored until quantity/frequency can be measured responsibly.
+Alcohol is likewise captured as optional context but is not numerically scored until quantity/frequency can be measured responsibly.
 
 ## Sleep & Recovery
 Average nightly sleep is a core input and uses a progressive curve centered around the commonly recommended adult range. Both short and very long sleep reduce the component; individual clinical circumstances may differ. Sleep is entered in the Health Assessment form.
@@ -188,6 +190,15 @@ The patient hero does not show a raw reliability percentage because it is easily
 
 A conditional core screening gap caps reliability at 75%. Unsupported disease-specific control caps reliability at 80% until better structured control information is available.
 
+## Patient-facing guidance
+The top-level experience should show:
+- the Current Health Score;
+- health-assessment completion separately;
+- acute clinical alerts separately;
+- one **Suggested focus** only when a measurable domain is below the Strong range.
+
+Suggested focus is the lowest measured actionable domain, not a diagnosis or emergency alert. Whenever possible, the UI identifies the actual lowest component (for example physical activity rather than generic Lifestyle Health) and gives a short action-oriented explanation.
+
 ## Data-entry routing in the patient UI
 Every health domain must show where its data comes from and provide an update action:
 - Cardiovascular => Vitals / structured lipid results
@@ -197,6 +208,8 @@ Every health domain must show where its data comes from and provide an update ac
 - Known Condition Control => My Conditions / Medical History
 - Treatment & Care => Medications / Treatments
 - Symptoms & Function => Symptoms
+
+The assessment form must also warn when a declaration conflicts with actual records, for example `No known chronic condition` while active conditions exist, or `No regular medication` while active medicines exist.
 
 A passive `Needs data` state without an entry path is not acceptable UX.
 
