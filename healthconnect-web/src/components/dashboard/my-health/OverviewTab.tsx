@@ -77,6 +77,7 @@ type Lifestyle = {
 
 type DomainAction = { label: string; onClick: () => void };
 type Focus = { title: string; text: string };
+type AssessmentSection = 'vitals' | 'details' | 'records';
 
 const C = {
   blue: '#1A6BB5',
@@ -100,6 +101,7 @@ const statusLabel = (s: string) => ({
   ESTABLISHING: 'Establishing',
   NO_DATA: 'Needs data',
 } as Record<string, string>)[s] ?? s.replace(/_/g, ' ');
+
 const iconFor = (k: string) => ({
   cardiovascular: '❤',
   metabolic_body: '◈',
@@ -163,12 +165,24 @@ function suggestedFocus(d?: Domain): Focus | null {
   return { title: `Suggested focus — ${d.label}`, text: `${d.label} is currently your lowest measurable domain at ${d.score}/100. Open the domain details to see the measurements contributing to it.` };
 }
 
-function AssessmentForm({ afterSave, open, setOpen, formRef, readiness }: {
+function AssessmentForm({
+  afterSave,
+  open,
+  setOpen,
+  formRef,
+  readiness,
+  onOpenVitals,
+  onOpenHistory,
+  onOpenMedications,
+}: {
   afterSave: () => Promise<void>;
   open: boolean;
   setOpen: (v: boolean) => void;
   formRef: any;
   readiness: HealthScore['assessmentReadiness'] | undefined;
+  onOpenVitals: () => void;
+  onOpenHistory: () => void;
+  onOpenMedications: () => void;
 }) {
   const empty: Lifestyle = {
     heightCm: null,
@@ -185,6 +199,7 @@ function AssessmentForm({ afterSave, open, setOpen, formRef, readiness }: {
   };
 
   const [f, setF] = useState<Lifestyle>(empty);
+  const [active, setActive] = useState<AssessmentSection | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -196,7 +211,12 @@ function AssessmentForm({ afterSave, open, setOpen, formRef, readiness }: {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (open) setActive(prev => prev ?? 'details');
+  }, [open]);
+
   const set = (k: keyof Lifestyle, v: any) => setF(p => ({ ...p, [k]: v === '' ? null : v }));
+
   const save = async () => {
     setSaving(true);
     setMsg('');
@@ -234,72 +254,153 @@ function AssessmentForm({ afterSave, open, setOpen, formRef, readiness }: {
   );
 
   const remaining = Math.max(0, (readiness?.total ?? 10) - (readiness?.completed ?? 0));
+  const item = (key: string) => readiness?.items?.find(i => i.key === key);
+  const issue = (key: string) => {
+    const x = item(key);
+    return x && !x.complete ? x.reason : '';
+  };
+  const doneCount = (keys: string[]) => keys.filter(k => item(k)?.complete).length;
+  const detailKeys = ['body_composition', 'tobacco', 'activity', 'sleep'];
+  const recordKeys = ['conditions', 'medications', 'family_history'];
+  const declarationIssues = recordKeys.map(k => item(k)).filter((x): x is ReadinessItem => !!x && !x.complete);
+
   const moderate = f.moderateActivityMinWeek ?? 0;
   const vigorous = f.vigorousActivityMinWeek ?? 0;
   const equivalent = moderate + 2 * vigorous;
   const activityText = equivalent >= 300
-    ? 'At or above the upper end of the core adult aerobic-activity reference'
+    ? 'At or above the upper end of the adult aerobic reference'
     : equivalent >= 150
-      ? 'Meets the core adult aerobic-activity reference'
+      ? 'Meets the adult aerobic reference'
       : equivalent > 0
-        ? 'Below the core adult aerobic-activity reference'
+        ? 'Below the adult aerobic reference'
         : 'No weekly aerobic activity entered';
 
-  const issue = (key: string) => readiness?.items?.find(i => i.key === key && !i.complete)?.reason;
-  const declarationIssues = ['conditions', 'medications', 'family_history']
-    .map(key => readiness?.items?.find(i => i.key === key && !i.complete))
-    .filter(Boolean) as ReadinessItem[];
+  const toggle = (section: AssessmentSection) => {
+    setActive(prev => {
+      const next = prev === section ? null : section;
+      setOpen(next != null);
+      return next;
+    });
+    setMsg('');
+  };
+
+  const sectionRow = (
+    key: AssessmentSection,
+    icon: string,
+    title: string,
+    subtitle: string,
+    status: string,
+    complete: boolean,
+  ) => (
+    <button className={`hc-assess-row${active === key ? ' active' : ''}`} onClick={() => toggle(key)}>
+      <span className="hc-assess-icon">{icon}</span>
+      <span className="hc-assess-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+      <span className={`hc-assess-status${complete ? ' done' : ''}`}>{status}</span>
+      <span className="hc-assess-chevron">{active === key ? '−' : '+'}</span>
+    </button>
+  );
 
   return (
     <section ref={formRef} className="hc-card hc-assessment">
-      <button className="hc-section-toggle" onClick={() => setOpen(!open)}>
+      <div className="hc-assess-head">
         <div>
           <small>HEALTH ASSESSMENT</small>
-          <strong>{readiness?.percent ?? 0}% complete · {remaining} remaining</strong>
-          <span>Add only information that is not already captured from Vitals or your medical records.</span>
+          <strong>{readiness?.percent ?? 0}% complete <span>· {remaining} remaining</span></strong>
+          <p>Age and sex come from your profile. Update only the health information that is still missing.</p>
         </div>
-        <b>{open ? '−' : '+'}</b>
-      </button>
+      </div>
 
-      {open && <div className="hc-form-wrap">
-        {loading ? <div className="hc-muted">Loading assessment…</div> : <>
-          <div className="hc-source-guide">
-            <div><b>📊 Vitals</b><span>Blood pressure, weight, glucose/HbA1c and supported clinical readings.</span></div>
-            <div><b>✍ Health details</b><span>Height, waist, physical activity, sleep, tobacco and declarations.</span></div>
-            <div><b>📋 Medical records</b><span>Conditions/family history from Medical History; medicines from Medications.</span></div>
-          </div>
-
-          <div className="hc-form-grid">
-            {number('Height', 'heightCm', '165', { unit: 'cm', min: 80, max: 250, step: 1, help: 'Enter your standing height. Your latest weight comes from Vitals and BMI updates automatically.' })}
-            {number('Waist circumference', 'waistCm', '85', { optional: true, unit: 'cm', min: 30, max: 250, step: 1, help: 'Optional body-composition context used together with BMI and metabolic information.' })}
-            {number('Usual sleep', 'sleepHoursAvg', '7.5', { unit: 'hours/night', min: 0, max: 24, step: .5, help: 'Enter your average hours actually slept per night over a typical week.' })}
-            {number('Moderate activity — whole week', 'moderateActivityMinWeek', '150', { unit: 'min/week', min: 0, max: 10000, step: 5, help: 'Enter total minutes for the week, not days or an activity level. Example: brisk walking 30 min × 5 days = 150 min/week.' })}
-            {number('Vigorous activity — whole week', 'vigorousActivityMinWeek', '75', { unit: 'min/week', min: 0, max: 10000, step: 5, help: 'Enter total minutes for the week. Example: running or fast cycling 25 min × 3 days = 75 min/week.' })}
-            {select('Tobacco exposure', 'tobaccoStatus', [['NEVER', 'Never used tobacco'], ['FORMER', 'Former user'], ['CURRENT', 'Current — smoked or smokeless tobacco'], ['SECONDHAND', 'Second-hand exposure']], 'Includes cigarette, bidi and smokeless tobacco such as gutkha/khaini.')}
-            {number('Fruit & vegetable intake', 'fruitVegServingsDay', '5', { optional: true, unit: 'servings/day', min: 0, max: 30, step: 1, help: 'Context only in HC-HSI 2.0; it does not currently change the numeric Health Score. WHO recommends at least 400 g of fruit and vegetables per day for people older than 10.' })}
-            {select('Regular prescribed medication', 'medicationStatus', [['NONE', 'No regular medication prescribed'], ['TAKING_PRESCRIBED', 'Yes — currently taking prescribed medication'], ['UNKNOWN', 'Not sure / needs review']], issue('medications') ? `Check this: ${issue('medications')}` : 'If no regular medicine is prescribed, Treatment & Care is N/A — not a penalty and not a bonus.')}
-            {select('Known chronic condition', 'conditionStatus', [['NONE', 'No known chronic condition'], ['KNOWN', 'Yes — recorded in Medical History'], ['UNKNOWN', 'Not sure / needs review']], issue('conditions') ? `Check this: ${issue('conditions')}` : 'Having a condition does not automatically lower the score; only supported measurable control is scored.')}
-            {select('Family medical history', 'familyHistoryStatus', [['NONE', 'No known relevant family history'], ['RECORDED', 'Yes — recorded in Medical History'], ['UNKNOWN', 'Not sure']], issue('family_history') ? `Check this: ${issue('family_history')}` : 'Used for risk and screening context. Family history does not directly deduct current-health points.')}
-            {select('Alcohol use — optional context', 'alcoholStatus', [['NONE', 'None'], ['OCCASIONAL', 'Occasional'], ['REGULAR', 'Regular'], ['UNKNOWN', 'Prefer not to say / unknown']], 'Stored as health context; alcohol is not part of the current HC-HSI 2.0 numeric score.')}
-          </div>
-
-          <div className="hc-activity-summary">
-            <b>Weekly activity summary: {equivalent} moderate-equivalent min/week</b>
-            <span>{activityText}. For the aerobic target, vigorous minutes count approximately double: 75 vigorous minutes ≈ 150 moderate-equivalent minutes.</span>
-          </div>
-
-          {declarationIssues.length > 0 && <div className="hc-declaration-warning">
-            <b>Check your declarations</b>
-            {declarationIssues.map(i => <span key={i.key}>{i.label}: {i.reason}</span>)}
+      {loading ? <div className="hc-muted">Loading assessment…</div> : <>
+        <div className="hc-assess-list">
+          {sectionRow(
+            'vitals',
+            '📊',
+            'Vitals',
+            'Blood pressure, weight, glucose/HbA1c and measured readings',
+            item('blood_pressure')?.complete ? 'BP available' : 'Needs BP',
+            !!item('blood_pressure')?.complete,
+          )}
+          {active === 'vitals' && <div className="hc-assess-panel">
+            <div className="hc-source-line">
+              <div><b>Measured health data lives in Vitals</b><span>Log or update blood pressure, weight, glucose/HbA1c and supported clinical readings there. HealthConnect uses those values automatically.</span></div>
+              <button onClick={onOpenVitals}>Open Vitals →</button>
+            </div>
+            <div className="hc-mini-statuses">
+              <span className={item('blood_pressure')?.complete ? 'done' : ''}>Blood pressure {item('blood_pressure')?.complete ? '✓' : 'missing'}</span>
+              <span>Weight is combined with height for BMI</span>
+              <span>Glucose/HbA1c improves metabolic assessment</span>
+            </div>
           </div>}
 
-          <div className="hc-form-note">Selecting “Yes” for a condition, family history or medicine does not create that medical record. Add the actual condition/family history in <b>Medical History</b> and actual medicines in <b>Medications</b>.</div>
-          <div className="hc-save-row">
-            <button className="hc-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & recalculate'}</button>
-            {msg && <span className={msg.startsWith('✓') ? 'ok' : 'err'}>{msg}</span>}
-          </div>
-        </>}
-      </div>}
+          {sectionRow(
+            'details',
+            '✍',
+            'Health Details',
+            'Body measurements, sleep, activity and tobacco',
+            `${doneCount(detailKeys)}/${detailKeys.length} core ready`,
+            doneCount(detailKeys) === detailKeys.length,
+          )}
+          {active === 'details' && <div className="hc-assess-panel">
+            <div className="hc-form-grid two">
+              {number('Height', 'heightCm', '165', { unit: 'cm', min: 80, max: 250, step: 1, help: 'Used with your latest weight from Vitals to calculate BMI.' })}
+              {number('Waist circumference', 'waistCm', '85', { optional: true, unit: 'cm', min: 30, max: 250, step: 1, help: 'Optional body-composition context.' })}
+              {number('Usual sleep', 'sleepHoursAvg', '7.5', { unit: 'hours/night', min: 0, max: 24, step: .5, help: 'Average hours actually slept on a typical night.' })}
+              {select('Tobacco exposure', 'tobaccoStatus', [['NEVER', 'Never used tobacco'], ['FORMER', 'Former user'], ['CURRENT', 'Current — smoked or smokeless tobacco'], ['SECONDHAND', 'Second-hand exposure']], 'Includes cigarette, bidi, gutkha and khaini.')}
+            </div>
+
+            <div className="hc-subhead"><b>Weekly physical activity</b><span>Enter total minutes for the whole week — not days or an activity level.</span></div>
+            <div className="hc-form-grid two">
+              {number('Moderate activity', 'moderateActivityMinWeek', '150', { unit: 'min/week', min: 0, max: 10000, step: 5, help: 'Example: brisk walking 30 min × 5 days = 150.' })}
+              {number('Vigorous activity', 'vigorousActivityMinWeek', '75', { unit: 'min/week', min: 0, max: 10000, step: 5, help: 'Example: running 25 min × 3 days = 75.' })}
+            </div>
+            <div className="hc-activity-summary"><b>{equivalent} moderate-equivalent min/week</b><span>{activityText}. Vigorous minutes count approximately double for this aerobic calculation.</span></div>
+
+            <details className="hc-optional">
+              <summary>Optional health context</summary>
+              <div className="hc-form-grid two">
+                {number('Fruit & vegetable intake', 'fruitVegServingsDay', '5', { optional: true, unit: 'servings/day', min: 0, max: 30, step: 1, help: 'Context only; it does not change the current numeric score.' })}
+                {select('Alcohol use', 'alcoholStatus', [['NONE', 'None'], ['OCCASIONAL', 'Occasional'], ['REGULAR', 'Regular'], ['UNKNOWN', 'Prefer not to say / unknown']], 'Context only; it is not part of the current numeric score.')}
+              </div>
+            </details>
+
+            <div className="hc-save-row">
+              <button className="hc-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save health details & recalculate'}</button>
+              {msg && <span className={msg.startsWith('✓') ? 'ok' : 'err'}>{msg}</span>}
+            </div>
+          </div>}
+
+          {sectionRow(
+            'records',
+            '📋',
+            'Medical Records',
+            'Conditions, medicines and family history',
+            `${doneCount(recordKeys)}/${recordKeys.length} declarations ready`,
+            doneCount(recordKeys) === recordKeys.length,
+          )}
+          {active === 'records' && <div className="hc-assess-panel">
+            <div className="hc-record-note">Confirm what applies to you here. Add the actual condition/family-history record in Medical History and actual prescriptions in Medications.</div>
+            <div className="hc-form-grid three">
+              {select('Known chronic condition', 'conditionStatus', [['NONE', 'No known chronic condition'], ['KNOWN', 'Yes — recorded in Medical History'], ['UNKNOWN', 'Not sure / needs review']], issue('conditions') ? `Check: ${issue('conditions')}` : 'A diagnosis does not automatically lower the score.')}
+              {select('Regular prescribed medication', 'medicationStatus', [['NONE', 'No regular medication prescribed'], ['TAKING_PRESCRIBED', 'Yes — currently taking prescribed medication'], ['UNKNOWN', 'Not sure / needs review']], issue('medications') ? `Check: ${issue('medications')}` : 'No prescribed medicine means Treatment & Care is N/A.')}
+              {select('Family medical history', 'familyHistoryStatus', [['NONE', 'No known relevant family history'], ['RECORDED', 'Yes — recorded in Medical History'], ['UNKNOWN', 'Not sure']], issue('family_history') ? `Check: ${issue('family_history')}` : 'Used for risk and screening context, not direct score deduction.')}
+            </div>
+
+            {declarationIssues.length > 0 && <div className="hc-declaration-warning">
+              <b>Check your declarations</b>
+              {declarationIssues.map(i => <span key={i.key}>{i.reason}</span>)}
+            </div>}
+
+            <div className="hc-record-actions">
+              <button onClick={onOpenHistory}>Open Medical History</button>
+              <button onClick={onOpenMedications}>Open Medications</button>
+            </div>
+            <div className="hc-save-row">
+              <button className="hc-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save declarations & recalculate'}</button>
+              {msg && <span className={msg.startsWith('✓') ? 'ok' : 'err'}>{msg}</span>}
+            </div>
+          </div>}
+        </div>
+      </>}
     </section>
   );
 }
@@ -415,7 +516,24 @@ export default function OverviewTab({ loading: parentLoading }: { data?: any; lo
       : 'Based on the measurable health information currently available. Add remaining details to make the assessment more complete.';
 
   return <div className="hc-wrap"><style>{`
-    .hc-wrap{display:grid;gap:14px;color:${C.ink}}.hc-card{background:#fff;border:1px solid ${C.border};border-radius:17px;box-shadow:0 7px 22px rgba(18,57,91,.045)}.hc-muted{padding:15px;color:${C.muted};font-size:12px}.hc-hero{background:linear-gradient(135deg,#103A5D,#176C91 58%,#1596A6);color:#fff;border-radius:23px;padding:24px;display:grid;grid-template-columns:170px 1fr;gap:24px;align-items:center;box-shadow:0 16px 36px rgba(16,58,93,.16)}.hc-gauge{position:relative;width:154px;height:154px}.hc-gauge-center{position:absolute;inset:0;display:grid;place-content:center;text-align:center}.hc-gauge-center strong{font-size:43px;line-height:1}.hc-gauge-center span{font-size:9px;letter-spacing:.08em;opacity:.78;margin-top:5px;font-weight:800}.hc-eyebrow{font-size:9px;font-weight:850;letter-spacing:.09em;opacity:.7}.hc-hero h2{font-size:25px;margin:5px 0 5px}.hc-hero p{font-size:12.5px;line-height:1.5;max-width:720px;color:rgba(255,255,255,.9);margin:0}.hc-completion{margin-top:14px;max-width:680px}.hc-completion-head{display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-bottom:6px}.hc-completion-head b{color:#fff}.hc-completion-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}.hc-completion-bar i{display:block;height:100%;border-radius:99px;background:#8DE5EE}.hc-meta{font-size:10px;opacity:.78;margin-top:7px}.hc-actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}.hc-btn{border-radius:9px;padding:9px 13px;font-size:11.5px;font-weight:800;cursor:pointer}.hc-btn.white{border:0;background:#fff;color:#15557A}.hc-btn.ghost{border:1px solid rgba(255,255,255,.32);background:rgba(255,255,255,.1);color:#fff}.hc-alert{padding:12px 14px;border-radius:13px;font-size:11.5px;line-height:1.45}.hc-alert.CRITICAL{background:#FFF1F2;border:1px solid #FDA4AF;color:#881337}.hc-alert.WARNING{background:#FFF7ED;border:1px solid #FED7AA;color:#7C2D12}.hc-next{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px}.hc-next span{font-size:11px;color:${C.muted}}.hc-next b{color:${C.ink}}.hc-next button{border:0;background:#EEF6FA;color:${C.blue};border-radius:8px;padding:7px 10px;font-size:10.5px;font-weight:800;cursor:pointer}.hc-assessment{overflow:hidden;scroll-margin-top:145px}.hc-section-toggle{width:100%;border:0;background:#fff;padding:16px 17px;display:flex;justify-content:space-between;text-align:left;cursor:pointer}.hc-section-toggle small{display:block;color:${C.blue};font-size:8.5px;font-weight:900;letter-spacing:.1em}.hc-section-toggle strong{display:block;font-size:14.5px;margin-top:3px}.hc-section-toggle span{display:block;font-size:10.5px;color:${C.muted};margin-top:3px}.hc-section-toggle>b{font-size:22px;color:${C.blue}}.hc-form-wrap{border-top:1px solid ${C.border};padding:16px}.hc-source-guide{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:13px}.hc-source-guide>div{background:#F5F9FC;border-radius:10px;padding:10px}.hc-source-guide b,.hc-source-guide span{display:block}.hc-source-guide b{font-size:10.5px;margin-bottom:3px}.hc-source-guide span{font-size:9.5px;line-height:1.4;color:${C.muted}}.hc-form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px}.hc-field>span{display:block;font-size:9.5px;font-weight:800;color:${C.muted};margin-bottom:4px}.hc-field em{font-style:normal;font-weight:500}.hc-field select{width:100%;box-sizing:border-box;border:1px solid ${C.border};border-radius:9px;padding:9px;background:#FBFDFE;color:${C.ink};font-size:11.5px}.hc-input-unit{display:flex;align-items:center;border:1px solid ${C.border};border-radius:9px;background:#FBFDFE;overflow:hidden}.hc-input-unit input{min-width:0;flex:1;border:0;outline:0;background:transparent;padding:9px;color:${C.ink};font-size:11.5px}.hc-input-unit b{font-size:9px;color:${C.muted};padding:0 8px;white-space:nowrap}.hc-help{display:block;font-size:8.8px!important;font-weight:500!important;line-height:1.4;color:${C.muted};margin-top:4px}.hc-activity-summary{margin-top:11px;background:#EEF9FB;border:1px solid #CBEAF0;border-radius:10px;padding:10px 12px}.hc-activity-summary b,.hc-activity-summary span{display:block}.hc-activity-summary b{font-size:10.5px;color:#116475}.hc-activity-summary span{font-size:9.3px;color:${C.muted};line-height:1.45;margin-top:3px}.hc-declaration-warning{margin-top:10px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:10px 12px;color:#9A3412}.hc-declaration-warning b,.hc-declaration-warning span{display:block}.hc-declaration-warning b{font-size:10.5px;margin-bottom:4px}.hc-declaration-warning span{font-size:9.3px;line-height:1.45;margin-top:2px}.hc-form-note{font-size:9.5px;line-height:1.5;color:${C.muted};background:#F5F9FC;padding:9px;border-radius:8px;margin-top:10px}.hc-save-row{display:flex;align-items:center;gap:9px;margin-top:11px}.hc-primary{background:linear-gradient(135deg,#176AA8,#1596A6);color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:11.5px;font-weight:800;cursor:pointer}.hc-save-row .ok{color:${C.green};font-size:10.5px}.hc-save-row .err{color:${C.red};font-size:10.5px}.hc-section-title h3{font-size:16px;margin:3px 0}.hc-section-title span{font-size:10.5px;color:${C.muted}}.hc-domain+.hc-domain{border-top:1px solid ${C.border}}.hc-domain-head{display:flex;align-items:center;background:#fff}.hc-domain-toggle{flex:1;min-width:0;border:0;background:#fff;display:flex;gap:11px;align-items:center;padding:13px 10px 13px 16px;text-align:left;cursor:pointer}.hc-domain-icon{width:34px;height:34px;border-radius:10px;background:#EEF6FA;color:${C.blue};display:grid;place-items:center;flex:0 0 auto}.hc-domain-main{flex:1;min-width:0}.hc-domain-main strong,.hc-domain-main small{display:block}.hc-domain-main small{font-size:10.5px;color:${C.muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hc-domain-score{font-size:20px;font-weight:900;text-align:right;min-width:68px}.hc-domain-score small{font-size:7.5px;text-transform:uppercase}.hc-domain-update{border:1px solid #CFE2F2;background:#F5FAFE;color:${C.blue};border-radius:8px;padding:6px 9px;font-size:9.5px;font-weight:800;cursor:pointer;white-space:nowrap}.hc-chevron{border:0;background:#fff;color:${C.muted};padding:12px 14px 12px 9px;cursor:pointer}.hc-domain-bar{height:3px;background:#EEF3F7}.hc-domain-bar i{display:block;height:100%}.hc-domain-detail{padding:5px 16px 14px 61px;font-size:10.5px;line-height:1.5;color:${C.muted}}.hc-domain-detail p{margin:5px 0}.hc-domain-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.hc-domain-actions button{border:1px solid #CFE2F2;background:#F5FAFE;color:${C.blue};border-radius:7px;padding:6px 8px;font-size:9.5px;font-weight:750;cursor:pointer}.hc-components{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:6px;margin-top:8px}.hc-components>div{background:#F7FAFC;border-radius:9px;padding:8px}.hc-components span,.hc-components small,.hc-components b{display:block}.hc-components b{font-size:15px;margin:2px 0}.hc-risk{padding:14px 15px}.hc-risk h4{margin:0 0 5px;font-size:13px}.hc-risk p,.hc-risk li{font-size:10.5px;line-height:1.5;color:${C.muted}}.hc-risk ul{margin:6px 0 0;padding-left:17px}.hc-focus{padding:14px 15px;border-left:4px solid ${C.blue}}.hc-focus h4{margin:0 0 5px;font-size:13px}.hc-focus p{font-size:10.8px;line-height:1.55;color:${C.muted};margin:0}@media(max-width:900px){.hc-hero{grid-template-columns:1fr;text-align:center}.hc-gauge{margin:auto}.hc-completion{margin-left:auto;margin-right:auto}.hc-form-grid,.hc-source-guide{grid-template-columns:1fr}.hc-actions{justify-content:center}.hc-domain-update{display:none}}
+    .hc-wrap{display:grid;gap:14px;color:${C.ink}}.hc-card{background:#fff;border:1px solid ${C.border};border-radius:17px;box-shadow:0 7px 22px rgba(18,57,91,.045)}.hc-muted{padding:15px;color:${C.muted};font-size:12px}
+    .hc-hero{background:linear-gradient(135deg,#103A5D,#176C91 58%,#1596A6);color:#fff;border-radius:23px;padding:24px;display:grid;grid-template-columns:170px 1fr;gap:24px;align-items:center;box-shadow:0 16px 36px rgba(16,58,93,.16)}
+    .hc-gauge{position:relative;width:154px;height:154px}.hc-gauge-center{position:absolute;inset:0;display:grid;place-content:center;text-align:center}.hc-gauge-center strong{font-size:43px;line-height:1}.hc-gauge-center span{font-size:9px;letter-spacing:.08em;opacity:.78;margin-top:5px;font-weight:800}
+    .hc-eyebrow{font-size:9px;font-weight:850;letter-spacing:.09em;opacity:.7}.hc-hero h2{font-size:25px;margin:5px 0}.hc-hero p{font-size:12.5px;line-height:1.5;max-width:720px;color:rgba(255,255,255,.9);margin:0}
+    .hc-completion{margin-top:14px;max-width:680px}.hc-completion-head{display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-bottom:6px}.hc-completion-head b{color:#fff}.hc-completion-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.18);overflow:hidden}.hc-completion-bar i{display:block;height:100%;border-radius:99px;background:#8DE5EE}.hc-meta{font-size:10px;opacity:.78;margin-top:7px}
+    .hc-actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}.hc-btn{border-radius:9px;padding:9px 13px;font-size:11.5px;font-weight:800;cursor:pointer}.hc-btn.white{border:0;background:#fff;color:#15557A}.hc-btn.ghost{border:1px solid rgba(255,255,255,.32);background:rgba(255,255,255,.1);color:#fff}
+    .hc-alert{padding:12px 14px;border-radius:13px;font-size:11.5px;line-height:1.45}.hc-alert.CRITICAL{background:#FFF1F2;border:1px solid #FDA4AF;color:#881337}.hc-alert.WARNING{background:#FFF7ED;border:1px solid #FED7AA;color:#7C2D12}
+    .hc-next{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px}.hc-next span{font-size:11px;color:${C.muted}}.hc-next b{color:${C.ink}}.hc-next button{border:0;background:#EEF6FA;color:${C.blue};border-radius:8px;padding:7px 10px;font-size:10.5px;font-weight:800;cursor:pointer}
+    .hc-assessment{overflow:hidden;scroll-margin-top:145px}.hc-assess-head{padding:16px 18px;border-bottom:1px solid ${C.border}}.hc-assess-head small{display:block;color:${C.blue};font-size:8.5px;font-weight:900;letter-spacing:.1em}.hc-assess-head strong{display:block;font-size:15px;margin-top:3px}.hc-assess-head strong span{color:${C.muted};font-weight:700}.hc-assess-head p{margin:3px 0 0;font-size:10.5px;color:${C.muted}}
+    .hc-assess-list{background:#F7FAFC}.hc-assess-row{width:100%;border:0;border-top:1px solid ${C.border};background:#fff;display:grid;grid-template-columns:40px 1fr auto 26px;align-items:center;gap:11px;padding:14px 17px;text-align:left;cursor:pointer}.hc-assess-row:first-child{border-top:0}.hc-assess-row:hover,.hc-assess-row.active{background:#F8FCFE}.hc-assess-icon{width:36px;height:36px;border-radius:10px;background:#EEF6FA;display:grid;place-items:center}.hc-assess-copy strong,.hc-assess-copy small{display:block}.hc-assess-copy strong{font-size:13.5px}.hc-assess-copy small{font-size:10px;color:${C.muted};margin-top:2px}.hc-assess-status{font-size:9px;font-weight:800;color:${C.blue};background:#EEF6FA;border-radius:99px;padding:5px 8px;white-space:nowrap}.hc-assess-status.done{color:${C.green};background:#ECFDF3}.hc-assess-chevron{font-size:18px;color:${C.blue};text-align:center}
+    .hc-assess-panel{background:#FBFDFE;border-top:1px solid ${C.border};padding:16px 18px}.hc-source-line{display:flex;align-items:center;justify-content:space-between;gap:18px;background:#F1F7FB;border-radius:11px;padding:13px 14px}.hc-source-line b,.hc-source-line span{display:block}.hc-source-line b{font-size:11.5px}.hc-source-line span{font-size:9.7px;color:${C.muted};line-height:1.45;margin-top:3px}.hc-source-line button,.hc-record-actions button{border:1px solid #CFE2F2;background:#fff;color:${C.blue};border-radius:8px;padding:8px 10px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap}
+    .hc-mini-statuses{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.hc-mini-statuses span{font-size:9.3px;color:${C.muted};background:#F1F5F8;border-radius:99px;padding:5px 8px}.hc-mini-statuses span.done{color:${C.green};background:#ECFDF3}
+    .hc-form-grid{display:grid;gap:12px 11px}.hc-form-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.hc-form-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.hc-field>span{display:block;font-size:9.5px;font-weight:800;color:${C.muted};margin-bottom:4px}.hc-field em{font-style:normal;font-weight:500}.hc-field select{width:100%;box-sizing:border-box;border:1px solid ${C.border};border-radius:9px;padding:9px;background:#fff;color:${C.ink};font-size:11.5px}.hc-input-unit{display:flex;align-items:center;border:1px solid ${C.border};border-radius:9px;background:#fff;overflow:hidden}.hc-input-unit input{min-width:0;flex:1;border:0;outline:0;background:transparent;padding:9px;color:${C.ink};font-size:11.5px}.hc-input-unit b{font-size:9px;color:${C.muted};padding:0 8px;white-space:nowrap}.hc-help{display:block;font-size:8.7px!important;font-weight:500!important;line-height:1.4;color:${C.muted};margin-top:4px}
+    .hc-subhead{margin:14px 0 8px}.hc-subhead b,.hc-subhead span{display:block}.hc-subhead b{font-size:11px}.hc-subhead span{font-size:9.4px;color:${C.muted};margin-top:2px}.hc-activity-summary{margin-top:10px;background:#EEF9FB;border:1px solid #CBEAF0;border-radius:10px;padding:9px 11px}.hc-activity-summary b,.hc-activity-summary span{display:block}.hc-activity-summary b{font-size:10px;color:#116475}.hc-activity-summary span{font-size:9px;color:${C.muted};line-height:1.4;margin-top:2px}
+    .hc-optional{margin-top:12px;border-top:1px solid ${C.border};padding-top:10px}.hc-optional summary{cursor:pointer;color:${C.blue};font-size:10px;font-weight:800;margin-bottom:10px}.hc-record-note{font-size:9.7px;color:${C.muted};line-height:1.45;margin-bottom:12px}.hc-declaration-warning{margin-top:10px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:10px 12px;color:#9A3412}.hc-declaration-warning b,.hc-declaration-warning span{display:block}.hc-declaration-warning b{font-size:10.5px;margin-bottom:4px}.hc-declaration-warning span{font-size:9.3px;line-height:1.45;margin-top:2px}.hc-record-actions{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+    .hc-save-row{display:flex;align-items:center;gap:9px;margin-top:12px}.hc-primary{background:linear-gradient(135deg,#176AA8,#1596A6);color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:11px;font-weight:800;cursor:pointer}.hc-save-row .ok{color:${C.green};font-size:10.5px}.hc-save-row .err{color:${C.red};font-size:10.5px}
+    .hc-section-title h3{font-size:16px;margin:3px 0}.hc-section-title span{font-size:10.5px;color:${C.muted}}.hc-domain+.hc-domain{border-top:1px solid ${C.border}}.hc-domain-head{display:flex;align-items:center;background:#fff}.hc-domain-toggle{flex:1;min-width:0;border:0;background:#fff;display:flex;gap:11px;align-items:center;padding:13px 10px 13px 16px;text-align:left;cursor:pointer}.hc-domain-icon{width:34px;height:34px;border-radius:10px;background:#EEF6FA;color:${C.blue};display:grid;place-items:center;flex:0 0 auto}.hc-domain-main{flex:1;min-width:0}.hc-domain-main strong,.hc-domain-main small{display:block}.hc-domain-main small{font-size:10.5px;color:${C.muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hc-domain-score{font-size:20px;font-weight:900;text-align:right;min-width:68px}.hc-domain-score small{font-size:7.5px;text-transform:uppercase}.hc-domain-update{border:1px solid #CFE2F2;background:#F5FAFE;color:${C.blue};border-radius:8px;padding:6px 9px;font-size:9.5px;font-weight:800;cursor:pointer;white-space:nowrap}.hc-chevron{border:0;background:#fff;color:${C.muted};padding:12px 14px 12px 9px;cursor:pointer}.hc-domain-bar{height:3px;background:#EEF3F7}.hc-domain-bar i{display:block;height:100%}.hc-domain-detail{padding:5px 16px 14px 61px;font-size:10.5px;line-height:1.5;color:${C.muted}}.hc-domain-detail p{margin:5px 0}.hc-domain-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.hc-domain-actions button{border:1px solid #CFE2F2;background:#F5FAFE;color:${C.blue};border-radius:7px;padding:6px 8px;font-size:9.5px;font-weight:750;cursor:pointer}.hc-components{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:6px;margin-top:8px}.hc-components>div{background:#F7FAFC;border-radius:9px;padding:8px}.hc-components span,.hc-components small,.hc-components b{display:block}.hc-components b{font-size:15px;margin:2px 0}.hc-risk{padding:14px 15px}.hc-risk h4{margin:0 0 5px;font-size:13px}.hc-risk p,.hc-risk li{font-size:10.5px;line-height:1.5;color:${C.muted}}.hc-risk ul{margin:6px 0 0;padding-left:17px}.hc-focus{padding:14px 15px;border-left:4px solid ${C.blue}}.hc-focus h4{margin:0 0 5px;font-size:13px}.hc-focus p{font-size:10.8px;line-height:1.55;color:${C.muted};margin:0}
+    @media(max-width:900px){.hc-hero{grid-template-columns:1fr;text-align:center}.hc-gauge{margin:auto}.hc-completion{margin-left:auto;margin-right:auto}.hc-actions{justify-content:center}.hc-form-grid.two,.hc-form-grid.three{grid-template-columns:1fr}.hc-assess-row{grid-template-columns:38px 1fr auto 24px}.hc-assess-copy small{display:none}.hc-domain-update{display:none}.hc-source-line{align-items:flex-start;flex-direction:column}}
   `}</style>
 
   {error && <div className="hc-alert CRITICAL">{error}</div>}
@@ -442,10 +560,19 @@ export default function OverviewTab({ loading: parentLoading }: { data?: any; lo
 
   {incomplete.length > 0 && <div className="hc-card hc-next"><span><b>Next assessment detail:</b> {incomplete[0].label} — {incomplete[0].reason}</span><button onClick={openForm}>Add detail</button></div>}
 
-  <AssessmentForm formRef={formRef} open={assessmentOpen} setOpen={setAssessmentOpen} readiness={ready} afterSave={refresh} />
+  <AssessmentForm
+    formRef={formRef}
+    open={assessmentOpen}
+    setOpen={setAssessmentOpen}
+    readiness={ready}
+    afterSave={refresh}
+    onOpenVitals={() => goPage('vitals')}
+    onOpenHistory={() => goTab('history')}
+    onOpenMedications={() => goPage('medications')}
+  />
 
   <section>
-    <div className="hc-section-title"><h3>Your health domains</h3><span>Use Add data / Update to enter information at its correct source. Only measurable, applicable domains contribute to the current score.</span></div>
+    <div className="hc-section-title"><h3>Your health domains</h3><span>Open a domain to see what contributes to the score or where to add missing data.</span></div>
     <div className="hc-card">{h?.domains?.map(d => <DomainRow key={d.key} d={d} actions={actionsFor(d)} />)}</div>
   </section>
 
