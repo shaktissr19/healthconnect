@@ -23,7 +23,7 @@ const SECTIONS: { key:SectionKey; icon:string; label:string }[] = [
 ];
 
 const STATUS_COLORS: Record<string,string> = {
-  ACTIVE:'#F43F5E', MANAGED:'#F59E0B', RESOLVED:'#22C55E', CHRONIC:'#8B5CF6',
+  ACTIVE:'#F43F5E', IN_REMISSION:'#F59E0B', RESOLVED:'#22C55E', CHRONIC:'#8B5CF6',
 };
 const ALLERGY_SEVERITY: Record<string,{color:string;bg:string}> = {
   MILD:            { color:'#16A34A', bg:'rgba(34,197,94,0.1)' },
@@ -64,8 +64,8 @@ type FormState = Record<string,string>;
 
 function getEmptyForm(s:SectionKey):FormState{
   switch(s){
-    case 'conditions':             return {name:'',status:'ACTIVE',diagnosedDate:'',icdCode:'',severity:'',treatingDoctor:'',lastReviewed:'',notes:''};
-    case 'allergies':              return {allergen:'',category:'',severity:'MODERATE',reaction:'',crossReactive:'',notes:''};
+    case 'conditions':             return {name:'',status:'ACTIVE',diagnosedDate:'',icdCode:'',treatingDoctor:'',notes:''};
+    case 'allergies':              return {allergen:'',category:'',severity:'MODERATE',reaction:'',notes:''};
     case 'surgeries':              return {name:'',surgeryDate:'',hospital:'',surgeon:'',outcome:'',notes:''};
     case 'vaccinations':           return {vaccineName:'',doseNumber:'1',administeredDate:'',administeredBy:'',nextDueDate:'',batchNumber:''};
     case 'familyHistory':          return {condition:'',relation:'Father',ageOfOnset:'',livingStatus:'living',causeOfDeath:'',notes:''};
@@ -83,9 +83,7 @@ function itemToForm(s:SectionKey, item:any):FormState{
         status:         item.status??'ACTIVE',
         diagnosedDate:  item.diagnosedDate?.split('T')[0]??'',
         icdCode:        item.icdCode??'',
-        severity:       item.severity??'',
         treatingDoctor: item.treatingDoctor??'',
-        lastReviewed:   item.lastReviewed?.split('T')[0]??'',
         notes:          item.notes??'',
       };
     case 'allergies':
@@ -94,7 +92,6 @@ function itemToForm(s:SectionKey, item:any):FormState{
         category:      item.category??'',
         severity:      item.severity??'MODERATE',
         reaction:      item.reaction??'',
-        crossReactive: item.crossReactive??'',
         notes:         item.notes??'',
       };
     case 'surgeries':
@@ -140,9 +137,9 @@ function itemToForm(s:SectionKey, item:any):FormState{
 function getSavePayload(s:SectionKey,f:FormState):any{
   switch(s){
     case 'conditions':
-      return {name:f.name,status:f.status,diagnosedDate:f.diagnosedDate||undefined,icdCode:f.icdCode||undefined,severity:f.severity||undefined,treatingDoctor:f.treatingDoctor||undefined,lastReviewed:f.lastReviewed||undefined,notes:f.notes||undefined};
+      return {name:f.name,status:f.status,diagnosedDate:f.diagnosedDate||undefined,icdCode:f.icdCode||undefined,treatingDoctor:f.treatingDoctor||undefined,notes:f.notes||undefined};
     case 'allergies':
-      return {allergen:f.allergen,category:f.category||undefined,severity:f.severity,reaction:f.reaction||undefined,crossReactive:f.crossReactive||undefined,notes:f.notes||undefined};
+      return {allergen:f.allergen,category:f.category||undefined,severity:f.severity,reaction:f.reaction||undefined,notes:f.notes||undefined};
     case 'surgeries':
       return {name:f.name,surgeryDate:f.surgeryDate||undefined,hospital:f.hospital||undefined,surgeon:f.surgeon||undefined,outcome:f.outcome||undefined,notes:f.notes||undefined};
     case 'vaccinations':
@@ -276,25 +273,22 @@ function AddForm({ section, onClose, onSaved, editItem }: AddFormProps){
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
           {section==='conditions'&&<>
             {inp('Condition Name','name',{required:true,placeholder:'e.g., Type 2 Diabetes'})}
-            {sel('Status','status',[['ACTIVE','Active'],['MANAGED','Managed'],['RESOLVED','Resolved'],['CHRONIC','Chronic']])}
+            {sel('Status','status',[['ACTIVE','Active'],['CHRONIC','Chronic'],['IN_REMISSION','In remission'],['RESOLVED','Resolved']])}
             {inp('Diagnosed Date','diagnosedDate',{type:'date'})}
             {inp('ICD Code','icdCode',{placeholder:'e.g., E11.9'})}
-            {sel('Severity','severity',[['','Select…'],['MILD','Mild'],['MODERATE','Moderate'],['SEVERE','Severe']])}
             {inp('Treating Doctor','treatingDoctor',{placeholder:'e.g., Dr. Mehta'})}
-            {inp('Last Reviewed','lastReviewed',{type:'date'})}
           </>}
 
           {section==='allergies'&&<>
             {inp('Allergen','allergen',{required:true,placeholder:'e.g., Penicillin'})}
-            {inp('Category','category',{placeholder:'e.g., Medication, Food'})}
+            {sel('Category','category',[['','Select…'],['DRUG','Medication / drug'],['FOOD','Food'],['ENVIRONMENTAL','Environmental'],['INSECT','Insect'],['LATEX','Latex'],['OTHER','Other']])}
             {sel('Severity','severity',[['MILD','Mild'],['MODERATE','Moderate'],['SEVERE','Severe'],['LIFE_THREATENING','⚠️ Life Threatening']])}
             {inp('Reaction','reaction',{placeholder:'e.g., Hives, anaphylaxis'})}
-            {inp('Cross-reactive substances','crossReactive',{placeholder:'e.g., Cephalosporins'})}
           </>}
 
           {section==='surgeries'&&<>
             {inp('Surgery Name','name',{required:true,placeholder:'e.g., Appendectomy'})}
-            {inp('Date','surgeryDate',{type:'date'})}
+            {inp('Date','surgeryDate',{type:'date',required:true})}
             {inp('Hospital','hospital',{placeholder:'e.g., AIIMS Delhi'})}
             {inp('Surgeon','surgeon',{placeholder:'e.g., Dr. Mehta'})}
             {inp('Outcome','outcome',{placeholder:'e.g., Successful'})}
@@ -303,7 +297,7 @@ function AddForm({ section, onClose, onSaved, editItem }: AddFormProps){
           {section==='vaccinations'&&<>
             {inp('Vaccine Name','vaccineName',{required:true,placeholder:'e.g., COVID-19 Covishield'})}
             {inp('Dose Number','doseNumber',{type:'number',placeholder:'1'})}
-            {inp('Date Given','administeredDate',{type:'date'})}
+            {inp('Date Given','administeredDate',{type:'date',required:true})}
             {inp('Administered By','administeredBy',{placeholder:'e.g., Dr. Kumar'})}
             {inp('Next Due Date','nextDueDate',{type:'date'})}
             {inp('Batch Number','batchNumber',{placeholder:'Optional'})}
@@ -342,8 +336,8 @@ function AddForm({ section, onClose, onSaved, editItem }: AddFormProps){
 
           {section==='hospitalizationHistory'&&<>
             {inp('Reason / Diagnosis','reason',{required:true,placeholder:'e.g., Chest pain, Dengue'})}
-            {inp('Hospital Name','hospitalName',{placeholder:'e.g., Apollo Hospital'})}
-            {inp('Admission Date','admissionDate',{type:'date'})}
+            {inp('Hospital Name','hospitalName',{required:true,placeholder:'e.g., Apollo Hospital'})}
+            {inp('Admission Date','admissionDate',{type:'date',required:true})}
             {inp('Discharge Date','dischargeDate',{type:'date'})}
             {inp('Treating Doctor','treatingDoctor',{placeholder:'e.g., Dr. Sharma'})}
           </>}
@@ -378,7 +372,7 @@ function AddForm({ section, onClose, onSaved, editItem }: AddFormProps){
   );
 }
 
-// ── Share Modal ───────────────────────────────────────────────────────────────
+// ── Export Summary Modal ──────────────────────────────────────────────────────
 function ShareModal({data,onClose}:{data:any;onClose:()=>void}){
   const [copied,setCopied]=useState(false);
   const gen=()=>{
@@ -428,8 +422,8 @@ function ShareModal({data,onClose}:{data:any;onClose:()=>void}){
       <div style={{background:C.white,borderRadius:20,padding:28,width:'100%',maxWidth:620,maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.2)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,paddingBottom:16,borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
           <div>
-            <div style={{fontSize:17,fontWeight:800,color:C.text}}>📋 Share Medical History</div>
-            <div style={{fontSize:12,color:C.text3,marginTop:3}}>Share a clean summary with your doctor</div>
+            <div style={{fontSize:17,fontWeight:800,color:C.text}}>📋 Export Medical Summary</div>
+            <div style={{fontSize:12,color:C.text3,marginTop:3}}>Copy or print a summary of the medical history recorded in HealthConnect.</div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:C.text3,cursor:'pointer',fontSize:22}}>✕</button>
         </div>
@@ -852,7 +846,7 @@ export default function MedicalHistoryTab(){
         </div>
         <button onClick={()=>setShowShare(true)}
           style={{padding:'8px 16px',borderRadius:10,border:`1.5px solid ${C.teal}`,background:C.white,color:C.teal,fontWeight:700,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-          📋 Share with Doctor
+          📋 Export Medical Summary
         </button>
       </div>
 
