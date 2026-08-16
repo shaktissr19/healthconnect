@@ -4,6 +4,12 @@ import * as PatientController from './controller';
 import * as HealthScoreController from '../health-score/controller';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roleGuard';
+import { validate } from '../../middleware/validate';
+import {
+  emergencyContactSchema,
+  updateEmergencyContactSchema,
+  updateProfileSchema,
+} from './validator';
 
 const router  = Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
@@ -12,10 +18,10 @@ const patient = [authenticate, requireRole('PATIENT')];
 router.get('/patient/dashboard', ...patient, PatientController.getDashboardOverview);
 
 router.get('/patient/profile', ...patient, PatientController.getProfile);
-router.put('/patient/profile', ...patient, PatientController.updateProfile);
+router.put('/patient/profile', ...patient, validate(updateProfileSchema), PatientController.updateProfile);
 router.get('/patient/profile/emergency-contacts', ...patient, PatientController.getEmergencyContacts);
-router.post('/patient/profile/emergency-contacts', ...patient, PatientController.addEmergencyContact);
-router.put('/patient/profile/emergency-contacts/:contactId', ...patient, PatientController.updateEmergencyContact);
+router.post('/patient/profile/emergency-contacts', ...patient, validate(emergencyContactSchema), PatientController.addEmergencyContact);
+router.put('/patient/profile/emergency-contacts/:contactId', ...patient, validate(updateEmergencyContactSchema), PatientController.updateEmergencyContact);
 router.delete('/patient/profile/emergency-contacts/:contactId', ...patient, PatientController.deleteEmergencyContact);
 
 router.get('/patient/medical-history', ...patient, PatientController.getMedicalHistory);
