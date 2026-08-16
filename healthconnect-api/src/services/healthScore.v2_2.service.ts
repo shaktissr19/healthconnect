@@ -11,58 +11,71 @@ const overallStatus = (score: number | null) =>
   score == null ? 'INCOMPLETE_ASSESSMENT' : score >= 85 ? 'STRONG' : score >= 70 ? 'GOOD' : score >= 55 ? 'NEEDS_ATTENTION' : 'NEEDS_REVIEW';
 
 /**
- * HC-HSI 2.0 scoring policy
- * -------------------------
- * - 0-5/10 core assessment areas: no overall numeric score.
- * - 6-9/10: a PROVISIONAL score may be shown when at least two meaningful
- *   domains are scoreable and those domains represent >=30% of HC-HSI weight.
- * - 10/10: COMPLETE score.
- * - The numeric value is always the normalized weighted score of available,
- *   applicable domains. Missing data never receives healthy points.
- * - Assessment completion and confidence remain separate from the score.
+ * HC-HSI 2.0 presentation/scoring policy
+ * --------------------------------------
+ * A current Health Score is shown whenever at least one applicable health
+ * domain has a real measurable score. Missing domains are excluded from the
+ * denominator; they never receive healthy points.
+ *
+ * Assessment completion is a separate concept:
+ * - 10/10 core areas => COMPLETE score
+ * - <10/10 with measurable score => PROVISIONAL score
+ * - no measurable scoreable domain => INSUFFICIENT_DATA
+ *
+ * Confidence is measurement reliability (freshness/repeat evidence), not the
+ * percentage of the assessment completed. Assessment completeness is already
+ * exposed separately as assessmentReadiness.percent.
  */
 function finalize(base: any) {
   const readiness = base?.assessmentReadiness ?? { complete: false, completed: 0, total: 10, percent: 0, items: [] };
-  const scoreable = (base?.domains ?? []).filter((d: any) => d?.applicable !== false && d?.score != null && Number.isFinite(Number(d.score)));
+  const scoreable = (base?.domains ?? []).filter(
+    (d: any) => d?.applicable !== false && d?.score != null && Number.isFinite(Number(d.score)),
+  );
+
   const scoreWeight = scoreable.reduce((sum: number, d: any) => sum + Number(d.weight ?? 0), 0);
-  const weightedPoints = scoreable.reduce((sum: number, d: any) => sum + Number(d.score) * Number(d.weight ?? 0), 0);
+  const weightedPoints = scoreable.reduce(
+    (sum: number, d: any) => sum + Number(d.score) * Number(d.weight ?? 0),
+    0,
+  );
   const rawScore = scoreWeight > 0 ? clamp(weightedPoints / scoreWeight) : null;
 
-  const minimumForProvisional =
-    readiness.completed >= 6 &&
-    scoreable.length >= 2 &&
-    scoreWeight >= 30 &&
-    rawScore != null;
+  const scoreType = rawScore == null
+    ? 'INSUFFICIENT_DATA'
+    : readiness.complete
+      ? 'COMPLETE'
+      : 'PROVISIONAL';
 
-  const scoreType = readiness.complete
-    ? 'COMPLETE'
-    : minimumForProvisional
-      ? 'PROVISIONAL'
-      : 'INSUFFICIENT_DATA';
+  const score = rawScore;
 
-  const score = scoreType === 'INSUFFICIENT_DATA' ? null : rawScore;
-
-  const domainConfidence = scoreWeight > 0
-    ? clamp(scoreable.reduce((sum: number, d: any) => sum + Number(d.confidence ?? 0) * Number(d.weight ?? 0), 0) / scoreWeight)
+  // Reliability of the data actually contributing to the score. It is not
+  // multiplied by assessment completeness because that would duplicate the
+  // meaning of assessmentReadiness.percent and confuse patients.
+  let confidence = scoreWeight > 0
+    ? clamp(
+        scoreable.reduce(
+          (sum: number, d: any) => sum + Number(d.confidence ?? 0) * Number(d.weight ?? 0),
+          0,
+        ) / scoreWeight,
+      )
     : 0;
 
-  // Partial assessments can be useful, but confidence must remain visibly lower
-  // until the remaining core context is completed.
-  let confidence = clamp(domainConfidence * (0.65 + 0.35 * (readiness.percent / 100)));
-  if (scoreType === 'PROVISIONAL') confidence = Math.min(confidence, 80);
-  if ((base?.riskContext?.screeningRecommendations ?? []).some((r: any) => r?.priority === 'CORE')) confidence = Math.min(confidence, 75);
-  if ((base?.limitations ?? []).some((l: any) => l?.severity === 'IMPORTANT')) confidence = Math.min(confidence, 80);
+  if ((base?.riskContext?.screeningRecommendations ?? []).some((r: any) => r?.priority === 'CORE')) {
+    confidence = Math.min(confidence, 75);
+  }
+  if ((base?.limitations ?? []).some((l: any) => l?.severity === 'IMPORTANT')) {
+    confidence = Math.min(confidence, 80);
+  }
 
   const remaining = Math.max(0, Number(readiness.total ?? 10) - Number(readiness.completed ?? 0));
   const assessmentMessage = scoreType === 'COMPLETE'
-    ? 'Core health assessment complete. Your score uses all required core assessment areas.'
+    ? 'Health assessment complete. Your score uses all required core assessment areas.'
     : scoreType === 'PROVISIONAL'
-      ? `Provisional Health Score based on currently available data. Assessment ${readiness.percent}% complete; add ${remaining} remaining core detail${remaining === 1 ? '' : 's'} for a more complete assessment.`
-      : `Not enough structured health data for a responsible overall score yet. Assessment ${readiness.percent}% complete; complete at least 6 core areas and two measurable health domains.`;
+      ? `Current Health Score based on available measurable health data. Assessment ${readiness.percent}% complete; add ${remaining} remaining core detail${remaining === 1 ? '' : 's'} for a more complete assessment.`
+      : `No measurable health domain is available yet. Add a blood-pressure, body, metabolic, lifestyle or other supported health input to start your Health Score.`;
 
   const recommendations = [...(base?.recommendations ?? [])];
   if (scoreType === 'PROVISIONAL') {
-    const msg = `Your current score is provisional because the core assessment is ${readiness.percent}% complete. Add ${remaining} remaining detail${remaining === 1 ? '' : 's'} to improve completeness and confidence.`;
+    const msg = `Your current Health Score uses the health data available today. Assessment ${readiness.percent}% complete; add ${remaining} remaining core detail${remaining === 1 ? '' : 's'} to improve completeness.`;
     if (!recommendations.includes(msg)) recommendations.unshift(msg);
   }
 
@@ -83,7 +96,6 @@ function finalize(base: any) {
     scoreBasis: {
       scoreableDomains: scoreable.length,
       availableWeight: scoreWeight,
-      minimumCoreAreasForProvisional: 6,
       coreAreasCompleted: readiness.completed,
       coreAreasTotal: readiness.total,
     },
@@ -129,8 +141,6 @@ async function persistCurrent(patientId: string, result: any, persistSnapshot: b
 }
 
 export async function calculateHealthScore(patientId: string, options: { persistSnapshot?: boolean } = {}) {
-  // Base engine provides all domain/component calculations and clinical alerts.
-  // Snapshot persistence is handled here so provisional scores are saved correctly.
   const base = await calculateV21(patientId, { persistSnapshot: false });
   const result = finalize(base);
   await persistCurrent(patientId, result, !!options.persistSnapshot);
