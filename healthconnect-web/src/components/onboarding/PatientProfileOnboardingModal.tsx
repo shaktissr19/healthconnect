@@ -166,11 +166,11 @@ export default function PatientProfileOnboardingModal({ profile, userName, onCom
           <>
             <Field label="Mobile number" required><input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} inputMode="numeric" placeholder="10-digit Indian mobile number" style={inputStyle} /></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="City" required><input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Ambala" style={inputStyle} /></Field>
+              <Field label="City / Town" required><input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Ambala" style={inputStyle} /></Field>
               <Field label="District" required><input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="e.g. Ambala" style={inputStyle} /></Field>
             </div>
             <Field label="State / UT" required><input value={state} onChange={(e) => setState(e.target.value)} placeholder="e.g. Haryana" style={inputStyle} /></Field>
-            <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.5 }}>City is required so HealthConnect can support location-based discovery and care services. District and State/UT provide consistent India-specific location context.</div>
+            <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.5 }}>Used for nearby healthcare services and location-based discovery.</div>
           </>
         )}
 
