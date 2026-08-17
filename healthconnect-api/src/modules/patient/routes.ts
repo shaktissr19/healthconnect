@@ -37,6 +37,18 @@ const router  = Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const patient = [authenticate, requireRole('PATIENT')];
 
+const normalizeMedicationLogQuery = (req: any, _res: any, next: any) => {
+  const date = typeof req.query.date === 'string' ? req.query.date : '';
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !req.query.from && !req.query.to) {
+    const start = new Date(`${date}T00:00:00.000Z`);
+    if (!Number.isNaN(start.getTime())) {
+      req.query.from = start.toISOString();
+      req.query.to = new Date(start.getTime() + 86400000 - 1).toISOString();
+    }
+  }
+  next();
+};
+
 router.get('/patient/dashboard', ...patient, PatientController.getDashboardOverview);
 
 router.get('/patient/profile', ...patient, PatientController.getProfile);
@@ -83,7 +95,7 @@ router.post('/patient/medications', ...patient, validate(medicationCreateSchema)
 router.put('/patient/medications/:medicationId', ...patient, validate(medicationUpdateSchema), PatientController.updateMedication);
 router.delete('/patient/medications/:medicationId', ...patient, PatientController.deleteMedication);
 router.post('/patient/medications/:medicationId/log', ...patient, validate(medicationDoseSchema), PatientController.logMedicationDose);
-router.get('/patient/medications/:medicationId/logs', ...patient, PatientController.getMedicationLogs);
+router.get('/patient/medications/:medicationId/logs', ...patient, normalizeMedicationLogQuery, PatientController.getMedicationLogs);
 router.get('/patient/therapies', ...patient, PatientController.getTherapies);
 router.post('/patient/therapies', ...patient, validate(therapyCreateSchema), PatientController.addTherapy);
 router.delete('/patient/therapies/:therapyId', ...patient, PatientController.deleteTherapy);
