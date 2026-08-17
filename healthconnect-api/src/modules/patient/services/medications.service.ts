@@ -1,6 +1,24 @@
 import { ApiError } from '../../../utils/apiError';
 import { getPatient, prisma } from './_shared';
 
+const normalizeFrequency = (value: string) => {
+  const frequency = String(value || 'ONCE_DAILY').toUpperCase();
+  if (frequency === 'DAILY') return 'ONCE_DAILY';
+  if (frequency === 'THRICE_DAILY') return 'THREE_TIMES_DAILY';
+  return frequency;
+};
+
+const normalizeTimes = (values?: string[]) => {
+  const aliases: Record<string, string> = {
+    MORNING: '08:00',
+    AFTERNOON: '13:00',
+    EVENING: '18:00',
+    NIGHT: '21:00',
+    BEFORE_BED: '22:00',
+  };
+  return (values || []).map(value => aliases[value.toUpperCase()] ?? value);
+};
+
 export const getMedications = async (userId: string, params: { status?: string }) => {
   const patient = await getPatient(userId);
   const where: any = { patientId: patient.id };
@@ -50,15 +68,16 @@ export const addMedication = async (userId: string, data: {
   timesOfDay?: string[];
   prescribedBy?: string;
   prescribedFor?: string;
-  startDate: string;
+  startDate?: string;
   endDate?: string;
   currentStock?: number;
   refillThreshold?: number;
   instructions?: string;
   notes?: string;
+  status?: string;
 }) => {
   const patient = await getPatient(userId);
-  const startDate = new Date(data.startDate);
+  const startDate = data.startDate ? new Date(data.startDate) : new Date();
   const endDate = data.endDate ? new Date(data.endDate) : undefined;
   if (endDate && endDate.getTime() < startDate.getTime()) {
     throw ApiError.badRequest('INVALID_DATE_RANGE', 'Medication end date cannot be before start date');
@@ -71,9 +90,9 @@ export const addMedication = async (userId: string, data: {
       genericName: data.genericName?.trim(),
       dosage: data.dosage.trim(),
       dosageUnit: data.dosageUnit?.trim(),
-      frequency: data.frequency.toUpperCase() as any,
+      frequency: normalizeFrequency(data.frequency) as any,
       customFrequency: data.customFrequency?.trim(),
-      timesOfDay: data.timesOfDay || [],
+      timesOfDay: normalizeTimes(data.timesOfDay),
       prescribedBy: data.prescribedBy?.trim(),
       prescribedFor: data.prescribedFor?.trim(),
       startDate,
@@ -111,8 +130,8 @@ export const updateMedication = async (
     data: {
       name: data.name?.trim(),
       dosage: data.dosage?.trim(),
-      frequency: data.frequency ? data.frequency.toUpperCase() as any : undefined,
-      timesOfDay: data.timesOfDay,
+      frequency: data.frequency ? normalizeFrequency(data.frequency) as any : undefined,
+      timesOfDay: data.timesOfDay ? normalizeTimes(data.timesOfDay) : undefined,
       status: data.status ? data.status.toUpperCase() as any : undefined,
       currentStock: data.currentStock,
       endDate: data.endDate ? new Date(data.endDate) : undefined,
