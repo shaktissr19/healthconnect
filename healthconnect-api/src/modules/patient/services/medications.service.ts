@@ -231,6 +231,45 @@ export const addTherapy = async (userId: string, data: {
   });
 };
 
+export const updateTherapy = async (
+  userId: string,
+  therapyId: string,
+  data: Partial<{
+    type: string;
+    plan: string;
+    targetValue: string;
+    currentValue: string;
+    startDate: string;
+    endDate: string | null;
+    notes: string;
+  }>,
+) => {
+  const patient = await getPatient(userId);
+  const therapy = await prisma.therapy.findFirst({ where: { id: therapyId, patientId: patient.id } });
+  if (!therapy) throw ApiError.notFound('Therapy record not found');
+
+  const nextStart = data.startDate ? new Date(data.startDate) : therapy.startDate;
+  const nextEnd = data.endDate === null
+    ? null
+    : data.endDate
+      ? new Date(data.endDate)
+      : therapy.endDate;
+
+  if (nextEnd && nextEnd.getTime() < nextStart.getTime()) {
+    throw ApiError.badRequest('INVALID_THERAPY_DATES', 'End date cannot be before start date');
+  }
+
+  const { startDate, endDate, ...rest } = data;
+  return prisma.therapy.update({
+    where: { id: therapyId },
+    data: {
+      ...rest,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate === null ? null : endDate ? new Date(endDate) : undefined,
+    },
+  });
+};
+
 export const deleteTherapy = async (userId: string, therapyId: string) => {
   const patient = await getPatient(userId);
   const therapy = await prisma.therapy.findFirst({ where: { id: therapyId, patientId: patient.id } });
