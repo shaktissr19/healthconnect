@@ -20,7 +20,9 @@ const userIdFrom = (req: any) => req.user?.userId ?? req.user?.id;
 
 router.get('/profile', ...doctorOnly, async (req: any, res) => {
   try {
-    const profile = await getOwnDoctorProfile(userIdFrom(req));
+    const userId = userIdFrom(req);
+    await syncDoctorProfileCompletion(userId);
+    const profile = await getOwnDoctorProfile(userId);
     if (!profile) {
       return res.status(404).json({ success: false, message: 'Doctor profile not found.' });
     }
