@@ -5,7 +5,6 @@ export const getConsents = async (userId: string) => {
   const patient = await getPatient(userId);
   const now = new Date();
 
-  // Keep stored status aligned with time-limited access before returning active grants.
   await prisma.patientConsent.updateMany({
     where: {
       patientId: patient.id,
@@ -44,7 +43,10 @@ export const grantConsent = async (userId: string, data: {
   grantReason?: string;
 }) => {
   const patient = await getPatient(userId);
-  const doctor = await prisma.doctorProfile.findUnique({ where: { id: data.doctorId } });
+  const doctor = await prisma.doctorProfile.findUnique({
+    where: { id: data.doctorId },
+    select: { id: true, userId: true, firstName: true, lastName: true, specialization: true },
+  });
   if (!doctor) throw ApiError.notFound('Doctor not found');
 
   const expiresAt = data.expiresAt
@@ -56,42 +58,67 @@ export const grantConsent = async (userId: string, data: {
     orderBy: { createdAt: 'desc' },
   });
 
-  if (existing) {
-    return prisma.patientConsent.update({
-      where: { id: existing.id },
-      data: {
-        accessScope: data.accessScope,
-        status: 'ACTIVE',
-        grantReason: data.grantReason,
-        expiresAt,
-        revokedAt: null,
-      },
-      include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
-    });
-  }
+  const consent = existing
+    ? await prisma.patientConsent.update({
+        where: { id: existing.id },
+        data: {
+          accessScope: data.accessScope,
+          status: 'ACTIVE',
+          grantReason: data.grantReason,
+          expiresAt,
+          revokedAt: null,
+        },
+        include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
+      })
+    : await prisma.patientConsent.create({
+        data: {
+          patientId: patient.id,
+          doctorId: data.doctorId,
+          accessScope: data.accessScope,
+          status: 'ACTIVE',
+          grantReason: data.grantReason,
+          expiresAt,
+        },
+        include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
+      });
 
-  return prisma.patientConsent.create({
+  await prisma.notification.create({
     data: {
-      patientId: patient.id,
-      doctorId: data.doctorId,
-      accessScope: data.accessScope,
-      status: 'ACTIVE',
-      grantReason: data.grantReason,
-      expiresAt,
+      userId: doctor.userId,
+      type: 'SYSTEM',
+      title: 'Patient granted health-record access',
+      body: `${patient.firstName} ${patient.lastName} granted you time-limited access to their HealthConnect health profile.`,
+      data: { requestType: 'ACCESS_GRANTED', patientId: patient.id, consentId: consent.id },
     },
-    include: { doctor: { select: { firstName: true, lastName: true, specialization: true } } },
-  });
+  }).catch(() => {});
+
+  return consent;
 };
 
 export const revokeConsent = async (userId: string, consentId: string) => {
   const patient = await getPatient(userId);
-  const consent = await prisma.patientConsent.findFirst({ where: { id: consentId, patientId: patient.id } });
+  const consent = await prisma.patientConsent.findFirst({
+    where: { id: consentId, patientId: patient.id },
+    include: { doctor: { select: { userId: true, firstName: true, lastName: true } } },
+  });
   if (!consent) throw ApiError.notFound('Consent not found');
 
-  return prisma.patientConsent.update({
+  const revoked = await prisma.patientConsent.update({
     where: { id: consentId },
     data: { status: 'REVOKED', revokedAt: new Date() },
   });
+
+  await prisma.notification.create({
+    data: {
+      userId: consent.doctor.userId,
+      type: 'SYSTEM',
+      title: 'Patient revoked health-record access',
+      body: `${patient.firstName} ${patient.lastName} revoked your HealthConnect health-profile access.`,
+      data: { requestType: 'ACCESS_REVOKED', patientId: patient.id, consentId },
+    },
+  }).catch(() => {});
+
+  return revoked;
 };
 
 export const getSettings = async (userId: string) => {
