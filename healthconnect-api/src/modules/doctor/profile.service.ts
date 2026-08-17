@@ -16,13 +16,18 @@ type Requirement = {
 const hasText = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
 const hasList = (value: unknown) => Array.isArray(value) && value.some(item => hasText(item));
 const hasNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
+const normalizeIndianPhone = (value: unknown) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+};
+const hasValidIndianPhone = (value: unknown) => /^[6-9]\d{9}$/.test(normalizeIndianPhone(value));
 
 // Core completion is intentionally limited to essential identity/professional data.
 // Narrative, consultation, availability and social-proof fields remain optional.
 export const DOCTOR_CORE_REQUIREMENTS: Requirement[] = [
   { key: 'firstName', label: 'First name', complete: profile => hasText(profile.firstName) },
   { key: 'lastName', label: 'Last name', complete: profile => hasText(profile.lastName) },
-  { key: 'phone', label: 'Valid Indian mobile number', complete: profile => /^[6-9]\d{9}$/.test(String(profile.phone ?? '')) },
+  { key: 'phone', label: 'Valid Indian mobile number', complete: profile => hasValidIndianPhone(profile.phone) },
   { key: 'dateOfBirth', label: 'Date of birth', complete: profile => Boolean(profile.dateOfBirth) },
   { key: 'gender', label: 'Gender', complete: profile => Boolean(profile.gender) },
   { key: 'specialization', label: 'Specialization', complete: profile => hasText(profile.specialization) },
@@ -85,6 +90,7 @@ export async function updateOwnDoctorProfile(userId: string, input: Record<strin
 
   const merged = { ...existing, ...input };
   const completion = computeDoctorProfileCompletion(merged);
+  const changedFields = Object.keys(input);
 
   const updated = await prisma.doctorProfile.update({
     where: { userId },
@@ -95,18 +101,20 @@ export async function updateOwnDoctorProfile(userId: string, input: Record<strin
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId,
-      action: 'DOCTOR_PROFILE_UPDATED',
-      entityType: 'DoctorProfile',
-      entityId: updated.id,
-      metadata: {
-        changedFields: Object.keys(input),
-        profileCompletion: completion.percentage,
+  if (changedFields.length > 0) {
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'DOCTOR_PROFILE_UPDATED',
+        entityType: 'DoctorProfile',
+        entityId: updated.id,
+        metadata: {
+          changedFields,
+          profileCompletion: completion.percentage,
+        },
       },
-    },
-  }).catch(() => undefined);
+    }).catch(() => undefined);
+  }
 
   return getOwnDoctorProfile(userId);
 }
