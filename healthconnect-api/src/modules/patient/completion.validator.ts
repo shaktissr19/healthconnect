@@ -11,6 +11,7 @@ const medicationFrequencies = [
 
 const medicationStatuses = ['ACTIVE', 'DISCONTINUED', 'COMPLETED', 'ON_HOLD'] as const;
 const vitalTypes = ['bp', 'heart_rate', 'blood_sugar', 'hba1c', 'weight', 'temperature', 'spo2', 'cholesterol'] as const;
+const reportTypes = ['LAB', 'SCAN', 'PRESCRIPTION', 'DISCHARGE', 'VACCINATION', 'INSURANCE', 'OTHER'] as const;
 
 const triggerInput = z.preprocess((value) => {
   if (typeof value === 'string') {
@@ -112,6 +113,27 @@ export const therapyCreateSchema = z.object({
 }).refine(value => !value.endDate || new Date(value.endDate) >= new Date(value.startDate), {
   message: 'End date cannot be before start date',
   path: ['endDate'],
+});
+
+export const therapyUpdateSchema = z.object({
+  type: z.string().trim().min(1).max(80).optional(),
+  plan: z.string().trim().min(1).max(1000).optional(),
+  targetValue: optionalText(100),
+  currentValue: optionalText(100),
+  startDate: dateTime.optional(),
+  endDate: dateTime.optional(),
+  notes: optionalText(),
+}).refine(value => Object.keys(value).length > 0, 'Provide at least one field to update')
+  .refine(value => !value.startDate || !value.endDate || new Date(value.endDate) >= new Date(value.startDate), {
+    message: 'End date cannot be before start date',
+    path: ['endDate'],
+  });
+
+export const reportUploadSchema = z.object({
+  name: z.string().trim().min(1, 'Report name is required').max(250),
+  type: z.enum(reportTypes).optional(),
+  description: optionalText(2000),
+  reportDate: dateTime.optional(),
 });
 
 export const reportShareSchema = z.object({
