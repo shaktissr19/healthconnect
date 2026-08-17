@@ -52,26 +52,33 @@ const optionalDateTime = z.preprocess((value) => {
   return value instanceof Date ? value : new Date(String(value));
 }, z.union([z.date(), z.null()]).optional());
 
-const gender = z.union([
+const gender = z.preprocess((value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  return String(value).trim().toUpperCase().replace(/\s+/g, '_');
+}, z.union([
   z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']),
   z.null(),
-]).optional();
+]).optional());
 
-const indianPhone = z.preprocess(
-  (value) => value === '' ? null : value,
-  z.union([
-    z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
-    z.null(),
-  ]).optional(),
-);
+const indianPhone = z.preprocess((value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const digits = String(value).replace(/\D/g, '');
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+}, z.union([
+  z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
+  z.null(),
+]).optional());
 
-const pinCode = z.preprocess(
-  (value) => value === '' ? null : value,
-  z.union([
-    z.string().trim().regex(/^[1-9]\d{5}$/, 'Enter a valid 6-digit Indian PIN code'),
-    z.null(),
-  ]).optional(),
-);
+const pinCode = z.preprocess((value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  return String(value).replace(/\D/g, '');
+}, z.union([
+  z.string().regex(/^[1-9]\d{5}$/, 'Enter a valid 6-digit Indian PIN code'),
+  z.null(),
+]).optional());
 
 const availabilitySchedule = z.preprocess((value) => {
   if (value === '' || value === null) return null;
@@ -151,10 +158,9 @@ const rawProfileSchema = z.object({
   };
 });
 
-export const doctorProfileUpdateSchema = rawProfileSchema.refine(
-  value => Object.values(value).some(item => item !== undefined),
-  'Provide at least one profile field to update',
-);
+// Unknown legacy fields continue to be stripped/no-op rather than becoming
+// a new breaking 400 response. Every recognized profile field is validated.
+export const doctorProfileUpdateSchema = rawProfileSchema;
 
 export const doctorAvailabilityUpdateSchema = z.object({
   schedule: availabilitySchedule,
@@ -163,7 +169,9 @@ export const doctorAvailabilityUpdateSchema = z.object({
   isAvailableOnline: optionalBoolean,
   isAcceptingNewPatients: optionalBoolean,
 }).transform(value => ({
-  availabilitySchedule: value.availabilitySchedule ?? value.schedule,
+  availabilitySchedule: value.availabilitySchedule !== undefined
+    ? value.availabilitySchedule
+    : value.schedule,
   nextAvailableSlot: value.nextAvailableSlot,
   isAvailableOnline: value.isAvailableOnline,
   isAcceptingNewPatients: value.isAcceptingNewPatients,
