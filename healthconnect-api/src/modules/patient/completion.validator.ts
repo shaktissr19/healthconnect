@@ -121,7 +121,7 @@ export const therapyUpdateSchema = z.object({
   targetValue: optionalText(100),
   currentValue: optionalText(100),
   startDate: dateTime.optional(),
-  endDate: dateTime.optional(),
+  endDate: dateTime.nullable().optional(),
   notes: optionalText(),
 }).refine(value => Object.keys(value).length > 0, 'Provide at least one field to update')
   .refine(value => !value.startDate || !value.endDate || new Date(value.endDate) >= new Date(value.startDate), {
