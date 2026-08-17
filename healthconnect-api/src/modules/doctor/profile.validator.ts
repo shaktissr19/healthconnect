@@ -12,6 +12,19 @@ const optionalUrl = z.preprocess(
   z.union([z.string().trim().url('Use a valid URL').max(1000), z.null()]).optional(),
 );
 
+// Existing uploads may be stored as a site-relative path while newer callers
+// can provide an absolute URL. Accept both without weakening other URL fields.
+const optionalAssetUrl = z.preprocess(
+  (value) => value === '' ? null : value,
+  z.union([
+    z.string().trim().max(1000).refine(
+      value => /^https?:\/\//i.test(value) || /^\/(?!\/)[^\s]*$/.test(value),
+      'Use a valid image URL or site-relative path',
+    ),
+    z.null(),
+  ]).optional(),
+);
+
 const optionalNumber = (min: number, max: number, integer = false) => z.preprocess(
   (value) => value === '' || value === null || value === undefined ? value : Number(value),
   z.union([
@@ -94,7 +107,7 @@ const rawProfileSchema = z.object({
   phone: indianPhone,
   dateOfBirth: optionalDateOfBirth,
   gender,
-  profilePhotoUrl: optionalUrl,
+  profilePhotoUrl: optionalAssetUrl,
 
   specialization: optionalTrimmed(160),
   subSpecializations: stringList(160, 20),
