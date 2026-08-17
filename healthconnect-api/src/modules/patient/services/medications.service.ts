@@ -18,7 +18,7 @@ export const getMedications = async (userId: string, params: { status?: string }
   });
 
   const day30 = new Date(Date.now() - 30 * 86400000);
-  const enriched = await Promise.all(
+  return Promise.all(
     medications.map(async medication => {
       const [total, taken] = await Promise.all([
         prisma.medicationLog.count({
@@ -38,8 +38,6 @@ export const getMedications = async (userId: string, params: { status?: string }
       return { ...medication, adherencePct: adherence, adherence30Day: adherence, needsRefill };
     }),
   );
-
-  return enriched;
 };
 
 export const addMedication = async (userId: string, data: {
@@ -168,7 +166,7 @@ export const logMedicationDose = async (
     ? (data.takenAt ? new Date(data.takenAt) : new Date())
     : null;
 
-  const result = await prisma.$transaction(async tx => {
+  return prisma.$transaction(async tx => {
     const log = existing
       ? await tx.medicationLog.update({
           where: { id: existing.id },
@@ -186,13 +184,13 @@ export const logMedicationDose = async (
 
     if (medication.currentStock != null) {
       const wasTaken = existing?.status === 'taken';
-      const isTaken = status === 'taken';
-      if (!wasTaken && isTaken) {
+      const isTakenNow = status === 'taken';
+      if (!wasTaken && isTakenNow) {
         await tx.medication.update({
           where: { id: medicationId },
           data: { currentStock: Math.max(0, medication.currentStock - 1) },
         });
-      } else if (wasTaken && !isTaken) {
+      } else if (wasTaken && !isTakenNow) {
         await tx.medication.update({
           where: { id: medicationId },
           data: { currentStock: medication.currentStock + 1 },
@@ -200,29 +198,32 @@ export const logMedicationDose = async (
       }
     }
 
-    return log;
+    return { ...log, status: log.status.toUpperCase() };
   });
-
-  return result;
 };
 
 export const getMedicationLogs = async (
   userId: string,
   medicationId: string,
-  params: { from?: string; to?: string },
+  params: { from?: string; to?: string; date?: string },
 ) => {
   const patient = await getPatient(userId);
   const medication = await prisma.medication.findFirst({ where: { id: medicationId, patientId: patient.id } });
   if (!medication) throw ApiError.notFound('Medication not found');
 
   const where: any = { medicationId };
-  if (params.from || params.to) {
+  if (params.date) {
+    const start = new Date(`${params.date}T00:00:00.000Z`);
+    const end = new Date(start.getTime() + 86400000);
+    if (!Number.isNaN(start.getTime())) where.scheduledTime = { gte: start, lt: end };
+  } else if (params.from || params.to) {
     where.scheduledTime = {};
     if (params.from) where.scheduledTime.gte = new Date(params.from);
     if (params.to) where.scheduledTime.lte = new Date(params.to);
   }
 
-  return prisma.medicationLog.findMany({ where, orderBy: { scheduledTime: 'desc' } });
+  const logs = await prisma.medicationLog.findMany({ where, orderBy: { scheduledTime: 'desc' } });
+  return logs.map(log => ({ ...log, status: log.status.toUpperCase() }));
 };
 
 export const getTherapies = async (userId: string) => {
