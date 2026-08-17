@@ -119,4 +119,5 @@ export const therapyCreateSchema = z.object({
 export const reportShareSchema = z.object({
   doctorId: z.string().uuid('Doctor ID must be a valid UUID'),
   expiresInDays: z.number().int().min(1).max(365).optional(),
+  expiresAt: dateInput.optional(),
 }).strict();
