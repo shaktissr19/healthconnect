@@ -10,6 +10,7 @@ import publicRoutes from './public.routes';
 import platformRoutes     from './platform.routes';
 import adminRoutes        from './admin.routes';
 import doctorDashRoutes   from './doctor.routes';
+import doctorProfileRoutes from '../modules/doctor/profile.routes';
 import notificationRoutes from './notification.routes';
 
 const router = Router();
@@ -24,6 +25,7 @@ router.use('/subscription', subscriptionRoutes);
 router.use('/public',         publicRoutes);
 router.use('/platform',     platformRoutes);
 router.use('/admin',        adminRoutes);
+router.use('/doctor',       doctorProfileRoutes);
 router.use('/doctor',       doctorDashRoutes);
 router.use('/notifications', notificationRoutes);
 

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import DoctorSidebar from '@/components/doctor/layout/DoctorSidebar';
 import DoctorTopbar  from '@/components/doctor/layout/DoctorTopbar';
+import DoctorProfileV2 from '@/components/doctor/DoctorProfileV2';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
 const SIDEBAR_W      = 268;
@@ -15,6 +16,7 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
   const router = useRouter();
   const uiStore = useUIStore() as any;
   const collapsed = uiStore.sidebarOpen === false;
+  const activePage = uiStore.activePage ?? 'home';
   const [authChecked, setAuthChecked] = useState(false);
   const [sessionToast, setSessionToast] = useState(false);
   const hasRun = useRef(false);
@@ -115,7 +117,9 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
       <DoctorSidebar />
 
       <div style={{ marginLeft:sidebarW, paddingTop:TOPBAR_H, minHeight:'100vh', background:'#F5F4F0', overflowX:'hidden', transition:'margin-left 0.25s cubic-bezier(.4,0,.2,1)' }}>
-        <main style={{ padding:24 }}>{children}</main>
+        <main style={{ padding:24 }}>
+          {activePage === 'profile' ? <DoctorProfileV2 /> : children}
+        </main>
       </div>
     </div>
   );

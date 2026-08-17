@@ -389,6 +389,8 @@ model DoctorProfile {
   firstName            String
   lastName              String
   phone                 String?
+  dateOfBirth           DateTime?
+  gender                Gender?
   profilePhotoUrl       String?
   specialization       String?
   subSpecializations   String[] @default([])
@@ -469,6 +471,7 @@ model DoctorProfile {
   @@index([userId])
   @@index([specialization])
   @@index([city])
+  @@index([gender])
   @@map("doctor_profiles")
 }
 
@@ -484,9 +487,9 @@ model HospitalProfile {
   website             String?
   logoUrl             String?
   addressLine1       String?
-  city               String?
-  state              String?
-  pinCode            String?
+  city                String?
+  state               String?
+  pinCode              String?
   latitude           Float?
   longitude          Float?
   totalBeds          Int?

@@ -1,76 +1,156 @@
 // src/routes/public.routes.ts
-// Fixed: added publicRateLimiter to all endpoints.
-// Previously these had zero rate limiting — trivially DoSable from the
-// landing page's data fetching.
+// Public endpoints are rate-limited and return only explicitly selected fields.
 
 import { Router, Request, Response } from 'express';
-import { prisma }            from '../lib/prisma';
+import { prisma } from '../lib/prisma';
 import { publicRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
-
-// Apply rate limiting to all public endpoints
 router.use(publicRateLimiter);
+
+const verifiedDoctorWhere = {
+  OR: [
+    { verificationStatus: 'VERIFIED' as const },
+    // Backward compatibility for doctors verified before verificationStatus existed.
+    { verificationStatus: 'PENDING' as const, isVerified: true },
+  ],
+};
+
+const PUBLIC_DOCTOR_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  gender: true,
+  profilePhotoUrl: true,
+  hcDoctorId: true,
+  verificationStatus: true,
+  isVerified: true,
+  specialization: true,
+  subSpecializations: true,
+  qualification: true,
+  experienceYears: true,
+  medicalLicenseNumber: true,
+  licenseState: true,
+  medicalCouncil: true,
+  registrationYear: true,
+  clinicName: true,
+  clinicAddress: true,
+  city: true,
+  state: true,
+  pinCode: true,
+  languagesSpoken: true,
+  bio: true,
+  careerJourney: true,
+  trainingHospitals: true,
+  hospitalAffiliations: true,
+  awards: true,
+  publications: true,
+  consultationFee: true,
+  teleconsultFee: true,
+  videoConsultFee: true,
+  audioConsultFee: true,
+  offersInPerson: true,
+  offersVideoConsult: true,
+  offersAudioConsult: true,
+  offersChatConsult: true,
+  videoPlatform: true,
+  isAvailableOnline: true,
+  isAcceptingNewPatients: true,
+  availabilitySchedule: true,
+  nextAvailableSlot: true,
+  averageRating: true,
+  totalReviews: true,
+  totalPatients: true,
+  profileViews: true,
+  avgResponseTimeMin: true,
+  featuredReview: true,
+  featuredPatientName: true,
+  profileScore: true,
+  isProfileComplete: true,
+  createdAt: true,
+} as const;
 
 // ─── GET /public/doctors ──────────────────────────────────────────────────────
 router.get('/doctors', async (req: Request, res: Response) => {
   try {
-    const { specialty, search, limit = '6' } = req.query;
-    const where: any = { isVerified: true };
+    const {
+      specialty,
+      search,
+      gender,
+      city,
+      state,
+      language,
+      available,
+      offersVideo,
+      offersAudio,
+      limit = '6',
+      sort = 'rating',
+    } = req.query as Record<string, string | undefined>;
+
+    const where: any = { AND: [verifiedDoctorWhere] };
 
     if (specialty && specialty !== 'All') {
-      where.specialization = { contains: specialty as string, mode: 'insensitive' };
+      where.specialization = { contains: specialty, mode: 'insensitive' };
+    }
+    if (city) where.city = { contains: city, mode: 'insensitive' };
+    if (state) where.state = { contains: state, mode: 'insensitive' };
+    if (language) where.languagesSpoken = { has: language };
+    if (available === 'true') where.isAvailableOnline = true;
+    if (offersVideo === 'true') where.offersVideoConsult = true;
+    if (offersAudio === 'true') where.offersAudioConsult = true;
+    if (gender && ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'].includes(gender.toUpperCase())) {
+      where.gender = gender.toUpperCase();
     }
     if (search) {
       where.OR = [
-        { firstName:      { contains: search as string, mode: 'insensitive' } },
-        { lastName:       { contains: search as string, mode: 'insensitive' } },
-        { specialization: { contains: search as string, mode: 'insensitive' } },
-        { clinicName:     { contains: search as string, mode: 'insensitive' } },
-        { city:           { contains: search as string, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { specialization: { contains: search, mode: 'insensitive' } },
+        { clinicName: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { hcDoctorId: { contains: search, mode: 'insensitive' } },
       ];
     }
 
+    const limitNum = Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 6));
+    let orderBy: any = [{ averageRating: 'desc' }, { totalPatients: 'desc' }];
+    if (sort === 'reviews') orderBy = [{ totalReviews: 'desc' }, { averageRating: 'desc' }];
+    if (sort === 'experience') orderBy = [{ experienceYears: 'desc' }, { averageRating: 'desc' }];
+    if (sort === 'fee_asc') orderBy = [{ consultationFee: 'asc' }, { averageRating: 'desc' }];
+    if (sort === 'fee_desc') orderBy = [{ consultationFee: 'desc' }, { averageRating: 'desc' }];
+    if (sort === 'newest') orderBy = [{ createdAt: 'desc' }];
+
     const doctors = await prisma.doctorProfile.findMany({
       where,
-      take:    parseInt(limit as string),
-      orderBy: [{ averageRating: 'desc' }, { totalPatients: 'desc' }],
-      select: {
-        id: true, firstName: true, lastName: true,
-        specialization: true, subSpecializations: true, qualification: true,
-        experienceYears: true, clinicName: true, city: true, state: true,
-        profilePhotoUrl: true, consultationFee: true, teleconsultFee: true,
-        averageRating: true, totalReviews: true, totalPatients: true,
-        isVerified: true, isAvailableOnline: true, languagesSpoken: true,
-      },
+      take: limitNum,
+      orderBy,
+      select: PUBLIC_DOCTOR_SELECT,
     });
 
-    res.json({ success: true, data: doctors, total: doctors.length });
+    return res.json({ success: true, data: doctors, total: doctors.length });
   } catch (error) {
     console.error('GET /public/doctors error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch doctors' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch doctors' });
   }
 });
 
 // ─── GET /public/doctors/:id ──────────────────────────────────────────────────
 router.get('/doctors/:id', async (req: Request, res: Response) => {
   try {
-    const doctor = await prisma.doctorProfile.findUnique({
-      where: { id: req.params.id },
-      select: {
-        id: true, firstName: true, lastName: true,
-        specialization: true, subSpecializations: true, qualification: true,
-        experienceYears: true, clinicName: true, city: true, state: true,
-        profilePhotoUrl: true, consultationFee: true, teleconsultFee: true,
-        averageRating: true, totalReviews: true, totalPatients: true,
-        isVerified: true, isAvailableOnline: true, languagesSpoken: true, bio: true,
+    const doctor = await prisma.doctorProfile.findFirst({
+      where: {
+        AND: [
+          verifiedDoctorWhere,
+          { OR: [{ id: req.params.id }, { hcDoctorId: req.params.id }] },
+        ],
       },
+      select: PUBLIC_DOCTOR_SELECT,
     });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
-    res.json({ success: true, data: doctor });
+    return res.json({ success: true, data: doctor });
   } catch (error) {
     console.error('GET /public/doctors/:id error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch doctor' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch doctor' });
   }
 });
 
@@ -78,32 +158,34 @@ router.get('/doctors/:id', async (req: Request, res: Response) => {
 router.get('/doctors/:id/availability', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const doctor = await prisma.doctorProfile.findUnique({
-      where:  { id },
-      select: { id: true, isVerified: true },
+    const doctor = await prisma.doctorProfile.findFirst({
+      where: {
+        AND: [verifiedDoctorWhere, { OR: [{ id }, { hcDoctorId: id }] }],
+      },
+      select: { id: true },
     });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
     const availability = await prisma.doctorAvailability.findMany({
-      where:   { doctorId: id },
+      where: { doctorId: doctor.id },
       orderBy: { dayOfWeek: 'asc' },
-      select:  { id: true, dayOfWeek: true, startTime: true, endTime: true, slotDuration: true, isActive: true },
+      select: { id: true, dayOfWeek: true, startTime: true, endTime: true, slotDuration: true, isActive: true },
     });
 
-    const now   = new Date();
+    const now = new Date();
     const end14 = new Date(now);
     end14.setDate(end14.getDate() + 14);
 
     const bookedSlots = await prisma.appointment.findMany({
       where: {
-        doctorId:    id,
-        status:      { in: ['PENDING', 'CONFIRMED'] },
+        doctorId: doctor.id,
+        status: { in: ['PENDING', 'CONFIRMED'] },
         scheduledAt: { gte: now, lte: end14 },
       },
       select: { scheduledAt: true, durationMinutes: true },
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         availability,
@@ -112,7 +194,7 @@ router.get('/doctors/:id/availability', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('GET /public/doctors/:id/availability error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch availability' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch availability' });
   }
 });
 
@@ -121,8 +203,8 @@ router.get('/communities', async (req: Request, res: Response) => {
   try {
     const { limit = '4' } = req.query;
     const communities = await prisma.community.findMany({
-      where:   { isActive: true, visibility: 'PUBLIC' },
-      take:    parseInt(limit as string),
+      where: { isActive: true, visibility: 'PUBLIC' },
+      take: parseInt(limit as string),
       orderBy: { members: { _count: 'desc' } },
       select: {
         id: true, slug: true, name: true, description: true, emoji: true,
@@ -130,10 +212,10 @@ router.get('/communities', async (req: Request, res: Response) => {
         _count: { select: { members: true, posts: true } },
       },
     });
-    res.json({ success: true, data: communities, total: communities.length });
+    return res.json({ success: true, data: communities, total: communities.length });
   } catch (error) {
     console.error('GET /public/communities error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch communities' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch communities' });
   }
 });
 
@@ -143,8 +225,8 @@ router.get('/communities/:id/posts', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { limit = '5' } = req.query;
     const posts = await prisma.post.findMany({
-      where:   { communityId: id, status: 'PUBLISHED' },
-      take:    parseInt(limit as string),
+      where: { communityId: id, status: 'PUBLISHED' },
+      take: parseInt(limit as string),
       orderBy: { createdAt: 'desc' },
       select: {
         id: true, title: true, body: true, tags: true,
@@ -153,10 +235,10 @@ router.get('/communities/:id/posts', async (req: Request, res: Response) => {
         _count: { select: { comments: true, reactions: true } },
       },
     });
-    res.json({ success: true, data: posts, total: posts.length });
+    return res.json({ success: true, data: posts, total: posts.length });
   } catch (error) {
     console.error('GET /public/communities/:id/posts error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch posts' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch posts' });
   }
 });
 
@@ -164,13 +246,13 @@ router.get('/communities/:id/posts', async (req: Request, res: Response) => {
 router.get('/testimonials', async (_req: Request, res: Response) => {
   try {
     const testimonials = await prisma.testimonial.findMany({
-      where:   { isPublished: true },
+      where: { isPublished: true },
       orderBy: { sortOrder: 'asc' },
     });
-    res.json({ success: true, data: testimonials, total: testimonials.length });
+    return res.json({ success: true, data: testimonials, total: testimonials.length });
   } catch (error) {
     console.error('GET /public/testimonials error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch testimonials' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch testimonials' });
   }
 });
 
@@ -184,7 +266,7 @@ router.get('/articles', async (req: Request, res: Response) => {
     }
     const articles = await prisma.article.findMany({
       where,
-      take:    parseInt(limit as string),
+      take: parseInt(limit as string),
       orderBy: [{ isFeatured: 'desc' }, { viewCount: 'desc' }, { publishedAt: 'desc' }],
       select: {
         id: true, slug: true, title: true, excerpt: true, coverImage: true,
@@ -193,10 +275,10 @@ router.get('/articles', async (req: Request, res: Response) => {
         isFeatured: true, isTrending: true, viewCount: true, publishedAt: true,
       },
     });
-    res.json({ success: true, data: articles, total: articles.length });
+    return res.json({ success: true, data: articles, total: articles.length });
   } catch (error) {
     console.error('GET /public/articles error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch articles' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch articles' });
   }
 });
 
@@ -206,14 +288,14 @@ router.get('/stats', async (_req: Request, res: Response) => {
     const [users, patients, doctors, appointments, communities, hospitals] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { role: 'PATIENT' } }),
-      prisma.doctorProfile.count({ where: { isVerified: true } }),
+      prisma.doctorProfile.count({ where: verifiedDoctorWhere }),
       prisma.appointment.count(),
       prisma.community.count({ where: { isActive: true } }),
       prisma.hospitalProfile.count(),
     ]);
-    res.json({ success: true, data: { users, patients, doctors, appointments, communities, hospitals } });
+    return res.json({ success: true, data: { users, patients, doctors, appointments, communities, hospitals } });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch stats' });
+    return res.status(500).json({ success: false, message: 'Failed to fetch stats' });
   }
 });
 
