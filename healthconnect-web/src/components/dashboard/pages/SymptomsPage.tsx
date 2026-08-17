@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { patientAPI } from '@/lib/api';
 
 const C = { card:'#fff', border:'#E2EEF0', text:'#0F2D2A', text2:'#4B6E6A', muted:'#64748B', teal:'#0D9488', green:'#16A34A', amber:'#D97706', red:'#DC2626' };
@@ -34,7 +34,7 @@ export default function SymptomsPage() {
     } finally { setLoading(false); }
   },[timeframe]);
 
-  useEffect(()=>{ load(); },[load]);
+  useEffect(()=>{ void load(); },[load]);
 
   const handleLog = async () => {
     if (!form.name.trim()) return;
@@ -84,18 +84,18 @@ export default function SymptomsPage() {
       <Kpi label="Average severity" value={avg} sub={`${thisWeek} logged this week`} color={C.amber}/>
     </div>
 
-    {showLog && <div style={card}>
+    {showLog && <div style={{...card,padding:20}}>
       <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:16}}>Log new symptom</div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginBottom:14}}>
         <Field label="Symptom name *"><input style={input} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Headache, cough, fatigue"/></Field>
         <Field label="Body area (optional)"><input style={input} value={form.bodyPart} onChange={e=>setForm({...form,bodyPart:e.target.value})} placeholder="e.g. Head, chest, lower back"/></Field>
       </div>
       <Field label={`Severity ${form.severity}/10 · ${severityLabel(form.severity)}`}><input type="range" min={1} max={10} value={form.severity} onChange={e=>setForm({...form,severity:Number(e.target.value)})} style={{width:'100%',accentColor:severityColor(form.severity)}}/><div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:C.muted}}><span>1 Mild</span><span>4–6 Moderate</span><span>7–10 Severe</span></div></Field>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginTop:14,marginBottom:16}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14,marginTop:14,marginBottom:16}}>
         <Field label="Triggers (optional)"><input style={input} value={form.triggers} onChange={e=>setForm({...form,triggers:e.target.value})} placeholder="Comma-separated, e.g. stress, meals"/></Field>
         <Field label="Notes (optional)"><input style={input} value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Duration, pattern or context"/></Field>
       </div>
-      <button onClick={handleLog} disabled={submitting||!form.name.trim()} style={{...primary,opacity:submitting||!form.name.trim()?.55:1}}>{submitting?'Saving…':'Save Symptom'}</button>
+      <button onClick={handleLog} disabled={submitting||!form.name.trim()} style={{...primary,opacity:(submitting||!form.name.trim())?.55:1}}>{submitting?'Saving…':'Save Symptom'}</button>
     </div>}
 
     <div style={{...card,padding:16,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
@@ -117,7 +117,7 @@ export default function SymptomsPage() {
 }
 
 function Kpi({label,value,sub,color}:{label:string;value:string|number;sub:string;color:string}) { return <div style={{...card,padding:'18px 20px'}}><div style={{fontSize:11,fontWeight:800,color:C.muted,textTransform:'uppercase',letterSpacing:'.06em'}}>{label}</div><div style={{fontSize:30,fontWeight:900,color,marginTop:8}}>{value}</div><div style={{fontSize:12,color:C.muted,marginTop:4}}>{sub}</div></div>; }
-function Field({label,children}:{label:string;children:React.ReactNode}) { return <label style={{display:'block',fontSize:11,fontWeight:800,color:C.text2,textTransform:'uppercase',letterSpacing:'.04em'}}>{label}<div style={{marginTop:6}}>{children}</div></label>; }
-const card:React.CSSProperties={background:C.card,border:`1px solid ${C.border}`,borderRadius:14,boxShadow:'0 2px 8px rgba(0,0,0,.05)'};
-const input:React.CSSProperties={width:'100%',boxSizing:'border-box',padding:'10px 12px',border:`1px solid ${C.border}`,borderRadius:9,background:'#F8FFFE',color:C.text,fontSize:13,outline:'none',fontFamily:'inherit'};
-const primary:React.CSSProperties={padding:'10px 19px',border:0,borderRadius:9,background:'linear-gradient(135deg,#0D9488,#14B8A6)',color:'#fff',fontWeight:800,cursor:'pointer',fontSize:13};
+function Field({label,children}:{label:string;children:ReactNode}) { return <label style={{display:'block',fontSize:11,fontWeight:800,color:C.text2,textTransform:'uppercase',letterSpacing:'.04em'}}>{label}<div style={{marginTop:6}}>{children}</div></label>; }
+const card:CSSProperties={background:C.card,border:`1px solid ${C.border}`,borderRadius:14,boxShadow:'0 2px 8px rgba(0,0,0,.05)'};
+const input:CSSProperties={width:'100%',boxSizing:'border-box',padding:'10px 12px',border:`1px solid ${C.border}`,borderRadius:9,background:'#F8FFFE',color:C.text,fontSize:13,outline:'none',fontFamily:'inherit'};
+const primary:CSSProperties={padding:'10px 19px',border:0,borderRadius:9,background:'linear-gradient(135deg,#0D9488,#14B8A6)',color:'#fff',fontWeight:800,cursor:'pointer',fontSize:13};
