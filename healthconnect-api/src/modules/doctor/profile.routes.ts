@@ -14,11 +14,10 @@ import {
 } from './profile.service';
 
 const router = Router();
-
-const doctorOnly = [authenticate, requireRole('DOCTOR')] as const;
+const doctorRole = requireRole('DOCTOR');
 const userIdFrom = (req: any) => req.user?.userId ?? req.user?.id;
 
-router.get('/profile', ...doctorOnly, async (req: any, res) => {
+router.get('/profile', authenticate, doctorRole, async (req: any, res) => {
   try {
     const userId = userIdFrom(req);
     await syncDoctorProfileCompletion(userId);
@@ -33,7 +32,7 @@ router.get('/profile', ...doctorOnly, async (req: any, res) => {
   }
 });
 
-router.get('/profile/completion', ...doctorOnly, async (req: any, res) => {
+router.get('/profile/completion', authenticate, doctorRole, async (req: any, res) => {
   try {
     const completion = await syncDoctorProfileCompletion(userIdFrom(req));
     if (!completion) {
@@ -48,7 +47,8 @@ router.get('/profile/completion', ...doctorOnly, async (req: any, res) => {
 
 router.put(
   '/profile',
-  ...doctorOnly,
+  authenticate,
+  doctorRole,
   validate(doctorProfileUpdateSchema),
   async (req: any, res) => {
     try {
@@ -70,7 +70,8 @@ router.put(
 
 router.put(
   '/profile/availability',
-  ...doctorOnly,
+  authenticate,
+  doctorRole,
   validate(doctorAvailabilityUpdateSchema),
   async (req: any, res) => {
     try {
@@ -91,7 +92,8 @@ router.put(
 
 router.put(
   '/profile/consultation-modes',
-  ...doctorOnly,
+  authenticate,
+  doctorRole,
   validate(doctorConsultationModesSchema),
   async (req: any, res) => {
     try {
