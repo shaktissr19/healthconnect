@@ -6,6 +6,14 @@ const nonEmptyUpdate = <T extends z.ZodRawShape>(schema: z.ZodObject<T>) => sche
   (value) => Object.keys(value).length > 0,
   'Provide at least one field to update',
 );
+const medicationFrequency = z.enum([
+  'ONCE_DAILY', 'DAILY', 'TWICE_DAILY', 'THREE_TIMES_DAILY', 'THRICE_DAILY', 'FOUR_TIMES_DAILY',
+  'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'AS_NEEDED', 'CUSTOM',
+]);
+const doseTime = z.union([
+  z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
+  z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT', 'BEFORE_BED']),
+]);
 
 export const symptomCreateSchema = z.object({
   name: z.string().trim().min(1, 'Symptom name is required').max(150),
@@ -56,24 +64,22 @@ const medicationBaseSchema = z.object({
   genericName: z.string().trim().max(200).optional(),
   dosage: z.string().trim().min(1, 'Dosage is required').max(100),
   dosageUnit: z.string().trim().max(50).optional(),
-  frequency: z.enum([
-    'ONCE_DAILY', 'TWICE_DAILY', 'THREE_TIMES_DAILY', 'FOUR_TIMES_DAILY',
-    'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'AS_NEEDED', 'CUSTOM',
-  ]),
+  frequency: medicationFrequency,
   customFrequency: z.string().trim().max(150).optional(),
-  timesOfDay: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm')).max(12).optional(),
+  timesOfDay: z.array(doseTime).max(12).optional(),
   prescribedBy: z.string().trim().max(200).optional(),
   prescribedFor: z.string().trim().max(250).optional(),
-  startDate: dateInput,
+  startDate: dateInput.optional(),
   endDate: dateInput.optional(),
   currentStock: z.number().int().min(0).max(100000).optional(),
   refillThreshold: z.number().int().min(0).max(100000).optional(),
   instructions: z.string().trim().max(2000).optional(),
   notes: z.string().trim().max(2000).optional(),
+  status: z.enum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'DISCONTINUED']).optional(),
 });
 
 export const medicationCreateSchema = medicationBaseSchema.superRefine((value, ctx) => {
-  if (value.endDate && new Date(value.endDate).getTime() < new Date(value.startDate).getTime()) {
+  if (value.startDate && value.endDate && new Date(value.endDate).getTime() < new Date(value.startDate).getTime()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'End date cannot be before start date' });
   }
   if (value.frequency === 'CUSTOM' && !value.customFrequency) {
@@ -84,11 +90,8 @@ export const medicationCreateSchema = medicationBaseSchema.superRefine((value, c
 export const medicationUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   dosage: z.string().trim().min(1).max(100).optional(),
-  frequency: z.enum([
-    'ONCE_DAILY', 'TWICE_DAILY', 'THREE_TIMES_DAILY', 'FOUR_TIMES_DAILY',
-    'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'AS_NEEDED', 'CUSTOM',
-  ]).optional(),
-  timesOfDay: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).max(12).optional(),
+  frequency: medicationFrequency.optional(),
+  timesOfDay: z.array(doseTime).max(12).optional(),
   status: z.enum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'DISCONTINUED']).optional(),
   currentStock: z.number().int().min(0).max(100000).optional(),
   endDate: dateInput.optional(),
