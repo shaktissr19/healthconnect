@@ -4,7 +4,7 @@ import { getPatient, prisma } from './_shared';
 export const getMedications = async (userId: string, params: { status?: string }) => {
   const patient = await getPatient(userId);
   const where: any = { patientId: patient.id };
-  if (params.status) where.status = params.status;
+  if (params.status) where.status = params.status.toUpperCase();
 
   const medications = await prisma.medication.findMany({
     where,
@@ -12,7 +12,7 @@ export const getMedications = async (userId: string, params: { status?: string }
     include: {
       logs: {
         orderBy: { scheduledTime: 'desc' },
-        take: 7,
+        take: 30,
       },
     },
   });
@@ -35,7 +35,7 @@ export const getMedications = async (userId: string, params: { status?: string }
         medication.refillThreshold != null &&
         medication.currentStock <= medication.refillThreshold;
 
-      return { ...medication, adherencePct: adherence, needsRefill };
+      return { ...medication, adherencePct: adherence, adherence30Day: adherence, needsRefill };
     }),
   );
 
@@ -60,25 +60,31 @@ export const addMedication = async (userId: string, data: {
   notes?: string;
 }) => {
   const patient = await getPatient(userId);
+  const startDate = new Date(data.startDate);
+  const endDate = data.endDate ? new Date(data.endDate) : undefined;
+  if (endDate && endDate.getTime() < startDate.getTime()) {
+    throw ApiError.badRequest('INVALID_DATE_RANGE', 'Medication end date cannot be before start date');
+  }
+
   return prisma.medication.create({
     data: {
       patientId: patient.id,
-      name: data.name,
-      genericName: data.genericName,
-      dosage: data.dosage,
-      dosageUnit: data.dosageUnit,
-      frequency: data.frequency as any,
-      customFrequency: data.customFrequency,
+      name: data.name.trim(),
+      genericName: data.genericName?.trim(),
+      dosage: data.dosage.trim(),
+      dosageUnit: data.dosageUnit?.trim(),
+      frequency: data.frequency.toUpperCase() as any,
+      customFrequency: data.customFrequency?.trim(),
       timesOfDay: data.timesOfDay || [],
-      prescribedBy: data.prescribedBy,
-      prescribedFor: data.prescribedFor,
-      startDate: new Date(data.startDate),
-      endDate: data.endDate ? new Date(data.endDate) : undefined,
+      prescribedBy: data.prescribedBy?.trim(),
+      prescribedFor: data.prescribedFor?.trim(),
+      startDate,
+      endDate,
       status: 'ACTIVE',
       currentStock: data.currentStock,
       refillThreshold: data.refillThreshold ?? 7,
-      instructions: data.instructions,
-      notes: data.notes,
+      instructions: data.instructions?.trim(),
+      notes: data.notes?.trim(),
     },
   });
 };
@@ -105,10 +111,15 @@ export const updateMedication = async (
   return prisma.medication.update({
     where: { id: medicationId },
     data: {
-      ...data,
-      frequency: data.frequency as any,
-      status: data.status as any,
+      name: data.name?.trim(),
+      dosage: data.dosage?.trim(),
+      frequency: data.frequency ? data.frequency.toUpperCase() as any : undefined,
+      timesOfDay: data.timesOfDay,
+      status: data.status ? data.status.toUpperCase() as any : undefined,
+      currentStock: data.currentStock,
       endDate: data.endDate ? new Date(data.endDate) : undefined,
+      notes: data.notes?.trim(),
+      instructions: data.instructions?.trim(),
     },
   });
 };
@@ -120,7 +131,7 @@ export const deleteMedication = async (userId: string, medicationId: string) => 
 
   return prisma.medication.update({
     where: { id: medicationId },
-    data: { status: 'DISCONTINUED' },
+    data: { status: 'DISCONTINUED', endDate: medication.endDate ?? new Date() },
   });
 };
 
@@ -128,8 +139,8 @@ export const logMedicationDose = async (
   userId: string,
   medicationId: string,
   data: {
-    status: 'taken' | 'missed' | 'skipped';
-    scheduledTime: string;
+    status: 'taken' | 'missed' | 'skipped' | 'TAKEN' | 'MISSED' | 'SKIPPED';
+    scheduledTime?: string;
     takenAt?: string;
     notes?: string;
   },
@@ -137,8 +148,12 @@ export const logMedicationDose = async (
   const patient = await getPatient(userId);
   const medication = await prisma.medication.findFirst({ where: { id: medicationId, patientId: patient.id } });
   if (!medication) throw ApiError.notFound('Medication not found');
+  if (medication.status !== 'ACTIVE') {
+    throw ApiError.badRequest('MEDICATION_NOT_ACTIVE', 'Only active medications can have doses logged');
+  }
 
-  const scheduled = new Date(data.scheduledTime);
+  const status = data.status.toLowerCase() as 'taken' | 'missed' | 'skipped';
+  const scheduled = data.scheduledTime ? new Date(data.scheduledTime) : new Date();
   const existing = await prisma.medicationLog.findFirst({
     where: {
       medicationId,
@@ -149,35 +164,46 @@ export const logMedicationDose = async (
     },
   });
 
-  if (existing) {
-    return prisma.medicationLog.update({
-      where: { id: existing.id },
-      data: {
-        status: data.status,
-        takenAt: data.takenAt ? new Date(data.takenAt) : data.status === 'taken' ? new Date() : undefined,
-        notes: data.notes,
-      },
-    });
-  }
+  const takenAt = status === 'taken'
+    ? (data.takenAt ? new Date(data.takenAt) : new Date())
+    : null;
 
-  const log = await prisma.medicationLog.create({
-    data: {
-      medicationId,
-      scheduledTime: scheduled,
-      status: data.status,
-      takenAt: data.takenAt ? new Date(data.takenAt) : data.status === 'taken' ? new Date() : undefined,
-      notes: data.notes,
-    },
+  const result = await prisma.$transaction(async tx => {
+    const log = existing
+      ? await tx.medicationLog.update({
+          where: { id: existing.id },
+          data: { status, takenAt, notes: data.notes?.trim() },
+        })
+      : await tx.medicationLog.create({
+          data: {
+            medicationId,
+            scheduledTime: scheduled,
+            status,
+            takenAt,
+            notes: data.notes?.trim(),
+          },
+        });
+
+    if (medication.currentStock != null) {
+      const wasTaken = existing?.status === 'taken';
+      const isTaken = status === 'taken';
+      if (!wasTaken && isTaken) {
+        await tx.medication.update({
+          where: { id: medicationId },
+          data: { currentStock: Math.max(0, medication.currentStock - 1) },
+        });
+      } else if (wasTaken && !isTaken) {
+        await tx.medication.update({
+          where: { id: medicationId },
+          data: { currentStock: medication.currentStock + 1 },
+        });
+      }
+    }
+
+    return log;
   });
 
-  if (data.status === 'taken' && medication.currentStock != null) {
-    await prisma.medication.update({
-      where: { id: medicationId },
-      data: { currentStock: Math.max(0, medication.currentStock - 1) },
-    });
-  }
-
-  return log;
+  return result;
 };
 
 export const getMedicationLogs = async (
@@ -217,16 +243,22 @@ export const addTherapy = async (userId: string, data: {
   notes?: string;
 }) => {
   const patient = await getPatient(userId);
+  const startDate = new Date(data.startDate);
+  const endDate = data.endDate ? new Date(data.endDate) : undefined;
+  if (endDate && endDate.getTime() < startDate.getTime()) {
+    throw ApiError.badRequest('INVALID_DATE_RANGE', 'Therapy end date cannot be before start date');
+  }
+
   return prisma.therapy.create({
     data: {
       patientId: patient.id,
-      type: data.type,
-      plan: data.plan,
-      targetValue: data.targetValue,
-      currentValue: data.currentValue,
-      startDate: new Date(data.startDate),
-      endDate: data.endDate ? new Date(data.endDate) : undefined,
-      notes: data.notes,
+      type: data.type.trim(),
+      plan: data.plan.trim(),
+      targetValue: data.targetValue?.trim(),
+      currentValue: data.currentValue?.trim(),
+      startDate,
+      endDate,
+      notes: data.notes?.trim(),
     },
   });
 };
