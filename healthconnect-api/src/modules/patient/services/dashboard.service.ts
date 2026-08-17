@@ -19,7 +19,7 @@ export const getDashboardOverview = async (userId: string) => {
     activeConditions,
     medicationAdherence,
     communityCount,
-    pendingReports,
+    totalReports,
   ] = await Promise.all([
     calculateHealthScore(patientId),
     prisma.appointment.findMany({
@@ -62,13 +62,18 @@ export const getDashboardOverview = async (userId: string) => {
 
   const totalLogs = medicationAdherence.reduce((sum, group) => sum + group._count.status, 0);
   const takenLogs = medicationAdherence.find(group => group.status === 'taken')?._count.status ?? 0;
-  const adherencePct = totalLogs > 0 ? Math.round((takenLogs / totalLogs) * 100) : 100;
+  const adherencePct = totalLogs > 0 ? Math.round((takenLogs / totalLogs) * 100) : null;
 
   const refillAlerts = activeMedications.filter(
     medication => medication.currentStock != null && medication.refillThreshold != null && medication.currentStock <= medication.refillThreshold,
   );
 
-  const insight = buildAiInsight(healthScore, adherencePct, recentSymptoms.length, upcomingAppointments.length);
+  const insight = buildPatientInsight(
+    adherencePct,
+    activeMedications.length,
+    recentSymptoms.length,
+    upcomingAppointments.length,
+  );
 
   return {
     profile: {
@@ -93,7 +98,7 @@ export const getDashboardOverview = async (userId: string) => {
       recentSymptomsCount: recentSymptoms.length,
       unreadNotifications,
       communitiesJoined: communityCount,
-      totalReports: pendingReports,
+      totalReports,
       medicationAdherencePct: adherencePct,
       refillAlertsCount: refillAlerts.length,
     },
@@ -106,34 +111,38 @@ export const getDashboardOverview = async (userId: string) => {
   };
 };
 
-const buildAiInsight = (
-  healthScore: { score: number; medicationAdherence: number; symptomFrequency: number },
-  adherencePct: number,
+const buildPatientInsight = (
+  adherencePct: number | null,
+  activeMedicationCount: number,
   symptomsLast7Days: number,
   upcomingAppts: number,
 ): string => {
   const parts: string[] = [];
 
-  if (adherencePct >= 85) {
-    parts.push(`Your medication adherence is at ${adherencePct}% — excellent consistency.`);
+  if (activeMedicationCount === 0) {
+    parts.push('No active medications are currently recorded.');
+  } else if (adherencePct == null) {
+    parts.push('Active medications are recorded, but no doses have been logged in the last 30 days.');
+  } else if (adherencePct >= 85) {
+    parts.push(`Medication adherence is ${adherencePct}% over the logged doses in the last 30 days.`);
   } else if (adherencePct >= 60) {
-    parts.push(`Your medication adherence is at ${adherencePct}%. Try setting reminders for missed doses.`);
+    parts.push(`Medication adherence is ${adherencePct}% over logged doses. A reminder may help with missed doses.`);
   } else {
-    parts.push(`Medication adherence is at ${adherencePct}%. Missing doses regularly can affect your health score significantly.`);
+    parts.push(`Medication adherence is ${adherencePct}% over logged doses. Review missed doses and your medication schedule.`);
   }
 
   if (symptomsLast7Days === 0) {
-    parts.push('No new symptoms logged this week — keep it up.');
+    parts.push('No symptoms were logged this week.');
   } else if (symptomsLast7Days <= 2) {
-    parts.push(`You logged ${symptomsLast7Days} symptom(s) this week. Monitor for any changes.`);
+    parts.push(`${symptomsLast7Days} symptom entr${symptomsLast7Days === 1 ? 'y was' : 'ies were'} logged this week; continue monitoring for changes.`);
   } else {
-    parts.push(`You logged ${symptomsLast7Days} symptoms this week. Consider consulting your doctor if they persist.`);
+    parts.push(`${symptomsLast7Days} symptom entries were logged this week; consider clinical review if symptoms are persistent, severe or worsening.`);
   }
 
   if (upcomingAppts > 0) {
-    parts.push(`You have ${upcomingAppts} upcoming appointment${upcomingAppts > 1 ? 's' : ''} scheduled.`);
+    parts.push(`${upcomingAppts} upcoming appointment${upcomingAppts > 1 ? 's are' : ' is'} scheduled.`);
   } else {
-    parts.push('No upcoming appointments. Regular check-ups help maintain your health score.');
+    parts.push('No upcoming appointments are scheduled.');
   }
 
   return parts.join(' ');
