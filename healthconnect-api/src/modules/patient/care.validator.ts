@@ -32,7 +32,7 @@ export const symptomUpdateSchema = nonEmptyUpdate(z.object({
 }));
 
 export const vitalCreateSchema = z.object({
-  type: z.enum(['bp', 'heart_rate', 'blood_sugar', 'hba1c', 'weight', 'temperature', 'spo2']),
+  type: z.enum(['bp', 'heart_rate', 'blood_sugar', 'hba1c', 'weight', 'temperature', 'spo2', 'cholesterol']),
   value: z.string().trim().min(1).max(100),
   unit: z.string().trim().min(1).max(40),
   systolic: z.number().int().min(40).max(300).optional(),
