@@ -11,12 +11,12 @@ export const symptomCreateSchema = z.object({
   name: z.string().trim().min(1, 'Symptom name is required').max(150),
   severity: z.number().int().min(1).max(10),
   loggedAt: dateInput.optional(),
-  startedAt: dateInput.optional(), // legacy UI alias; service normalizes this to loggedAt
+  startedAt: dateInput.optional(),
   triggers: z.union([
     z.array(z.string().trim().min(1).max(120)).max(20),
-    z.string().trim().max(1000), // legacy comma-separated UI payload
+    z.string().trim().max(1000),
   ]).optional(),
-  bodyPart: z.string().trim().max(120).optional(), // accepted for backward compatibility; not persisted separately
+  bodyPart: z.string().trim().max(120).optional(),
   notes: optionalText(),
 }).strict();
 
@@ -89,7 +89,7 @@ export const medicationUpdateSchema = z.object({
     'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'AS_NEEDED', 'CUSTOM',
   ]).optional(),
   timesOfDay: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).max(12).optional(),
-  status: z.enum(['ACTIVE', 'PAUSED', 'COMPLETED', 'DISCONTINUED']).optional(),
+  status: z.enum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'DISCONTINUED']).optional(),
   currentStock: z.number().int().min(0).max(100000).optional(),
   endDate: dateInput.optional(),
   notes: z.string().trim().max(2000).optional(),
