@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as PatientController from './controller';
+import * as TherapyController from './therapy.controller';
 import * as HealthScoreController from '../health-score/controller';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roleGuard';
@@ -29,9 +30,11 @@ import {
   medicationDoseSchema,
   medicationUpdateSchema,
   reportShareSchema,
+  reportUploadSchema,
   symptomCreateSchema,
   symptomUpdateSchema,
   therapyCreateSchema,
+  therapyUpdateSchema,
   vitalCreateSchema,
 } from './completion.validator';
 
@@ -89,10 +92,11 @@ router.get('/patient/medications/:medicationId/logs', ...patient, PatientControl
 
 router.get('/patient/therapies', ...patient, PatientController.getTherapies);
 router.post('/patient/therapies', ...patient, validate(therapyCreateSchema), PatientController.addTherapy);
+router.put('/patient/therapies/:therapyId', ...patient, validate(therapyUpdateSchema), TherapyController.updateTherapy);
 router.delete('/patient/therapies/:therapyId', ...patient, PatientController.deleteTherapy);
 
 router.get('/patient/reports', ...patient, PatientController.getReports);
-router.post('/patient/reports', ...patient, upload.single('file'), PatientController.uploadReport);
+router.post('/patient/reports', ...patient, upload.single('file'), validate(reportUploadSchema), PatientController.uploadReport);
 router.delete('/patient/reports/:reportId', ...patient, PatientController.deleteReport);
 router.post('/patient/reports/:reportId/share', ...patient, validate(reportShareSchema), PatientController.shareReport);
 router.delete('/patient/reports/:reportId/share/:doctorId', ...patient, PatientController.revokeReportShare);
