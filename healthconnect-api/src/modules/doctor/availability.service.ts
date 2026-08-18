@@ -11,11 +11,20 @@ export type AvailabilitySession = {
 
 export type WeeklyAvailability = Record<(typeof DOCTOR_AVAILABILITY_DAYS)[number], AvailabilitySession[]>;
 
+type AvailabilityRow = {
+  id?: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  slotDuration: number;
+  isActive?: boolean;
+};
+
 const SHORT_DAY: Record<number, string> = {
   0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat',
 };
 
-const SHORT_TO_INDEX: Record<string, number> = {
+const DAY_TO_INDEX: Record<string, number> = {
   sun: 0, sunday: 0,
   mon: 1, monday: 1,
   tue: 2, tues: 2, tuesday: 2,
@@ -34,12 +43,12 @@ const emptyWeekly = (): WeeklyAvailability => ({
   Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [],
 });
 
-function legacyJsonToRows(schedule: unknown, defaultSlotDuration = 30) {
-  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return [] as any[];
-  const rows: any[] = [];
+function legacyJsonToRows(schedule: unknown, defaultSlotDuration = 30): AvailabilityRow[] {
+  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return [];
+  const rows: AvailabilityRow[] = [];
 
   for (const [rawDay, rawRanges] of Object.entries(schedule as Record<string, unknown>)) {
-    const dayOfWeek = SHORT_TO_INDEX[rawDay.trim().toLowerCase()];
+    const dayOfWeek = DAY_TO_INDEX[rawDay.trim().toLowerCase()];
     if (dayOfWeek === undefined || !Array.isArray(rawRanges)) continue;
 
     for (const rawRange of rawRanges) {
@@ -55,7 +64,7 @@ function legacyJsonToRows(schedule: unknown, defaultSlotDuration = 30) {
   return rows;
 }
 
-function rowsToWeekly(rows: Array<{ dayOfWeek: number; startTime: string; endTime: string; slotDuration: number; isActive?: boolean }>): WeeklyAvailability {
+function rowsToWeekly(rows: AvailabilityRow[]): WeeklyAvailability {
   const weekly = emptyWeekly();
   for (const row of rows) {
     if (row.dayOfWeek < 0 || row.dayOfWeek > 6 || row.isActive === false) continue;
@@ -68,8 +77,8 @@ function rowsToWeekly(rows: Array<{ dayOfWeek: number; startTime: string; endTim
   return weekly;
 }
 
-function weeklyToRows(weekly: Partial<WeeklyAvailability>) {
-  const rows: Array<{ dayOfWeek: number; startTime: string; endTime: string; slotDuration: number; isActive: boolean }> = [];
+function weeklyToRows(weekly: Partial<WeeklyAvailability>): AvailabilityRow[] {
+  const rows: AvailabilityRow[] = [];
   DOCTOR_AVAILABILITY_DAYS.forEach((day, dayOfWeek) => {
     for (const session of weekly[day] ?? []) {
       rows.push({
@@ -133,7 +142,7 @@ async function resolveDoctorProfile(userId: string) {
   });
 }
 
-export async function getEffectiveAvailabilityRows(doctorId: string) {
+export async function getEffectiveAvailabilityRows(doctorId: string): Promise<AvailabilityRow[] | null> {
   const [profile, rows] = await Promise.all([
     prisma.doctorProfile.findUnique({
       where: { id: doctorId },
@@ -148,8 +157,8 @@ export async function getEffectiveAvailabilityRows(doctorId: string) {
   if (!profile) return null;
   if (rows.length) return rows;
 
-  // Backward compatibility for the existing seeded JSON schedule. New saves always
-  // persist canonical DoctorAvailability rows and keep this JSON synchronized.
+  // Existing seeded doctors store schedules on DoctorProfile JSON. Keep them
+  // bookable without data migration; the next Doctor save materializes rows.
   return legacyJsonToRows(profile.availabilitySchedule);
 }
 
@@ -165,7 +174,6 @@ export async function getOwnDoctorAvailability(userId: string) {
     timezone: BUSINESS_TIME_ZONE,
     configured: rows.length > 0,
     weeklySchedule,
-    // Compatibility with the existing Doctor Availability page.
     slots: weeklyToLegacySlots(weeklySchedule),
     fees: {
       inPerson: profile.consultationFee,
@@ -181,7 +189,7 @@ export async function getOwnDoctorAvailability(userId: string) {
     isAvailableOnline: profile.isAvailableOnline,
     isAcceptingNewPatients: profile.isAcceptingNewPatients,
     availability: rows.map(row => ({
-      id: (row as any).id ?? null,
+      id: row.id ?? null,
       dayOfWeek: row.dayOfWeek,
       startTime: row.startTime,
       endTime: row.endTime,
@@ -222,7 +230,14 @@ export async function updateOwnDoctorAvailability(userId: string, input: any) {
       await tx.doctorAvailability.deleteMany({ where: { doctorId: profile.id } });
       if (rows.length) {
         await tx.doctorAvailability.createMany({
-          data: rows.map(row => ({ ...row, doctorId: profile.id })),
+          data: rows.map(row => ({
+            doctorId: profile.id,
+            dayOfWeek: row.dayOfWeek,
+            startTime: row.startTime,
+            endTime: row.endTime,
+            slotDuration: row.slotDuration,
+            isActive: row.isActive !== false,
+          })),
         });
       }
       profileData.availabilitySchedule = weeklyToLegacyJson(weeklySchedule);
@@ -258,12 +273,10 @@ function istParts(date: Date) {
     hourCycle: 'h23',
   }).formatToParts(date);
 
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? '';
-  const dayName = get('weekday').toLowerCase();
-  const dayOfWeek = SHORT_TO_INDEX[dayName];
-  const hour = Number(get('hour'));
-  const minute = Number(get('minute'));
-  return { dayOfWeek, minuteOfDay: hour * 60 + minute };
+  const get = (type: string) => parts.find(part => part.type === type)?.value ?? '';
+  const dayOfWeek = DAY_TO_INDEX[get('weekday').toLowerCase()];
+  const minuteOfDay = Number(get('hour')) * 60 + Number(get('minute'));
+  return { dayOfWeek, minuteOfDay };
 }
 
 export async function checkDoctorAvailability(input: {
@@ -278,7 +291,6 @@ export async function checkDoctorAvailability(input: {
       id: true,
       offersInPerson: true,
       offersVideoConsult: true,
-      isAvailableOnline: true,
     },
   });
   if (!profile) return { exists: false, available: false, reason: 'Doctor not found.' };
@@ -286,7 +298,7 @@ export async function checkDoctorAvailability(input: {
   if (input.appointmentType === 'IN_PERSON' && !profile.offersInPerson) {
     return { exists: true, available: false, reason: 'This doctor is not accepting in-person appointments.' };
   }
-  if (input.appointmentType === 'TELECONSULT' && !profile.offersVideoConsult && !profile.isAvailableOnline) {
+  if (input.appointmentType === 'TELECONSULT' && !profile.offersVideoConsult) {
     return { exists: true, available: false, reason: 'This doctor is not offering video consultations.' };
   }
 
@@ -296,8 +308,8 @@ export async function checkDoctorAvailability(input: {
   }
 
   const { dayOfWeek, minuteOfDay } = istParts(input.scheduledAt);
-  if (dayOfWeek === undefined) {
-    return { exists: true, available: false, reason: 'Unable to resolve appointment day.' };
+  if (dayOfWeek === undefined || !Number.isFinite(minuteOfDay)) {
+    return { exists: true, available: false, reason: 'Unable to resolve appointment time.' };
   }
 
   const requestedEnd = minuteOfDay + input.durationMinutes;
@@ -306,8 +318,8 @@ export async function checkDoctorAvailability(input: {
     const sessionStart = timeToMinutes(row.startTime);
     const sessionEnd = timeToMinutes(row.endTime);
     const slotDuration = row.slotDuration || 30;
-    const aligned = (minuteOfDay - sessionStart) >= 0 && (minuteOfDay - sessionStart) % slotDuration === 0;
-    return aligned && minuteOfDay >= sessionStart && requestedEnd <= sessionEnd;
+    const aligned = minuteOfDay >= sessionStart && (minuteOfDay - sessionStart) % slotDuration === 0;
+    return aligned && requestedEnd <= sessionEnd;
   });
 
   if (!matchingSession) {
