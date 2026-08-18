@@ -11,7 +11,6 @@ import {
 } from '../validators/hospital.validator';
 
 const router = Router();
-const hospitalOnly = [authenticate, requireHospital] as const;
 
 // Public hospital discovery. Static paths must precede /:id.
 router.get('/', hospitalController.searchHospitals);
@@ -20,20 +19,20 @@ router.get('/nearest', hospitalController.getNearestHospitals);
 
 // Hospital portal. Keep these before public /:id so /hospitals/doctors is not
 // accidentally interpreted as a public hospital id named "doctors".
-router.get('/dashboard', ...hospitalOnly, hospitalController.getDashboard);
-router.get('/profile/me', ...hospitalOnly, hospitalController.getMyProfile);
-router.put('/profile/me', ...hospitalOnly, validate(hospitalProfileUpdateSchema), hospitalController.updateMyProfile);
+router.get('/dashboard', authenticate, requireHospital, hospitalController.getDashboard);
+router.get('/profile/me', authenticate, requireHospital, hospitalController.getMyProfile);
+router.put('/profile/me', authenticate, requireHospital, validate(hospitalProfileUpdateSchema), hospitalController.updateMyProfile);
 
-router.get('/doctors', ...hospitalOnly, hospitalController.getMyDoctors);
-router.post('/doctors/invite', ...hospitalOnly, validate(hospitalDoctorInviteSchema), hospitalController.inviteDoctor);
-router.delete('/doctors/:doctorId', ...hospitalOnly, hospitalController.removeDoctor);
+router.get('/doctors', authenticate, requireHospital, hospitalController.getMyDoctors);
+router.post('/doctors/invite', authenticate, requireHospital, validate(hospitalDoctorInviteSchema), hospitalController.inviteDoctor);
+router.delete('/doctors/:doctorId', authenticate, requireHospital, hospitalController.removeDoctor);
 
-router.get('/departments', ...hospitalOnly, hospitalController.getMyDepartments);
-router.post('/departments', ...hospitalOnly, validate(hospitalDepartmentCreateSchema), hospitalController.createDepartment);
-router.put('/departments/:id', ...hospitalOnly, validate(hospitalDepartmentUpdateSchema), hospitalController.updateDepartment);
-router.delete('/departments/:id', ...hospitalOnly, hospitalController.deleteDepartment);
+router.get('/departments', authenticate, requireHospital, hospitalController.getMyDepartments);
+router.post('/departments', authenticate, requireHospital, validate(hospitalDepartmentCreateSchema), hospitalController.createDepartment);
+router.put('/departments/:id', authenticate, requireHospital, validate(hospitalDepartmentUpdateSchema), hospitalController.updateDepartment);
+router.delete('/departments/:id', authenticate, requireHospital, hospitalController.deleteDepartment);
 
-router.get('/appointments', ...hospitalOnly, hospitalController.getMyAppointments);
+router.get('/appointments', authenticate, requireHospital, hospitalController.getMyAppointments);
 
 // Public detail paths.
 router.get('/:id/doctors', hospitalController.getHospitalDoctors);
