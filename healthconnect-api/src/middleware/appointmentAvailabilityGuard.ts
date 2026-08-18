@@ -9,7 +9,9 @@ export async function enforceDoctorAvailability(req: Request, res: Response, nex
     let durationMinutes = 30;
     let appointmentType: string | undefined;
 
-    if (req.method === 'POST' && req.baseUrl.endsWith('/appointments')) {
+    // This middleware is mounted only on appointment booking and rescheduling
+    // routes. POST is a new booking; PUT/PATCH are an existing appointment.
+    if (req.method === 'POST') {
       doctorId = req.body.doctorId;
       scheduledAt = req.body.scheduledAt ? new Date(req.body.scheduledAt) : undefined;
       durationMinutes = req.body.durationMinutes ?? 30;
