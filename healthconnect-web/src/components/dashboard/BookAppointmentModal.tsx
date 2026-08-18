@@ -1,10 +1,7 @@
 'use client';
 // src/components/dashboard/BookAppointmentModal.tsx
-// FIXED:
-//  1. HOME_VISIT added as third consultation type
-//  2. Doctor search response parsing fixed (data.data.doctors vs data.data)
-//  3. Meeting link auto-generated for TELECONSULT using appointment id
-//  4. All 3 types always shown — doctor can configure which they offer
+// Patient booking uses the same canonical DoctorAvailability rows managed by the
+// Doctor portal. No invented fallback slots are shown when a schedule is absent.
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
@@ -12,7 +9,7 @@ import { api } from '@/lib/api';
 const C = {
   bg:       '#0C1628',
   card:     '#111E33',
-  card2:    '#162236',
+  card2:     '#162236',
   border:   'rgba(20,184,166,0.15)',
   borderHi: 'rgba(20,184,166,0.35)',
   teal:     '#14B8A6',
@@ -41,6 +38,13 @@ function minutesToLabel(cur: number): string {
   const h = Math.floor(cur / 60);
   const m = cur % 60;
   return `${h > 12 ? h - 12 : h === 0 ? 12 : h}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+function labelToMinutes(label: string): number {
+  const [timePart, period] = label.split(' ');
+  const [h, m] = timePart.split(':').map(Number);
+  const hour24 = period === 'PM' && h !== 12 ? h + 12 : period === 'AM' && h === 12 ? 0 : h;
+  return hour24 * 60 + m;
 }
 
 function generateSlots(start = '09:00', end = '17:00', duration = 30): string[] {
@@ -89,7 +93,8 @@ const SPECIALTIES = [
   'ENT','Ophthalmology','Urology','Gastroenterology','Pulmonology','Nephrology',
 ];
 
-// Consultation type definitions — all 3 always available
+// HOME_VISIT remains available for doctor confirmation because there is no
+// separate home-visit capability flag in the current DoctorProfile schema.
 const CONSULT_TYPES = [
   { v: 'IN_PERSON',   l: '🏥 In Person',  desc: 'Visit the clinic' },
   { v: 'TELECONSULT', l: '📹 Video Call',  desc: 'Online consultation' },
@@ -114,6 +119,19 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
   const [availability, setAvailability] = useState<any[]>([]);
   const [bookedSlots,  setBookedSlots]  = useState<any[]>([]);
   const [loadingAvail, setLoadingAvail] = useState(false);
+  const [availabilityConfigured, setAvailabilityConfigured] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
+  const [consultationModes, setConsultationModes] = useState({
+    offersInPerson: true,
+    offersVideoConsult: false,
+    offersAudioConsult: false,
+    offersChatConsult: false,
+  });
+  const [availabilityFees, setAvailabilityFees] = useState<{ inPerson: number|null; video: number|null; phone: number|null }>({
+    inPerson: null,
+    video: null,
+    phone: null,
+  });
 
   const days = getNext14Days();
 
@@ -122,7 +140,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
     if (preselectedDoctorId) {
       api.get(`/public/doctors/${preselectedDoctorId}`)
         .then((r: any) => {
-          // Handle both response shapes
           const doc = r?.data?.data?.doctor ?? r?.data?.data ?? r?.data?.doctor ?? r?.data;
           if (doc?.id) {
             setSelectedDoc(doc);
@@ -144,7 +161,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
       if (search)    params.set('search', search);
       if (specialty) params.set('specialty', specialty);
       const r: any = await api.get(`/public/doctors?${params}`);
-      // FIX: correct response shape — data.data.doctors or data.data (array) or data.doctors
       const raw = r?.data?.data?.doctors ?? r?.data?.data ?? r?.data?.doctors ?? r?.data ?? [];
       setDoctors(Array.isArray(raw) ? raw : []);
     } catch {
@@ -159,44 +175,97 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
     return () => clearTimeout(t);
   }, [search, specialty]);
 
-  // ── Load availability when entering step 2 ──────────────────────────────
+  // ── Load canonical availability when entering step 2 ────────────────────
   useEffect(() => {
     if (step !== 2 || !selectedDoc) return;
     setLoadingAvail(true);
+    setAvailabilityError('');
+    setSelectedDate(null);
+    setSelectedTime('');
     api.get(`/public/doctors/${selectedDoc.id}/availability`)
       .then((r: any) => {
-        setAvailability(r?.data?.data?.availability ?? r?.data?.availability ?? []);
-        setBookedSlots(r?.data?.data?.bookedSlots ?? r?.data?.bookedSlots ?? []);
+        const data = r?.data?.data ?? r?.data ?? {};
+        const rows = Array.isArray(data.availability) ? data.availability : [];
+        setAvailability(rows);
+        setBookedSlots(Array.isArray(data.bookedSlots) ? data.bookedSlots : []);
+        setAvailabilityConfigured(Boolean(data.configured && rows.some((row: any) => row.isActive !== false)));
+        setConsultationModes({
+          offersInPerson: data.consultationModes?.offersInPerson !== false,
+          offersVideoConsult: Boolean(data.consultationModes?.offersVideoConsult),
+          offersAudioConsult: Boolean(data.consultationModes?.offersAudioConsult),
+          offersChatConsult: Boolean(data.consultationModes?.offersChatConsult),
+        });
+        setAvailabilityFees({
+          inPerson: data.fees?.inPerson ?? null,
+          video: data.fees?.video ?? null,
+          phone: data.fees?.phone ?? null,
+        });
+        setApptType(previous => {
+          if (previous === 'IN_PERSON' && data.consultationModes?.offersInPerson !== false) return previous;
+          if (previous === 'TELECONSULT' && data.consultationModes?.offersVideoConsult) return previous;
+          if (data.consultationModes?.offersInPerson !== false) return 'IN_PERSON';
+          if (data.consultationModes?.offersVideoConsult) return 'TELECONSULT';
+          return 'HOME_VISIT';
+        });
       })
-      .catch(() => {
+      .catch((e: any) => {
         setAvailability([]);
         setBookedSlots([]);
+        setAvailabilityConfigured(false);
+        setAvailabilityError(e?.response?.data?.message ?? 'Unable to load this doctor’s availability.');
       })
       .finally(() => setLoadingAvail(false));
   }, [step, selectedDoc]);
 
-  const getSlotsForDate = (date: Date): { label: string; booked: boolean }[] => {
-    const dayOfWeek = date.getDay();
-    const avail = availability.find(a => a.dayOfWeek === dayOfWeek && a.isActive);
-    const rawSlots = avail
-      ? generateSlots(avail.startTime, avail.endTime, avail.slotDuration ?? 30)
-      : generateSlots(); // fallback: 9am–5pm every 30min
-
-    return rawSlots.map(label => {
-      const slotDate = slotToDate(date, label);
-      const isBooked = bookedSlots.some(b => {
-        const bStart = new Date(b.scheduledAt);
-        const bEnd   = new Date(bStart.getTime() + (b.durationMinutes ?? 30) * 60_000);
-        return slotDate >= bStart && slotDate < bEnd;
-      });
-      return { label, booked: isBooked };
-    });
+  const isConsultationTypeEnabled = (type: 'IN_PERSON'|'TELECONSULT'|'HOME_VISIT') => {
+    if (type === 'IN_PERSON') return consultationModes.offersInPerson;
+    if (type === 'TELECONSULT') return consultationModes.offersVideoConsult;
+    return true;
   };
+
+  const getSlotsForDate = (date: Date): { label: string; booked: boolean; duration: number }[] => {
+    const dayOfWeek = date.getDay();
+    const sessions = availability
+      .filter(a => a.dayOfWeek === dayOfWeek && a.isActive !== false)
+      .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+    const byLabel = new Map<string, { label: string; booked: boolean; duration: number }>();
+
+    for (const session of sessions) {
+      const duration = Number(session.slotDuration ?? 30);
+      for (const label of generateSlots(session.startTime, session.endTime, duration)) {
+        const slotDate = slotToDate(date, label);
+        const slotEnd = new Date(slotDate.getTime() + duration * 60_000);
+        const booked = bookedSlots.some(b => {
+          const bStart = new Date(b.scheduledAt);
+          const bEnd = new Date(bStart.getTime() + (b.durationMinutes ?? 30) * 60_000);
+          return slotDate < bEnd && slotEnd > bStart;
+        });
+        byLabel.set(label, { label, booked, duration });
+      }
+    }
+
+    return [...byLabel.values()].sort((a, b) => labelToMinutes(a.label) - labelToMinutes(b.label));
+  };
+
+  const selectedSlotDuration = selectedDate && selectedTime
+    ? getSlotsForDate(selectedDate.date).find(slot => slot.label === selectedTime)?.duration ?? 30
+    : 30;
+
+  const selectedFee = apptType === 'TELECONSULT'
+    ? availabilityFees.video
+    : apptType === 'IN_PERSON'
+      ? availabilityFees.inPerson
+      : null;
 
   // ── Submit booking ───────────────────────────────────────────────────────
   const handleBook = async () => {
     if (!selectedDoc || !selectedDate || !selectedTime) {
       setError('Please select a doctor, date, and time slot.');
+      return;
+    }
+    if (!isConsultationTypeEnabled(apptType)) {
+      setError('The selected consultation type is not offered by this doctor.');
       return;
     }
     if (!reason.trim()) {
@@ -211,7 +280,7 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
       const payload = {
         doctorId:        selectedDoc.id,
         scheduledAt:     scheduledAt.toISOString(),
-        durationMinutes: 30,
+        durationMinutes: selectedSlotDuration,
         type:            apptType,
         reasonForVisit:  reason.trim(),
         symptoms:        symptoms.trim()
@@ -222,7 +291,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
       const r: any = await api.post('/appointments', payload);
       const appt = r?.data?.data ?? payload;
 
-      // Auto-generate Jitsi link for video consultations
       const meetingLink = apptType === 'TELECONSULT'
         ? (appt.meetingLink ?? `https://meet.jit.si/hc-${appt.id ?? Date.now()}`)
         : undefined;
@@ -242,7 +310,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
       setBookedAppt(confirmed);
       setStep(4);
       onSuccess?.(confirmed);
-      // Notify all dashboard components
       window.dispatchEvent(new CustomEvent('hcAppointmentBooked'));
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.response?.data?.error ?? 'Booking failed. Please try again.';
@@ -340,7 +407,7 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                       </div>
                       <div style={{ textAlign:'right', flexShrink:0 }}>
                         {(doc.averageRating ?? doc.rating) > 0 && <div style={{ fontSize:13, fontWeight:700, color:C.amber, marginBottom:4 }}>★ {(doc.averageRating ?? doc.rating).toFixed(1)}</div>}
-                        {(doc.consultationFee ?? doc.fee) && <div style={{ fontSize:13, color:C.teal, fontWeight:700 }}>₹{doc.consultationFee ?? doc.fee}</div>}
+                        {(doc.consultationFee ?? doc.fee) != null && <div style={{ fontSize:13, color:C.teal, fontWeight:700 }}>₹{doc.consultationFee ?? doc.fee}</div>}
                         {doc.isAvailableOnline && <div style={{ fontSize:10, color:C.green, marginTop:3 }}>● Online Now</div>}
                       </div>
                     </div>
@@ -353,7 +420,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
           {/* ── STEP 2: Date & Time ── */}
           {step === 2 && selectedDoc && (
             <>
-              {/* Doctor summary */}
               <div style={{ padding:'14px 16px', borderRadius:12, border:`1px solid ${C.borderHi}`, background:C.tealGlow, display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
                 <div style={{ width:44, height:44, borderRadius:'50%', background:`linear-gradient(135deg,${C.tealDk},${C.teal})`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👨‍⚕️</div>
                 <div style={{ flex:1 }}>
@@ -363,20 +429,35 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                 <button onClick={() => { setSelectedDoc(null); setStep(1); }} style={{ background:'none', border:`1px solid ${C.border}`, color:C.txt2, cursor:'pointer', fontSize:12, padding:'4px 10px', borderRadius:6 }}>Change →</button>
               </div>
 
-              {/* Consultation type — all 3 shown */}
+              {availabilityError && (
+                <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:10, background:'rgba(244,63,94,0.08)', border:'1px solid rgba(244,63,94,0.2)', color:C.rose, fontSize:12 }}>
+                  ⚠️ {availabilityError}
+                </div>
+              )}
+
+              {!loadingAvail && !availabilityError && !availabilityConfigured && (
+                <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:10, background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)', color:C.amber, fontSize:12 }}>
+                  This doctor has not configured bookable availability yet. Please choose another doctor or check again later.
+                </div>
+              )}
+
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:10 }}>Consultation Type</div>
                 <div style={{ display:'flex', gap:8 }}>
-                  {CONSULT_TYPES.map(t => (
-                    <button
-                      key={t.v}
-                      onClick={() => setApptType(t.v)}
-                      style={{ flex:1, padding:'10px 8px', borderRadius:10, border:`1px solid ${apptType===t.v ? C.teal : C.border}`, background:apptType===t.v ? C.tealGlow : 'transparent', color:apptType===t.v ? C.teal : C.txt2, fontSize:12, fontWeight:apptType===t.v ? 700 : 400, cursor:'pointer', transition:'all 0.15s', textAlign:'center' as const }}
-                    >
-                      <div style={{ marginBottom:3 }}>{t.l}</div>
-                      <div style={{ fontSize:10, opacity:0.7 }}>{t.desc}</div>
-                    </button>
-                  ))}
+                  {CONSULT_TYPES.map(t => {
+                    const enabled = isConsultationTypeEnabled(t.v);
+                    return (
+                      <button
+                        key={t.v}
+                        onClick={() => enabled && setApptType(t.v)}
+                        disabled={!enabled}
+                        style={{ flex:1, padding:'10px 8px', borderRadius:10, border:`1px solid ${apptType===t.v && enabled ? C.teal : C.border}`, background:apptType===t.v && enabled ? C.tealGlow : 'transparent', color:apptType===t.v && enabled ? C.teal : enabled ? C.txt2 : C.txt3, fontSize:12, fontWeight:apptType===t.v && enabled ? 700 : 400, cursor:enabled ? 'pointer' : 'not-allowed', transition:'all 0.15s', textAlign:'center' as const, opacity:enabled ? 1 : 0.45 }}
+                      >
+                        <div style={{ marginBottom:3 }}>{t.l}</div>
+                        <div style={{ fontSize:10, opacity:0.7 }}>{enabled ? t.desc : 'Not offered'}</div>
+                      </button>
+                    );
+                  })}
                 </div>
                 {apptType === 'HOME_VISIT' && (
                   <div style={{ marginTop:8, padding:'8px 12px', borderRadius:8, background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)', fontSize:12, color:'#D97706' }}>
@@ -385,15 +466,13 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                 )}
               </div>
 
-              {/* Date picker */}
               <div style={{ marginBottom:20 }}>
                 <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:10 }}>Select Date</div>
                 <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4 }}>
                   {days.map((day, i) => {
-                    const isSunday = day.date.getDay() === 0;
                     const sel = selectedDate?.label === day.label;
-                    const hasAvail = availability.length === 0 || availability.some(a => a.dayOfWeek === day.date.getDay() && a.isActive);
-                    const disabled = isSunday || !hasAvail;
+                    const hasAvail = availability.some(a => a.dayOfWeek === day.date.getDay() && a.isActive !== false);
+                    const disabled = loadingAvail || !availabilityConfigured || !hasAvail;
                     return (
                       <button key={i} onClick={() => { if (!disabled) { setSelectedDate(day); setSelectedTime(''); } }} disabled={disabled}
                         style={{ flexShrink:0, width:60, padding:'10px 6px', borderRadius:12, border:`1px solid ${sel ? C.teal : C.border}`, background:sel ? C.tealGlow : disabled ? 'transparent' : C.card, color:sel ? C.teal : disabled ? C.txt3 : C.txt, cursor:disabled ? 'not-allowed' : 'pointer', textAlign:'center', opacity:disabled ? 0.35 : 1, transition:'all 0.15s' }}>
@@ -406,7 +485,6 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                 </div>
               </div>
 
-              {/* Time slots */}
               {selectedDate && (
                 <div style={{ marginBottom:20 }}>
                   <div style={{ fontSize:11, color:C.txt2, fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', marginBottom:10 }}>
@@ -414,13 +492,15 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                   </div>
                   {loadingAvail ? (
                     <div style={{ color:C.txt2, fontSize:13, padding:16, textAlign:'center' }}>Loading availability…</div>
+                  ) : getSlotsForDate(selectedDate.date).length === 0 ? (
+                    <div style={{ color:C.txt2, fontSize:13, padding:16, textAlign:'center', border:`1px solid ${C.border}`, borderRadius:10 }}>No configured slots for this date.</div>
                   ) : (
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
-                      {getSlotsForDate(selectedDate.date).map(({ label, booked }) => (
-                        <button key={label} onClick={() => !booked && setSelectedTime(label)} disabled={booked}
+                      {getSlotsForDate(selectedDate.date).map(({ label, booked, duration }) => (
+                        <button key={`${label}-${duration}`} onClick={() => !booked && setSelectedTime(label)} disabled={booked}
                           style={{ padding:'9px 6px', borderRadius:10, border:`1px solid ${selectedTime===label ? C.teal : booked ? 'rgba(255,255,255,0.05)' : C.border}`, background:selectedTime===label ? C.tealGlow : booked ? 'rgba(255,255,255,0.02)' : 'transparent', color:selectedTime===label ? C.teal : booked ? C.txt3 : C.txt2, fontSize:12, fontWeight:selectedTime===label ? 700 : 400, cursor:booked ? 'not-allowed' : 'pointer', textAlign:'center', transition:'all 0.15s', position:'relative' }}>
                           {label}
-                          {booked && <div style={{ fontSize:8, color:C.txt3, marginTop:2 }}>Booked</div>}
+                          <div style={{ fontSize:8, color:booked ? C.txt3 : C.txt2, marginTop:2 }}>{booked ? 'Booked' : `${duration} min`}</div>
                         </button>
                       ))}
                     </div>
@@ -439,9 +519,9 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
                   { l:'Doctor',     v: selectedDoc.name ?? `Dr. ${selectedDoc.firstName ?? ''} ${selectedDoc.lastName ?? ''}`.trim() },
                   { l:'Specialty',  v: selectedDoc.specialization ?? selectedDoc.specialty ?? 'General Medicine' },
                   { l:'Date',       v: selectedDate.label },
-                  { l:'Time',       v: selectedTime },
+                  { l:'Time',       v: `${selectedTime} · ${selectedSlotDuration} min` },
                   { l:'Type',       v: apptType === 'IN_PERSON' ? '🏥 In Person' : apptType === 'TELECONSULT' ? '📹 Video Call' : '🏠 Home Visit' },
-                  { l:'Fee',        v: (selectedDoc.consultationFee ?? selectedDoc.fee) ? `₹${selectedDoc.consultationFee ?? selectedDoc.fee}` : 'To be confirmed' },
+                  { l:'Fee',        v: selectedFee != null ? `₹${selectedFee}` : 'To be confirmed' },
                   { l:'Location',   v: selectedDoc.clinicName ?? selectedDoc.hospital ?? selectedDoc.city ?? 'To be confirmed' },
                 ].map(row => (
                   <div key={row.l} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:`1px solid ${C.border}` }}>
@@ -527,8 +607,8 @@ export default function BookAppointmentModal({ onClose, onSuccess, preselectedDo
               </button>
             )}
             {step === 2 && (
-              <button onClick={() => selectedDate && selectedTime && setStep(3)} disabled={!selectedDate || !selectedTime}
-                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:(selectedDate && selectedTime) ? `linear-gradient(135deg,${C.tealDk},${C.teal})` : 'rgba(255,255,255,0.06)', color:(selectedDate && selectedTime) ? '#fff' : C.txt3, fontSize:14, fontWeight:700, cursor:(selectedDate && selectedTime) ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
+              <button onClick={() => selectedDate && selectedTime && setStep(3)} disabled={!selectedDate || !selectedTime || !isConsultationTypeEnabled(apptType)}
+                style={{ padding:'11px 32px', borderRadius:10, border:'none', background:(selectedDate && selectedTime && isConsultationTypeEnabled(apptType)) ? `linear-gradient(135deg,${C.tealDk},${C.teal})` : 'rgba(255,255,255,0.06)', color:(selectedDate && selectedTime && isConsultationTypeEnabled(apptType)) ? '#fff' : C.txt3, fontSize:14, fontWeight:700, cursor:(selectedDate && selectedTime && isConsultationTypeEnabled(apptType)) ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
                 Next: Confirm →
               </button>
             )}
