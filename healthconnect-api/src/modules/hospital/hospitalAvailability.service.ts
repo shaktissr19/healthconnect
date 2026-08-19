@@ -47,6 +47,9 @@ export function validateHospitalSchedule(rows: HospitalAvailabilityInput[]) {
     if (!Number.isInteger(row.slotDuration) || row.slotDuration < 10 || row.slotDuration > 120) {
       throw new Error('Slot duration must be between 10 and 120 minutes.');
     }
+    if ((end - start) < row.slotDuration) {
+      throw new Error('Each OPD session must contain at least one full appointment slot.');
+    }
   }
 
   for (let day = 0; day <= 6; day += 1) {
@@ -67,13 +70,24 @@ export async function assertAcceptedAffiliation(doctorId: string, hospitalId: st
   const membership = await prisma.doctorHospital.findUnique({
     where: { doctorId_hospitalId: { doctorId, hospitalId } },
     include: {
-      hospital: { select: { id: true, name: true, isActive: true, isVerified: true, teleconsultAvailable: true } },
+      hospital: {
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+          isVerified: true,
+          verificationStatus: true,
+          teleconsultAvailable: true,
+        },
+      },
       doctor: {
         select: {
           id: true,
           firstName: true,
           lastName: true,
           user: { select: { isActive: true } },
+          isVerified: true,
+          verificationStatus: true,
           offersInPerson: true,
           offersVideoConsult: true,
           isAcceptingNewPatients: true,
@@ -85,10 +99,13 @@ export async function assertAcceptedAffiliation(doctorId: string, hospitalId: st
   if (!membership || membership.status !== 'ACCEPTED') {
     return { ok: false as const, reason: 'The doctor is not an accepted member of this hospital.' };
   }
-  if (!membership.hospital.isActive || !membership.hospital.isVerified) {
-    return { ok: false as const, reason: 'This hospital is not currently available for booking.' };
+  if (!membership.hospital.isActive || !membership.hospital.isVerified || membership.hospital.verificationStatus !== 'VERIFIED') {
+    return { ok: false as const, reason: 'This hospital is not currently verified and available for booking.' };
   }
-  if (!membership.doctor.user.isActive || membership.doctor.isAcceptingNewPatients === false) {
+  if (!membership.doctor.user.isActive || (!membership.doctor.isVerified && membership.doctor.verificationStatus !== 'VERIFIED')) {
+    return { ok: false as const, reason: 'This doctor is not currently verified for booking.' };
+  }
+  if (membership.doctor.isAcceptingNewPatients === false) {
     return { ok: false as const, reason: 'This doctor is not currently accepting new patients.' };
   }
   return { ok: true as const, membership };
@@ -156,14 +173,24 @@ export async function checkHospitalDoctorAvailability(input: {
   }
 
   const { dayOfWeek, minuteOfDay } = istParts(input.scheduledAt);
-  const endMinute = minuteOfDay + input.durationMinutes;
   const session = active.find(row => {
     if (row.dayOfWeek !== dayOfWeek) return false;
-    return minuteOfDay >= timeToMinutes(row.startTime) && endMinute <= timeToMinutes(row.endTime);
+    const sessionStart = timeToMinutes(row.startTime);
+    const sessionEnd = timeToMinutes(row.endTime);
+    const endMinute = minuteOfDay + input.durationMinutes;
+    return minuteOfDay >= sessionStart && endMinute <= sessionEnd;
   });
 
   if (!session) {
     return { exists: true, available: false, reason: 'The selected time is outside this doctor’s hospital OPD schedule.' };
+  }
+
+  const sessionStart = timeToMinutes(session.startTime);
+  if (input.durationMinutes !== session.slotDuration) {
+    return { exists: true, available: false, reason: `Appointments for this OPD session must be ${session.slotDuration} minutes.` };
+  }
+  if ((minuteOfDay - sessionStart) % session.slotDuration !== 0) {
+    return { exists: true, available: false, reason: 'The selected time is not aligned to a valid OPD appointment slot.' };
   }
 
   return { exists: true, available: true, slotDuration: session.slotDuration };
