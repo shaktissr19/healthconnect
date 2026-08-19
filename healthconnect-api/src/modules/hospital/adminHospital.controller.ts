@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { HospitalVerificationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiResponse } from '../../utils/apiResponse';
 
@@ -6,7 +7,8 @@ export const getPendingHospitals = async (req: Request, res: Response, next: Nex
   try {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 20)));
-    const where = { verificationStatus: { in: ['SUBMITTED', 'UNDER_REVIEW'] as const } };
+    const pendingStatuses: HospitalVerificationStatus[] = ['SUBMITTED', 'UNDER_REVIEW'];
+    const where = { verificationStatus: { in: pendingStatuses } };
     const [hospitals, total] = await Promise.all([
       prisma.hospitalProfile.findMany({
         where,
