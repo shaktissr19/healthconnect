@@ -1,105 +1,28 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 
-const C = { card:'#FFFFFF', border:'rgba(45,139,122,0.14)', teal:'#2D8B7A', text:'#1C3A35', muted:'#5A7184', green:'#16A34A', amber:'#D97706', red:'#DC2626' };
+const C={card:'#FFFFFF',border:'rgba(45,139,122,0.14)',teal:'#2D8B7A',text:'#1C3A35',muted:'#5A7184',green:'#16A34A',amber:'#D97706',red:'#DC2626',blue:'#2563EB'};
+type Tab='doctors'|'hospitals';
 
-export default function VerificationPage() {
-  const [doctors,  setDoctors]  = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [selected, setSelected] = useState<any>(null);
-  const [reason,   setReason]   = useState('');
-  const [acting,   setActing]   = useState(false);
-  const [done,     setDone]     = useState<string[]>([]);
-
-  useEffect(() => {
-    api.get('/admin/doctors/pending')
-      .then(r => setDoctors(r.data.data.doctors || r.data.data))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const act = async (d: any, action: 'approve' | 'reject') => {
-    if (action==='reject' && !reason.trim()) { alert('Please provide a rejection reason'); return; }
-    setActing(true);
-    try {
-      await api.post(`/admin/doctors/${d.id}/verify`, { action, reason: action==='reject'?reason:undefined });
-      setDone(prev => [...prev, d.id]);
-      setSelected(null);
-      setReason('');
-    } catch { alert('Action failed'); }
-    setActing(false);
-  };
-
-  const visible = doctors.filter(d => !done.includes(d.id));
-
-  if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:300 }}>
-      <div style={{ width:36, height:36, border:`3px solid ${C.border}`, borderTop:`3px solid ${C.teal}`, borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-
-  return (
-    <div style={{ color:C.text, fontFamily:"'Inter',sans-serif" }}>
-      <div style={{ marginBottom:22 }}>
-        <h1 style={{ margin:0, fontSize:24, fontWeight:700, letterSpacing:'-0.4px' }}>Doctor Verification</h1>
-        <p style={{ margin:'4px 0 0', color:C.muted, fontSize:13 }}>{visible.length} pending review</p>
-      </div>
-
-      {visible.length===0 ? (
-        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:60, textAlign:'center' }}>
-          <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
-          <h3 style={{ margin:'0 0 6px', color:C.text }}>All caught up!</h3>
-          <p style={{ color:C.muted, margin:0 }}>No doctors pending verification.</p>
-        </div>
-      ) : (
-        <div style={{ display:'grid', gap:14 }}>
-          {visible.map(d=>(
-            <div key={d.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:20, boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                    <div style={{ width:40, height:40, borderRadius:10, background:`${C.teal}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>🩺</div>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:15 }}>Dr. {d.firstName} {d.lastName}</div>
-                      <div style={{ color:C.muted, fontSize:12 }}>{d.user?.email} · Registered {new Date(d.createdAt).toLocaleDateString('en-IN')}</div>
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', gap:24, flexWrap:'wrap' }}>
-                    {[['Specialization',d.specialization],['License',d.medicalLicenseNumber],['State',d.licenseState],['City',d.city],['Experience',d.experienceYears?`${d.experienceYears} yrs`:'—'],['Fee',d.consultationFee?`₹${d.consultationFee}`:'—']].map(([k,v])=>(
-                      <div key={k as string}>
-                        <div style={{ color:C.muted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.5px' }}>{k}</div>
-                        <div style={{ color:C.text, fontSize:13, fontWeight:500 }}>{v as string||'—'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ display:'flex', gap:8, flexShrink:0, marginLeft:16 }}>
-                  <button onClick={()=>{setSelected({...d,_action:'reject'});setReason('');}} style={{ padding:'8px 16px', borderRadius:8, border:'none', background:'#FEE2E2', color:C.red, cursor:'pointer', fontSize:13, fontWeight:600 }}>Reject</button>
-                  <button onClick={()=>act(d,'approve')} style={{ padding:'8px 16px', borderRadius:8, border:'none', background:C.green, color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 }}>✓ Approve</button>
-                </div>
-              </div>
-              {d.bio&&<div style={{ marginTop:12, padding:10, background:'#F8FFFE', borderRadius:8, fontSize:12, color:C.muted }}>{d.bio}</div>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {selected&&(
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>
-          <div style={{ background:'#fff', borderRadius:14, padding:26, width:400, boxShadow:'0 20px 60px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ margin:'0 0 8px', color:C.text }}>Reject Dr. {selected.firstName} {selected.lastName}?</h3>
-            <p style={{ color:C.muted, fontSize:13, margin:'0 0 14px' }}>The doctor will be notified with your reason.</p>
-            <textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Reason for rejection (required)…" rows={3} style={{ width:'100%', padding:10, borderRadius:8, border:`1px solid ${C.border}`, fontSize:13, color:C.text, outline:'none', resize:'vertical', boxSizing:'border-box' }} />
-            <div style={{ display:'flex', gap:10, marginTop:14 }}>
-              <button onClick={()=>setSelected(null)} style={{ flex:1, padding:'9px', borderRadius:8, border:`1px solid ${C.border}`, background:'transparent', color:C.muted, cursor:'pointer' }}>Cancel</button>
-              <button disabled={acting} onClick={()=>act(selected,'reject')} style={{ flex:1, padding:'9px', borderRadius:8, border:'none', background:C.red, color:'#fff', cursor:'pointer', fontWeight:600 }}>
-                {acting?'Processing…':'Confirm Reject'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+export default function VerificationPage(){
+  const [tab,setTab]=useState<Tab>('doctors');const [doctors,setDoctors]=useState<any[]>([]);const [hospitals,setHospitals]=useState<any[]>([]);const [loading,setLoading]=useState(true);const [selected,setSelected]=useState<any>(null);const [reason,setReason]=useState('');const [acting,setActing]=useState(false);const [error,setError]=useState('');
+  const load=useCallback(async()=>{setLoading(true);setError('');try{const [d,h]=await Promise.all([api.get('/admin/doctors/pending'),api.get('/admin/hospitals/pending')]);const dd=d?.data?.data??{};const hd=h?.data?.data??{};setDoctors(Array.isArray(dd)?dd:dd.doctors??[]);setHospitals(Array.isArray(hd)?hd:hd.hospitals??[]);}catch(e:any){setError(e?.response?.data?.message??'Unable to load verification queue.')}finally{setLoading(false)}},[]);
+  useEffect(()=>{void load()},[load]);
+  const doctorAct=async(d:any,action:'approve'|'reject')=>{if(action==='reject'&&!reason.trim()){alert('Please provide a rejection reason');return;}setActing(true);try{await api.post(`/admin/doctors/${d.id}/verify`,{action,reason:action==='reject'?reason:undefined});setSelected(null);setReason('');await load()}catch(e:any){setError(e?.response?.data?.message??'Doctor verification action failed.')}finally{setActing(false)}};
+  const hospitalAct=async(h:any,action:'review'|'approve'|'reject')=>{if(action==='reject'&&!reason.trim()){alert('Please provide a rejection reason');return;}setActing(true);try{await api.post(`/admin/hospitals/${h.id}/verify`,{action,reason:reason.trim()||undefined});setSelected(null);setReason('');await load()}catch(e:any){setError(e?.response?.data?.message??'Hospital verification action failed.')}finally{setActing(false)}};
+  if(loading)return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:300}}>Loading verification queue…</div>;
+  return <div style={{color:C.text,fontFamily:"'Inter',sans-serif"}}><div style={{marginBottom:20}}><h1 style={{margin:0,fontSize:24,fontWeight:700}}>Verification Center</h1><p style={{margin:'4px 0 0',color:C.muted,fontSize:13}}>Review healthcare professional and institutional verification submissions.</p></div>
+    {error&&<div style={{padding:11,borderRadius:9,background:'#FEF2F2',color:C.red,marginBottom:12,fontSize:12}}>⚠ {error}</div>}
+    <div style={{display:'flex',gap:8,marginBottom:16}}><button onClick={()=>setTab('doctors')} style={tabBtn(tab==='doctors')}>Doctors · {doctors.length}</button><button onClick={()=>setTab('hospitals')} style={tabBtn(tab==='hospitals')}>Hospitals · {hospitals.length}</button></div>
+    {tab==='doctors'?<DoctorQueue rows={doctors} onApprove={d=>doctorAct(d,'approve')} onReject={d=>{setSelected({...d,_kind:'doctor'});setReason('')}}/>:<HospitalQueue rows={hospitals} onReview={h=>hospitalAct(h,'review')} onApprove={h=>hospitalAct(h,'approve')} onReject={h=>{setSelected({...h,_kind:'hospital'});setReason('')}}/>}
+    {selected&&<div style={overlay}><div style={{background:'#fff',borderRadius:14,padding:24,width:'min(440px,94vw)',boxShadow:'0 20px 60px rgba(0,0,0,.16)'}}><h3 style={{margin:'0 0 7px'}}>Reject {selected._kind==='hospital'?selected.name:`Dr. ${selected.firstName} ${selected.lastName}`}?</h3><p style={{color:C.muted,fontSize:12}}>The account will be notified with this reason and can correct the information before resubmitting.</p><textarea value={reason} onChange={e=>setReason(e.target.value)} rows={4} placeholder="Reason for rejection (required)" style={{width:'100%',boxSizing:'border-box',border:`1px solid ${C.border}`,borderRadius:8,padding:10}}/><div style={{display:'flex',gap:8,marginTop:12}}><button onClick={()=>setSelected(null)} style={{...baseBtn,background:'#fff',color:C.muted,border:`1px solid ${C.border}`}}>Cancel</button><button disabled={acting} onClick={()=>selected._kind==='hospital'?hospitalAct(selected,'reject'):doctorAct(selected,'reject')} style={{...baseBtn,background:C.red,color:'#fff',flex:1}}>{acting?'Processing…':'Confirm rejection'}</button></div></div></div>}
+  </div>;
 }
+
+function DoctorQueue({rows,onApprove,onReject}:{rows:any[];onApprove:(d:any)=>void;onReject:(d:any)=>void}){if(!rows.length)return <Empty label="No doctors pending verification."/>;return <div style={{display:'grid',gap:11}}>{rows.map(d=><div key={d.id} style={card}><div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'start'}}><div><div style={{fontWeight:750}}>Dr. {d.firstName} {d.lastName}</div><div style={sub}>{d.user?.email} · {d.specialization||'Specialization not added'}</div><div style={{display:'flex',gap:18,flexWrap:'wrap',marginTop:10}}>{[['License',d.medicalLicenseNumber],['Council',d.medicalCouncil],['State',d.licenseState],['Experience',d.experienceYears!=null?`${d.experienceYears} yrs`:null]].map(([k,v])=><Meta key={String(k)} label={String(k)} value={v}/>)}</div></div><div style={{display:'flex',gap:7}}><button onClick={()=>onReject(d)} style={{...baseBtn,background:'#FEE2E2',color:C.red}}>Reject</button><button onClick={()=>onApprove(d)} style={{...baseBtn,background:C.green,color:'#fff'}}>✓ Approve</button></div></div></div>)}</div>}
+
+function HospitalQueue({rows,onReview,onApprove,onReject}:{rows:any[];onReview:(h:any)=>void;onApprove:(h:any)=>void;onReject:(h:any)=>void}){if(!rows.length)return <Empty label="No hospitals pending verification."/>;return <div style={{display:'grid',gap:11}}>{rows.map(h=><div key={h.id} style={card}><div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'start'}}><div style={{flex:1}}><div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap'}}><div style={{fontWeight:780}}>{h.name}</div><span style={{fontSize:9.5,fontWeight:800,padding:'3px 7px',borderRadius:999,background:h.verificationStatus==='UNDER_REVIEW'?'#EDE9FE':'#DBEAFE',color:h.verificationStatus==='UNDER_REVIEW'?'#7C3AED':C.blue}}>{String(h.verificationStatus).replaceAll('_',' ')}</span></div><div style={sub}>{h.user?.email} · {[h.city,h.state].filter(Boolean).join(', ')}</div><div style={{display:'flex',gap:18,flexWrap:'wrap',marginTop:10}}><Meta label="Registration" value={h.registrationNumber}/><Meta label="Authority" value={h.registrationAuthority}/><Meta label="Type" value={h.hospitalType}/><Meta label="Beds" value={h.totalBeds}/><Meta label="Documents" value={Array.isArray(h.verificationDocuments)?h.verificationDocuments.length:0}/></div>{Array.isArray(h.verificationDocuments)&&h.verificationDocuments.length>0&&<div style={{marginTop:10,fontSize:11}}>{h.verificationDocuments.map((url:string,i:number)=><a key={url} href={url} target="_blank" rel="noreferrer" style={{color:C.blue,marginRight:10}}>Document {i+1} ↗</a>)}</div>}</div><div style={{display:'flex',gap:7,flexWrap:'wrap',justifyContent:'flex-end'}}>{h.verificationStatus==='SUBMITTED'&&<button onClick={()=>onReview(h)} style={{...baseBtn,background:'#EDE9FE',color:'#7C3AED'}}>Start review</button>}<button onClick={()=>onReject(h)} style={{...baseBtn,background:'#FEE2E2',color:C.red}}>Reject</button><button onClick={()=>onApprove(h)} style={{...baseBtn,background:C.green,color:'#fff'}}>✓ Verify</button></div></div></div>)}</div>}
+function Meta({label,value}:{label:string;value:any}){return <div><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase'}}>{label}</div><div style={{fontSize:11.5,fontWeight:600,marginTop:2}}>{value??'—'}</div></div>}
+function Empty({label}:{label:string}){return <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:50,textAlign:'center'}}><div style={{fontSize:35}}>✅</div><h3 style={{margin:'8px 0 3px'}}>All caught up</h3><div style={{fontSize:12,color:C.muted}}>{label}</div></div>}
+const card:React.CSSProperties={background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:18,boxShadow:'0 1px 4px rgba(0,0,0,.035)'};const sub:React.CSSProperties={fontSize:11,color:C.muted,marginTop:4};const baseBtn:React.CSSProperties={border:'none',borderRadius:8,padding:'8px 12px',fontWeight:700,fontSize:11.5,cursor:'pointer'};const overlay:React.CSSProperties={position:'fixed',inset:0,zIndex:100,background:'rgba(0,0,0,.45)',display:'grid',placeItems:'center',padding:16};const tabBtn=(active:boolean):React.CSSProperties=>({...baseBtn,background:active?C.teal:'#fff',color:active?'#fff':C.muted,border:`1px solid ${active?C.teal:C.border}`});
