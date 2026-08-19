@@ -7,6 +7,7 @@ import DoctorSidebar from '@/components/doctor/layout/DoctorSidebar';
 import DoctorTopbar  from '@/components/doctor/layout/DoctorTopbar';
 import DoctorProfileV2 from '@/components/doctor/DoctorProfileV2';
 import DoctorAvailabilityV2 from '@/components/doctor/DoctorAvailabilityV2';
+import DoctorHospitalAffiliations from '@/components/doctor/DoctorHospitalAffiliations';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
 const SIDEBAR_W      = 268;
@@ -22,7 +23,6 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
   const [sessionToast, setSessionToast] = useState(false);
   const hasRun = useRef(false);
 
-  // Read ?session=expired and ?tab= on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -31,7 +31,6 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
       window.history.replaceState({}, '', window.location.pathname);
       setTimeout(() => setSessionToast(false), 6000);
     }
-    // Read ?tab= param — set active page
     const tab = params.get('tab');
     const validPages = ['home','patients','appointments','video-consults',
       'prescriptions','records','communities','earnings','profile','availability','settings'];
@@ -46,24 +45,13 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
   useEffect(() => {
     if (hasRun.current) return;
     hasRun.current = true;
-
     const resolve = (s: any) => {
-      if (s.isAuthenticated && s.user?.role === 'DOCTOR') {
-        setAuthChecked(true);
-      } else if (s.isAuthenticated && s.user?.role) {
-        router.replace('/dashboard');
-      } else {
-        router.replace('/');
-      }
+      if (s.isAuthenticated && s.user?.role === 'DOCTOR') setAuthChecked(true);
+      else if (s.isAuthenticated && s.user?.role) router.replace('/dashboard');
+      else router.replace('/');
     };
-
     const s = useAuthStore.getState() as any;
-
-    if (s._hasHydrated) {
-      resolve(s);
-      return;
-    }
-
+    if (s._hasHydrated) { resolve(s); return; }
     let settled = false;
     const unsub = (useAuthStore as any).subscribe((ns: any) => {
       if (settled) return;
@@ -74,16 +62,14 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
         resolve(ns);
       }
     });
-
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
       unsub();
       resolve(useAuthStore.getState() as any);
     }, 1000);
-
     return () => { unsub(); clearTimeout(timer); };
-  }, []);
+  }, [router]);
 
   const sidebarW = collapsed ? SIDEBAR_W_MINI : SIDEBAR_W;
 
@@ -101,26 +87,18 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
   return (
     <div style={{ minHeight:'100vh', background:'#F5F4F0' }}>
       <SessionTimeoutManager />
-
-      {/* Session expired toast */}
       {sessionToast && (
         <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:'#1E293B', color:'#fff', borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:600, zIndex:9999, whiteSpace:'nowrap', boxShadow:'0 4px 20px rgba(0,0,0,0.25)', display:'flex', alignItems:'center', gap:10 }}>
-          <span>⏱️</span>
-          <span>You were signed out due to inactivity.</span>
+          <span>⏱️</span><span>You were signed out due to inactivity.</span>
           <button onClick={() => setSessionToast(false)} style={{ background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:16, padding:0, marginLeft:4 }}>✕</button>
         </div>
       )}
-
-      {/* Topbar — full width, z-index above sidebar */}
       <DoctorTopbar />
-
-      {/* Sidebar — starts below topbar */}
       <DoctorSidebar />
-
       <div style={{ marginLeft:sidebarW, paddingTop:TOPBAR_H, minHeight:'100vh', background:'#F5F4F0', overflowX:'hidden', transition:'margin-left 0.25s cubic-bezier(.4,0,.2,1)' }}>
         <main style={{ padding:24 }}>
           {activePage === 'profile'
-            ? <DoctorProfileV2 />
+            ? <div style={{ maxWidth:1180, margin:'0 auto', display:'flex', flexDirection:'column', gap:16 }}><DoctorProfileV2 /><DoctorHospitalAffiliations /></div>
             : activePage === 'availability'
               ? <DoctorAvailabilityV2 />
               : children}

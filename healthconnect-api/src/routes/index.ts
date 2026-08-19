@@ -14,6 +14,7 @@ import doctorProfileRoutes from '../modules/doctor/profile.routes';
 import doctorAvailabilityRoutes from '../modules/doctor/availability.routes';
 import publicDoctorAvailabilityRoutes from '../modules/doctor/availability.public.routes';
 import patientPrescriptionRoutes from '../modules/doctor/patient-prescriptions.routes';
+import doctorHospitalAffiliationRoutes from '../modules/hospital/doctorAffiliations.routes';
 import notificationRoutes from './notification.routes';
 
 const router = Router();
@@ -25,14 +26,14 @@ router.use('/appointments', appointmentRoutes);
 router.use('/communities',  communityRoutes);
 router.use('/articles',     articleRoutes);
 router.use('/subscription', subscriptionRoutes);
-// Canonical doctor availability must precede the older public router endpoint.
 router.use('/public',       publicDoctorAvailabilityRoutes);
 router.use('/public',       publicRoutes);
 router.use('/platform',     platformRoutes);
 router.use('/admin',        adminRoutes);
-// Canonical Doctor v2 modules precede the legacy Doctor router.
+// Canonical Doctor v2 / Hospital-affiliation modules precede legacy Doctor routes.
 router.use('/doctor',       doctorProfileRoutes);
 router.use('/doctor',       doctorAvailabilityRoutes);
+router.use('/doctor',       doctorHospitalAffiliationRoutes);
 router.use('/doctor',       patientPrescriptionRoutes);
 router.use('/doctor',       doctorDashRoutes);
 router.use('/notifications', notificationRoutes);
