@@ -7,6 +7,7 @@ import DoctorSidebar from '@/components/doctor/layout/DoctorSidebar';
 import DoctorTopbar  from '@/components/doctor/layout/DoctorTopbar';
 import DoctorProfileV2 from '@/components/doctor/DoctorProfileV2';
 import DoctorAvailabilityV2 from '@/components/doctor/DoctorAvailabilityV2';
+import DoctorAppointmentsV2 from '@/components/doctor/DoctorAppointmentsV2';
 import DoctorHospitalAffiliations from '@/components/doctor/DoctorHospitalAffiliations';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
@@ -101,7 +102,9 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
             ? <div style={{ maxWidth:1180, margin:'0 auto', display:'flex', flexDirection:'column', gap:16 }}><DoctorProfileV2 /><DoctorHospitalAffiliations /></div>
             : activePage === 'availability'
               ? <DoctorAvailabilityV2 />
-              : children}
+              : activePage === 'appointments'
+                ? <DoctorAppointmentsV2 />
+                : children}
         </main>
       </div>
     </div>

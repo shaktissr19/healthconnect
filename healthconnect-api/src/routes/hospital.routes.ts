@@ -3,6 +3,7 @@ import * as hospitalController from '../controllers/hospital.controller';
 import { authenticate } from '../middleware/auth';
 import { requireHospital, requireRole } from '../middleware/roleGuard';
 import { validate } from '../middleware/validate';
+import { promptHospitalReviewAfterSuccess } from '../middleware/appointmentOperationalGuard';
 import {
   hospitalAppointmentRescheduleSchema,
   hospitalAppointmentStatusSchema,
@@ -42,7 +43,14 @@ router.put('/departments/:id', authenticate, requireHospital, validate(hospitalD
 router.delete('/departments/:id', authenticate, requireHospital, hospitalController.deleteDepartment);
 
 router.get('/appointments', authenticate, requireHospital, hospitalController.getMyAppointments);
-router.patch('/appointments/:id/status', authenticate, requireHospital, validate(hospitalAppointmentStatusSchema), hospitalController.updateHospitalAppointmentStatus);
+router.patch(
+  '/appointments/:id/status',
+  authenticate,
+  requireHospital,
+  validate(hospitalAppointmentStatusSchema),
+  promptHospitalReviewAfterSuccess,
+  hospitalController.updateHospitalAppointmentStatus,
+);
 router.put('/appointments/:id/reschedule', authenticate, requireHospital, validate(hospitalAppointmentRescheduleSchema), hospitalController.rescheduleHospitalAppointment);
 
 // Public hospital details and booking support.

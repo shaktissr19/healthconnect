@@ -8,6 +8,8 @@ import { enforceDoctorAvailability } from '../middleware/appointmentAvailability
 import {
   enforceActiveAppointmentConflict,
   notifyLinkedHospitalAfterSuccess,
+  notifyLinkedHospitalOnMutationAfterSuccess,
+  promptHospitalReviewAfterSuccess,
 } from '../middleware/appointmentOperationalGuard';
 import {
   bookAppointmentSchema,
@@ -40,11 +42,28 @@ router.put(
   notifyLinkedHospitalAfterSuccess,
   appointmentController.rescheduleAppointment,
 );
-router.put('/:id/cancel', validate(cancelAppointmentSchema), appointmentController.cancelAppointment);
+router.put(
+  '/:id/cancel',
+  validate(cancelAppointmentSchema),
+  notifyLinkedHospitalOnMutationAfterSuccess,
+  appointmentController.cancelAppointment,
+);
 
-router.put('/:id/status', requireDoctor, validate(updateAppointmentStatusSchema), appointmentController.updateAppointmentStatus);
+router.put(
+  '/:id/status',
+  requireDoctor,
+  validate(updateAppointmentStatusSchema),
+  notifyLinkedHospitalOnMutationAfterSuccess,
+  promptHospitalReviewAfterSuccess,
+  appointmentController.updateAppointmentStatus,
+);
 
-router.patch('/:id/cancel', validate(cancelAppointmentSchema), appointmentController.cancelAppointment);
+router.patch(
+  '/:id/cancel',
+  validate(cancelAppointmentSchema),
+  notifyLinkedHospitalOnMutationAfterSuccess,
+  appointmentController.cancelAppointment,
+);
 router.patch(
   '/:id/reschedule',
   validate(rescheduleAppointmentSchema),
