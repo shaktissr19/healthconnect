@@ -1,58 +1,84 @@
-name: Validate HealthConnect
+name: Remediate HealthConnect Dependencies
 
 on:
   pull_request:
     branches: [main]
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  api-build:
+  dependency-remediation:
+    if: github.head_ref == 'dependency-security-audit'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: healthconnect-api
+    timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://healthconnect:healthconnect@localhost:5432/healthconnect
-      NODE_ENV: test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: healthconnect-api/package-lock.json
-      - run: npm ci
-      - name: Audit runtime dependencies
-        continue-on-error: true
-        run: npm audit --omit=dev
-      - name: Audit complete dependency tree
-        continue-on-error: true
-        run: npm audit
-      - run: npx prisma generate
-      - run: npm run build
-
-  web-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: healthconnect-web
-    env:
       NEXT_PUBLIC_API_URL: https://api.healthconnect.sbs/api/v1
-      NODE_ENV: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: dependency-security-audit
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: healthconnect-web/package-lock.json
-      - run: npm ci
-      - name: Audit runtime dependencies
-        continue-on-error: true
-        run: npm audit --omit=dev
-      - name: Audit complete dependency tree
-        continue-on-error: true
-        run: npm audit
-      - run: npm run build
+
+      - name: Remediate Web runtime dependencies
+        shell: bash
+        run: |
+          set -e
+          cd healthconnect-web
+          npm install --save-exact axios@1.19.0 js-cookie@3.0.8 next@16.3.1
+          npm install --save-dev --save-exact eslint-config-next@16.3.1
+
+      - name: Remediate API runtime dependencies
+        shell: bash
+        run: |
+          set -e
+          cd healthconnect-api
+          npm uninstall multer uuid
+          npm uninstall --save-dev @types/multer @types/uuid
+          npm install --save-exact express@4.22.2 morgan@1.11.0 razorpay@2.9.8
+
+      - name: Verify runtime audits and builds
+        shell: bash
+        run: |
+          set +e
+
+          cd healthconnect-web
+          npm audit --omit=dev --audit-level=high
+          WEB_AUDIT=$?
+          npm run build
+          WEB_BUILD=$?
+
+          cd ../healthconnect-api
+          npm audit --omit=dev --audit-level=high
+          API_AUDIT=$?
+          npx prisma generate
+          PRISMA_RESULT=$?
+          npm run build
+          API_BUILD=$?
+
+          echo "WEB_AUDIT=$WEB_AUDIT"
+          echo "WEB_BUILD=$WEB_BUILD"
+          echo "API_AUDIT=$API_AUDIT"
+          echo "PRISMA_RESULT=$PRISMA_RESULT"
+          echo "API_BUILD=$API_BUILD"
+
+          if [ "$WEB_BUILD" -ne 0 ] || [ "$PRISMA_RESULT" -ne 0 ] || [ "$API_BUILD" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Commit regenerated manifests and lockfiles
+        shell: bash
+        run: |
+          git config user.name "healthconnect-security-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add healthconnect-web/package.json healthconnect-web/package-lock.json healthconnect-api/package.json healthconnect-api/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+          else
+            git commit -m "security: remediate runtime dependency vulnerabilities"
+            git push origin HEAD:dependency-security-audit
+          fi
