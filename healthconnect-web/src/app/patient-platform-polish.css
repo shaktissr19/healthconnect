@@ -1,0 +1,140 @@
+/* HealthConnect India — patient/global navigation polish
+   Scoped to existing platform classes so business modules remain untouched. */
+
+/* ── Patient dashboard sidebar: cleaner global-platform shell ───────────── */
+.hc-sb {
+  background: linear-gradient(180deg, #F8FAFC 0%, #F3F6FA 100%) !important;
+  border-right: 1px solid #D8E2EC !important;
+  box-shadow: 8px 0 30px rgba(15, 23, 42, 0.055) !important;
+}
+
+.hc-sb-id {
+  background: #FFFFFF !important;
+  border-color: #DCE5EF !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07) !important;
+}
+
+.hc-sb-id-lbl,
+.hc-sb-sec-lbl {
+  color: #53657B !important;
+  font-weight: 800 !important;
+  letter-spacing: .095em !important;
+}
+
+.hc-sb-id-name {
+  color: #10213B !important;
+  font-weight: 800 !important;
+}
+
+.hc-sb-id-reg {
+  color: #60748C !important;
+}
+
+.hc-sb-chip {
+  background: #F7F9FC !important;
+  border-color: #D9E2EC !important;
+  color: #30445C !important;
+}
+
+.hc-sb-btn {
+  color: #2F435A !important;
+  font-weight: 590 !important;
+  min-height: 40px;
+}
+
+.hc-sb-btn-icon {
+  opacity: .78 !important;
+  color: #52677F !important;
+}
+
+.hc-sb-btn:hover {
+  background: #EDF4FC !important;
+  color: #174EA6 !important;
+}
+
+.hc-sb-btn.active {
+  background: linear-gradient(90deg, #E7F0FF 0%, #EDF4FF 100%) !important;
+  color: #174EA6 !important;
+  border-left-color: #2563EB !important;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .05) !important;
+  font-weight: 750 !important;
+}
+
+.hc-sb-btn.active .hc-sb-btn-icon {
+  color: #2563EB !important;
+}
+
+.hc-sb-divider {
+  border-color: #E1E7EF !important;
+}
+
+.hc-logout-btn {
+  color: #53657B !important;
+  border-color: #D7E0EA !important;
+  background: #FFFFFF !important;
+}
+
+.hc-logout-btn:hover {
+  color: #B42318 !important;
+  border-color: #F3B9B4 !important;
+  background: #FFF7F6 !important;
+}
+
+/* ── Patient dashboard topbar: clearer hierarchy ───────────────────────── */
+.hc-tb {
+  background: rgba(255,255,255,.97) !important;
+  border-bottom-color: #DDE5EE !important;
+  box-shadow: 0 2px 12px rgba(15,23,42,.045) !important;
+}
+
+.hc-tb-breadcrumb-home {
+  color: #6B7D91 !important;
+}
+
+.hc-tb-breadcrumb-cur {
+  color: #10213B !important;
+  font-weight: 750 !important;
+}
+
+/* Find Care and My Home are private-platform concepts, distinct from public Home. */
+body:has(.hc-find-care-page) .hc-tb-breadcrumb-cur,
+body:has(.hp-kpis) .hc-tb-breadcrumb-cur {
+  font-size: 0 !important;
+}
+
+body:has(.hc-find-care-page) .hc-tb-breadcrumb-cur::after {
+  content: 'Find Care';
+  font-size: 13px;
+}
+
+body:has(.hp-kpis) .hc-tb-breadcrumb-cur::after {
+  content: 'My Home';
+  font-size: 13px;
+}
+
+/* ── Public navigation: role-aware visibility after auth hydration ─────── */
+/* Desktop PublicNavbar: first role div = My Health, second = My Patients. */
+html[data-hc-role='PATIENT'] .hcnav-links > div:nth-of-type(2),
+html[data-hc-role='DOCTOR'] .hcnav-links > div:nth-of-type(1),
+html[data-hc-role='HOSPITAL'] .hcnav-links > div:nth-of-type(1),
+html[data-hc-role='HOSPITAL'] .hcnav-links > div:nth-of-type(2),
+html[data-hc-role='ADMIN'] .hcnav-links > div:nth-of-type(1),
+html[data-hc-role='ADMIN'] .hcnav-links > div:nth-of-type(2) {
+  display: none !important;
+}
+
+/* Mobile PublicNavbar: first five buttons are standard links, then role links. */
+html[data-hc-role='PATIENT'] .hcnav-mobile > button:nth-of-type(7),
+html[data-hc-role='DOCTOR'] .hcnav-mobile > button:nth-of-type(6),
+html[data-hc-role='HOSPITAL'] .hcnav-mobile > button:nth-of-type(6),
+html[data-hc-role='HOSPITAL'] .hcnav-mobile > button:nth-of-type(7),
+html[data-hc-role='ADMIN'] .hcnav-mobile > button:nth-of-type(6),
+html[data-hc-role='ADMIN'] .hcnav-mobile > button:nth-of-type(7) {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  .hc-sb-id {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06) !important;
+  }
+}
