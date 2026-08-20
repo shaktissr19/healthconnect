@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as communityController from '../controllers/community.controller';
+import * as communityPrivacyController from '../controllers/communityPrivacy.controller';
 import { authenticate, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
@@ -32,7 +33,7 @@ router.get('/:id/events', optionalAuth, communityController.getCommunityEvents);
 router.get('/:id/health-score', optionalAuth, communityController.getCommunityHealthScore);
 router.get('/:slug', optionalAuth, communityController.getCommunity);
 
-// ── Authenticated mutations ──────────────────────────────────────────────────
+// ── Authenticated mutations / member-only reads ──────────────────────────────
 router.use(authenticate);
 
 // Community requests
@@ -43,7 +44,8 @@ router.post('/:id/join', communityController.joinCommunity);
 router.delete('/:id/leave', communityController.leaveCommunity);
 // Kept only for backward compatibility. Controller returns 410 instead of false success.
 router.post('/:id/follow', communityController.followCommunity);
-router.get('/:id/members', communityController.getCommunityMembers);
+// Health-community membership identity is sensitive: counts are public, identities are not.
+router.get('/:id/members', communityPrivacyController.getCommunityMembers);
 router.get('/:id/membership-requests', communityController.getMembershipRequests);
 router.patch('/:id/members/:memberId/approve', communityController.approveMembership);
 router.delete('/:id/members/:memberId', communityController.rejectMembership);
