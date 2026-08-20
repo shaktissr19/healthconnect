@@ -5,9 +5,21 @@ const futureDateTime = z.string().datetime().refine(
   'Appointment time must be in the future',
 );
 
+// HealthConnect normally generates UUID primary keys, but production also
+// contains intentionally seeded/legacy IDs such as `seed-dp-001`. Route
+// validation must accept IDs that already exist in our database rather than
+// rejecting them before the service layer can perform the authoritative lookup.
+// Keep the accepted format deliberately narrow: letters, digits, `_` and `-`.
+const entityId = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/, 'Invalid entity ID');
+
 export const bookAppointmentSchema = z.object({
-  doctorId:       z.string().uuid(),
-  hospitalId:     z.string().uuid().optional(),
+  doctorId:       entityId,
+  hospitalId:     entityId.optional(),
   scheduledAt:    futureDateTime,
   type:           z.enum(['IN_PERSON', 'TELECONSULT', 'HOME_VISIT']),
   reasonForVisit: z.string().trim().max(1000).optional(),
