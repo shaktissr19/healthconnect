@@ -16,6 +16,10 @@ import publicDoctorAvailabilityRoutes from '../modules/doctor/availability.publi
 import patientPrescriptionRoutes from '../modules/doctor/patient-prescriptions.routes';
 import doctorHospitalAffiliationRoutes from '../modules/hospital/doctorAffiliations.routes';
 import notificationRoutes from './notification.routes';
+import * as communityController from '../controllers/community.controller';
+import { optionalAuth } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import { communitySearchSchema } from '../validators/community.validator';
 
 const router = Router();
 
@@ -24,6 +28,12 @@ router.use('/',             patientRoutes);
 router.use('/hospitals',    hospitalRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/communities',  communityRoutes);
+
+// Backward-compatible read-only alias for the Patient dashboard global-search
+// client that historically called /api/v1/api/communities. Keep this limited
+// to GET discovery only; all canonical Community routes remain /communities/*.
+router.get('/api/communities', optionalAuth, validate(communitySearchSchema, 'query'), communityController.getCommunities);
+
 router.use('/articles',     articleRoutes);
 router.use('/subscription', subscriptionRoutes);
 router.use('/public',       publicDoctorAvailabilityRoutes);
