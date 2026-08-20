@@ -31,7 +31,8 @@ jobs:
           cd healthconnect-web
           npm install --save-exact axios@1.19.0 js-cookie@3.0.8 next@16.3.1
           npm install --save-dev --save-exact eslint-config-next@16.3.1
-          npm audit fix
+          npm audit fix || true
+          npm audit fix || true
 
       - name: Remediate API dependencies
         shell: bash
@@ -42,9 +43,9 @@ jobs:
           npm uninstall --save-dev @types/uuid
           npm install --save-exact @prisma/client@5.22.0 express@4.22.2 morgan@1.11.0 multer@2.2.0 razorpay@2.9.8
           npm install --save-dev --save-exact prisma@5.22.0 typescript@5.7.2 @types/multer@2.2.0
-          npm audit fix --omit=dev
+          npm audit fix --omit=dev || true
           npm install --include=dev
-          npm audit fix
+          npm audit fix || true
 
       - name: Verify audits and builds
         shell: bash
@@ -56,6 +57,8 @@ jobs:
           WEB_RUNTIME_AUDIT=$?
           npm audit
           WEB_FULL_AUDIT=$?
+          echo "--- WEB brace-expansion dependency chain ---"
+          npm ls brace-expansion || true
           npm run build
           WEB_BUILD=$?
 
@@ -64,6 +67,8 @@ jobs:
           API_RUNTIME_AUDIT=$?
           npm audit
           API_FULL_AUDIT=$?
+          echo "--- API remaining vulnerable dependency diagnostics ---"
+          npm ls brace-expansion picomatch path-to-regexp || true
           npx prisma generate
           PRISMA_RESULT=$?
           npm run build
