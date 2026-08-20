@@ -98,7 +98,7 @@
 
 /* Find Care and My Home are private-platform concepts, distinct from public Home. */
 body:has(.hc-find-care-page) .hc-tb-breadcrumb-cur,
-body:has(.hc-my-home-page) .hc-tb-breadcrumb-cur {
+body:has(.hp-kpis) .hc-tb-breadcrumb-cur {
   font-size: 0 !important;
 }
 
@@ -107,7 +107,7 @@ body:has(.hc-find-care-page) .hc-tb-breadcrumb-cur::after {
   font-size: 13px;
 }
 
-body:has(.hc-my-home-page) .hc-tb-breadcrumb-cur::after {
+body:has(.hp-kpis) .hc-tb-breadcrumb-cur::after {
   content: 'My Home';
   font-size: 13px;
 }
