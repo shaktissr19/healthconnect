@@ -1,9 +1,11 @@
 // src/app/layout.tsx — Root Layout
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import './patient-platform-polish.css';
 import { Toaster } from 'react-hot-toast';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import AuthTransportBootstrap from '@/components/AuthTransportBootstrap';
+import GlobalRoleBridge from '@/components/GlobalRoleBridge';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -35,6 +37,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {/* Configures credential cookies + automatic access-token refresh. */}
         <AuthTransportBootstrap />
+
+        {/* Publishes the hydrated application role for shared role-aware UX. */}
+        <GlobalRoleBridge />
 
         {/* Session timeout — 10min warning, 15min auto-logout, all pages */}
         <SessionTimeoutManager />
