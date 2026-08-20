@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   api-build:
     runs-on: ubuntu-latest
@@ -23,6 +26,10 @@ jobs:
           cache: npm
           cache-dependency-path: healthconnect-api/package-lock.json
       - run: npm ci
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit full dependency tree
+        run: npm audit --audit-level=high
       - run: npx prisma generate
       - run: npm run build
 
@@ -42,5 +49,9 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: healthconnect-web/package-lock.json
-      - run: npm ci
+      - run: npm ci --include=dev
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit full dependency tree
+        run: npm audit --audit-level=high
       - run: npm run build

@@ -1,4 +1,4 @@
-// src/middleware.ts
+// src/proxy.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -12,7 +12,7 @@ const PROTECTED_PREFIXES = [
 const ACCESS_COOKIE_NAME = 'hc_access';
 const SESSION_COOKIE_NAME = 'hc_session';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isProtected = PROTECTED_PREFIXES.some(
