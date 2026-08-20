@@ -1,5 +1,5 @@
-import HospitalDetailV2 from '@/components/hospital/HospitalDetailV2';
+import HospitalDetailV3 from '@/components/hospital/HospitalDetailV3';
 
 export default function HospitalDetailPage() {
-  return <HospitalDetailV2 />;
+  return <HospitalDetailV3 />;
 }
