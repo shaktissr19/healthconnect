@@ -1,5 +1,5 @@
-import HospitalDashboardV2 from '@/components/hospital/HospitalDashboardV2';
+import HospitalDashboardV3 from '@/components/hospital/HospitalDashboardV3';
 
 export default function HospitalDashboardPage() {
-  return <HospitalDashboardV2 />;
+  return <HospitalDashboardV3 />;
 }
