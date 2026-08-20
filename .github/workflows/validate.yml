@@ -8,6 +8,7 @@ on:
 jobs:
   api-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: healthconnect-api
@@ -27,6 +28,7 @@ jobs:
 
   web-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: healthconnect-web
