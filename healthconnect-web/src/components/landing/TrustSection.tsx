@@ -1,11 +1,11 @@
 'use client';
 
 const ITEMS = [
-  ['🔐','Private by design','Health information is kept behind authenticated access and role-aware permissions.'],
-  ['🧾','Consent-controlled sharing','Patients decide when health information is shared into a care workflow.'],
-  ['✅','Provider verification status','Doctor and hospital profiles display HealthConnect verification state instead of unsupported external certification claims.'],
+  ['🔐','Private by design','Personal health information stays behind authenticated access and role-aware permissions.'],
+  ['🧾','Consent-controlled sharing','Patients stay in control of supported health-information sharing within care workflows.'],
+  ['✅','Visible provider status','Doctor and hospital profiles show HealthConnect verification status clearly so users can understand the provider profile they are viewing.'],
   ['🛡️','Community safety controls','Membership rules, moderation, reporting and anonymous-post protections are built into Community workflows.'],
-  ['📚','Clear health information','Knowledge content is separated from personal medical advice and points users back to professional care when appropriate.'],
+  ['📚','Clear health information','Knowledge content supports informed conversations and stays separate from diagnosis or personal medical advice.'],
   ['🇮🇳','Built for Indian healthcare journeys','Doctors, hospitals, government-scheme information, OPD discovery and patient records are presented in familiar, explicit language.'],
 ] as const;
 
@@ -17,7 +17,7 @@ export default function TrustSection(){
       @media(max-width:600px){.trust-section{padding:54px 16px}.trust-grid{grid-template-columns:1fr}}
     `}</style>
     <div className="trust-inner">
-      <div className="trust-head"><div><div className="trust-kicker">TRUST SHOULD BE SPECIFIC</div><h2 className="trust-title">Healthcare confidence comes from what the platform actually does.</h2></div><p className="trust-copy">HealthConnect should earn trust through clear permissions, visible provider status and transparent workflows — not by displaying certification or integration badges before those formal claims are supportable.</p></div>
+      <div className="trust-head"><div><div className="trust-kicker">TRUST & PRIVACY</div><h2 className="trust-title">Know what HealthConnect protects, shares and shows.</h2></div><p className="trust-copy">Healthcare trust starts with understandable permissions, visible provider status and clear boundaries between public discovery information and private health information.</p></div>
       <div className="trust-grid">{ITEMS.map(([icon,title,copy])=><article className="trust-card" key={title}><div className="trust-icon">{icon}</div><h3>{title}</h3><p>{copy}</p></article>)}</div>
       <div className="trust-note"><strong>Important:</strong> HealthConnect supports healthcare discovery, records and care coordination. It does not replace emergency services or a clinician’s diagnosis and treatment decisions.</div>
     </div>
