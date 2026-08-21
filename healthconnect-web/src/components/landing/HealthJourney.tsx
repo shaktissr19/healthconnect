@@ -4,78 +4,55 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 
-const STEPS = [
-  ['01', 'Health Profile', 'Identity, core health context and preferences'],
-  ['02', 'Medical History', 'Conditions, past care and longitudinal history'],
-  ['03', 'Vitals & Symptoms', 'Track measurable health information over time'],
-  ['04', 'Reports & Prescriptions', 'Keep documents organised in one health account'],
-  ['05', 'Medications', 'Know what you take and follow treatment more consistently'],
-  ['06', 'Doctor & Hospital Visits', 'Appointments stay connected to your care journey'],
-  ['07', 'Follow-up', 'Keep the next step visible instead of starting over'],
+const FEATURES = [
+  ['Health Profile','Identity and core health context'],
+  ['Medical History','Conditions and past care'],
+  ['Vitals & Symptoms','Track changes over time'],
+  ['Reports','Keep health documents organised'],
+  ['Medications','Keep treatment context visible'],
+  ['Appointments','Doctor and hospital visits in one journey'],
 ] as const;
 
-export default function HealthJourney() {
-  const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
-  const { openAuthModal } = useUIStore();
+export default function HealthJourney(){
+  const router=useRouter();
+  const {user,isAuthenticated}=useAuthStore();
+  const {openAuthModal}=useUIStore();
 
-  const openMyHealth = () => {
-    if (!isAuthenticated || !user) {
-      try { sessionStorage.setItem('hc_post_login_redirect', '/dashboard'); } catch {}
+  const openMyHealth=()=>{
+    if(!isAuthenticated||!user){
+      try{sessionStorage.setItem('hc_post_login_redirect','/dashboard');}catch{}
       openAuthModal('login');
       return;
     }
-    const role = String(user.role ?? '').toUpperCase();
-    if (role === 'PATIENT') router.push('/dashboard');
-    else if (role === 'DOCTOR') router.push('/doctor-dashboard');
-    else if (role === 'HOSPITAL') router.push('/hospital-dashboard');
-    else router.push('/admin-dashboard');
+    const role=String(user.role??'').toUpperCase();
+    router.push(role==='PATIENT'?'/dashboard':role==='DOCTOR'?'/doctor-dashboard':role==='HOSPITAL'?'/hospital-dashboard':'/admin-dashboard');
   };
 
-  return (
-    <section className="journey-section">
-      <style>{`
-        .journey-section{background:#F4F8FB;padding:76px 28px;font-family:'DM Sans',Arial,sans-serif}
-        .journey-inner{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:minmax(0,.92fr) minmax(500px,1.08fr);gap:54px;align-items:center}
-        .journey-kicker{font-size:11px;font-weight:850;letter-spacing:.17em;color:#0D9488;margin-bottom:11px}
-        .journey-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.1rem,3.4vw,3.8rem);line-height:1.05;letter-spacing:-.045em;color:#0F172A;margin:0 0 16px}
-        .journey-copy{font-size:15px;line-height:1.75;color:#5C7085;margin:0 0 23px;max-width:560px}
-        .journey-quote{padding:16px 18px;border-left:3px solid #0D9488;background:#fff;border-radius:0 12px 12px 0;color:#334155;font-size:13px;line-height:1.65;margin-bottom:22px;box-shadow:0 6px 20px rgba(15,23,42,.04)}
-        .journey-cta{border:none;border-radius:10px;padding:12px 19px;background:#0D9488;color:#fff;font-size:12px;font-weight:850;cursor:pointer;box-shadow:0 8px 22px rgba(13,148,136,.19)}
-        .journey-app{background:#08182D;border-radius:22px;padding:17px;border:1px solid rgba(148,163,184,.18);box-shadow:0 24px 60px rgba(15,23,42,.18)}
-        .journey-appbar{height:42px;border-radius:12px 12px 0 0;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #E5EDF4}.journey-brand{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:850;color:#0F172A}.journey-logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#0D9488,#14B8A6);display:grid;place-items:center;color:#fff;font-size:9px}.journey-avatar{width:24px;height:24px;border-radius:50%;background:#DBEAFE;color:#1D4ED8;display:grid;place-items:center;font-size:8px;font-weight:900}
-        .journey-appbody{display:grid;grid-template-columns:145px 1fr;background:#fff;min-height:360px;border-radius:0 0 12px 12px;overflow:hidden}.journey-nav{background:#F8FAFC;border-right:1px solid #E5EDF4;padding:16px 10px}.journey-nav strong{display:block;font-size:9px;color:#94A3B8;letter-spacing:.1em;margin:0 7px 8px}.journey-nav span{display:block;font-size:9px;color:#475569;padding:7px 8px;border-radius:7px;margin-bottom:3px}.journey-nav span.active{background:#E6F7F5;color:#0F766E;font-weight:850}
-        .journey-content{padding:17px}.journey-content h4{font-family:'Sora',sans-serif;font-size:15px;margin:0 0 4px;color:#0F172A}.journey-content>p{font-size:9px;color:#64748B;margin:0 0 14px}.journey-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.journey-card{border:1px solid #E5EDF4;border-radius:9px;padding:9px;background:#fff}.journey-card small{display:block;color:#94A3B8;font-size:7px;font-weight:800;letter-spacing:.06em;margin-bottom:5px}.journey-card strong{font-size:16px;color:#0F172A}.journey-card span{font-size:7px;color:#64748B;margin-left:3px}
-        .journey-flow{border:1px solid #E5EDF4;border-radius:11px;padding:10px;background:#FBFDFF}.journey-flow-title{font-size:8px;font-weight:900;color:#475569;letter-spacing:.08em;margin-bottom:9px}.journey-step-row{display:flex;align-items:center;gap:6px;overflow:hidden}.journey-step-dot{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#E6F7F5;color:#0F766E;font-size:7px;font-weight:900;flex:0 0 20px}.journey-step-line{height:1px;background:#CBD5E1;flex:1}.journey-step-labels{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:5px}.journey-step-labels span{font-size:6.5px;color:#64748B;text-align:center}
-        .journey-list{margin-top:18px;display:grid;gap:8px}.journey-list-row{display:grid;grid-template-columns:38px 1fr;gap:11px;align-items:start}.journey-num{font-family:'Sora',sans-serif;font-size:10px;color:#0D9488;font-weight:900;padding-top:2px}.journey-list-row strong{display:block;font-size:12px;color:#1E293B;margin-bottom:2px}.journey-list-row span{font-size:10px;color:#64748B;line-height:1.45}
-        @media(max-width:980px){.journey-inner{grid-template-columns:1fr}.journey-app{max-width:700px}.journey-list{grid-template-columns:1fr 1fr}}
-        @media(max-width:640px){.journey-section{padding:58px 16px}.journey-list{grid-template-columns:1fr}.journey-appbody{grid-template-columns:92px 1fr}.journey-nav{padding:12px 6px}.journey-cards{grid-template-columns:1fr}.journey-app{padding:9px}.journey-content{padding:12px}.journey-step-labels{display:none}}
-      `}</style>
+  return <section className="journey-section">
+    <style>{`
+      .journey-section{background:#fff;padding:20px 28px 60px;font-family:'DM Sans',Arial,sans-serif}.journey-shell{max-width:1280px;margin:0 auto;background:radial-gradient(circle at 8% 12%,rgba(56,189,248,.13),transparent 28%),linear-gradient(135deg,#073543 0%,#0B5360 50%,#0F766E 100%);border-radius:22px;padding:38px 42px;display:grid;grid-template-columns:minmax(0,.9fr) minmax(490px,1.1fr);gap:40px;align-items:center;box-shadow:0 16px 42px rgba(15,118,110,.15);overflow:hidden;position:relative}.journey-kicker{font-size:10px;font-weight:900;letter-spacing:.18em;color:#99F6E4;margin-bottom:9px}.journey-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,3vw,3.35rem);line-height:1.06;letter-spacing:-.04em;color:#F8FFFE;margin:0 0 13px}.journey-copy{font-size:13px;line-height:1.68;color:#D1F0EC;margin:0 0 17px;max-width:560px}.journey-flow-copy{font-size:11px;line-height:1.55;color:#B8DED9;padding:11px 13px;border-left:2px solid #5EEAD4;background:rgba(255,255,255,.055);border-radius:0 9px 9px 0;margin-bottom:16px}.journey-cta{border:0;border-radius:9px;padding:10px 16px;background:#fff;color:#0F766E;font-size:11px;font-weight:900;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.12)}.journey-features{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:17px}.journey-feature{padding:8px 9px;border:1px solid rgba(153,246,228,.16);background:rgba(255,255,255,.045);border-radius:9px}.journey-feature b{display:block;color:#ECFEFF;font-size:9.5px;margin-bottom:2px}.journey-feature span{font-size:8px;line-height:1.3;color:#A8D6D2}
+      .journey-app{background:#071426;border-radius:17px;padding:11px;border:1px solid rgba(255,255,255,.14);box-shadow:0 20px 50px rgba(0,0,0,.24)}.appbar{height:36px;background:#fff;border-radius:9px 9px 0 0;display:flex;justify-content:space-between;align-items:center;padding:0 11px;border-bottom:1px solid #E5EDF4}.brand{display:flex;align-items:center;gap:7px;font-size:9px;font-weight:900;color:#0F172A}.brand i{width:21px;height:21px;border-radius:6px;background:linear-gradient(135deg,#0D9488,#14B8A6);display:grid;place-items:center;color:#fff;font-size:7px;font-style:normal}.avatar{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;background:#DBEAFE;color:#1D4ED8;font-size:7px;font-weight:900}.appbody{display:grid;grid-template-columns:120px 1fr;background:#fff;min-height:270px;border-radius:0 0 9px 9px;overflow:hidden}.appnav{padding:13px 8px;background:#F8FAFC;border-right:1px solid #E5EDF4}.appnav strong{display:block;font-size:7px;letter-spacing:.09em;color:#94A3B8;margin:0 6px 7px}.appnav span{display:block;font-size:7.5px;color:#475569;padding:5px 6px;border-radius:6px;margin-bottom:2px}.appnav span.active{background:#E6F7F5;color:#0F766E;font-weight:900}.appcontent{padding:14px}.appcontent h4{font-family:'Sora',sans-serif;font-size:13px;color:#0F172A;margin:0 0 3px}.appcontent>p{font-size:7.5px;color:#64748B;margin:0 0 10px}.appcards{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px}.appcard{padding:8px;border:1px solid #E5EDF4;border-radius:8px}.appcard small{display:block;font-size:6px;color:#94A3B8;font-weight:900;margin-bottom:4px}.appcard strong{font-size:13px;color:#0F172A}.appcard span{font-size:6px;color:#64748B;margin-left:2px}.care-flow{border:1px solid #E5EDF4;border-radius:9px;padding:9px;background:#FBFDFF}.care-flow>small{display:block;font-size:6.5px;font-weight:900;color:#475569;letter-spacing:.08em;margin-bottom:7px}.dots{display:flex;align-items:center}.dot{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:#CCFBF1;color:#0F766E;font-size:6px;font-weight:900}.line{height:1px;background:#CBD5E1;flex:1}.labels{display:grid;grid-template-columns:repeat(4,1fr);margin-top:4px}.labels span{text-align:center;font-size:5.5px;color:#64748B}
+      @media(max-width:960px){.journey-shell{grid-template-columns:1fr}.journey-app{max-width:700px}}
+      @media(max-width:600px){.journey-section{padding:16px 12px 44px}.journey-shell{padding:28px 18px}.journey-features{grid-template-columns:1fr}.appbody{grid-template-columns:88px 1fr}.appcards{grid-template-columns:1fr}.labels{display:none}}
+    `}</style>
 
-      <div className="journey-inner">
-        <div>
-          <div className="journey-kicker">MY HEALTH · YOUR CONTINUOUS HEALTH JOURNEY</div>
-          <h2 className="journey-title">Your health should not start over at every appointment.</h2>
-          <p className="journey-copy">My Health is the patient side of HealthConnect: one place to organise the information that matters before, during and after a consultation. The goal is continuity — not another folder of disconnected records.</p>
-          <div className="journey-quote">“I came to find a doctor” can become “my reports, medicines, appointments and follow-up are still connected when I come back.”</div>
-          <button className="journey-cta" onClick={openMyHealth}>Open My Health →</button>
-          <div className="journey-list">
-            {STEPS.map(([n, title, copy]) => <div className="journey-list-row" key={n}><div className="journey-num">{n}</div><div><strong>{title}</strong><span>{copy}</span></div></div>)}
-          </div>
-        </div>
+    <div className="journey-shell">
+      <div>
+        <div className="journey-kicker">MY HEALTH · CONTINUITY BETWEEN VISITS</div>
+        <h2 className="journey-title">Your health should not start over at every appointment.</h2>
+        <p className="journey-copy">My Health keeps the patient side of HealthConnect together before, during and after care — so reports, medicines, symptoms and appointments are easier to find when you need them again.</p>
+        <div className="journey-flow-copy">Find a doctor or hospital when you need care today. Sign in to My Health when you want your own health journey organised around you.</div>
+        <button className="journey-cta" onClick={openMyHealth}>Open My Health →</button>
+        <div className="journey-features">{FEATURES.map(([title,copy])=><div className="journey-feature" key={title}><b>{title}</b><span>{copy}</span></div>)}</div>
+      </div>
 
-        <div className="journey-app" aria-label="Illustrative preview of the HealthConnect patient dashboard">
-          <div className="journey-appbar"><div className="journey-brand"><div className="journey-logo">HC</div>HealthConnect · My Health</div><div className="journey-avatar">PS</div></div>
-          <div className="journey-appbody">
-            <div className="journey-nav"><strong>MY HEALTH</strong>{['Overview','Medical History','Vitals','Symptoms','Medications','Reports','Appointments'].map((item,i)=><span className={i===0?'active':''} key={item}>{item}</span>)}</div>
-            <div className="journey-content">
-              <h4>Good afternoon, Priya</h4><p>Your health information stays organised around you.</p>
-              <div className="journey-cards"><div className="journey-card"><small>HEALTH SCORE</small><strong>67</strong><span>/100</span></div><div className="journey-card"><small>REPORTS</small><strong>8</strong><span>stored</span></div><div className="journey-card"><small>MEDICATIONS</small><strong>2</strong><span>active</span></div></div>
-              <div className="journey-flow"><div className="journey-flow-title">CONNECTED CARE JOURNEY</div><div className="journey-step-row"><div className="journey-step-dot">1</div><div className="journey-step-line"/><div className="journey-step-dot">2</div><div className="journey-step-line"/><div className="journey-step-dot">3</div><div className="journey-step-line"/><div className="journey-step-dot">4</div></div><div className="journey-step-labels"><span>Find</span><span>Book</span><span>Visit</span><span>Follow-up</span></div></div>
-            </div>
-          </div>
+      <div className="journey-app" aria-label="Illustrative preview of the HealthConnect patient dashboard">
+        <div className="appbar"><div className="brand"><i>HC</i>HealthConnect · My Health</div><div className="avatar">PS</div></div>
+        <div className="appbody">
+          <div className="appnav"><strong>MY HEALTH</strong>{['Overview','Medical History','Vitals','Symptoms','Medications','Reports','Appointments'].map((item,i)=><span className={i===0?'active':''} key={item}>{item}</span>)}</div>
+          <div className="appcontent"><h4>Good afternoon, Priya</h4><p>Your health information stays organised around you.</p><div className="appcards"><div className="appcard"><small>HEALTH SCORE</small><strong>67</strong><span>/100</span></div><div className="appcard"><small>REPORTS</small><strong>8</strong><span>stored</span></div><div className="appcard"><small>MEDICATIONS</small><strong>2</strong><span>active</span></div></div><div className="care-flow"><small>CONNECTED CARE JOURNEY</small><div className="dots"><div className="dot">1</div><div className="line"/><div className="dot">2</div><div className="line"/><div className="dot">3</div><div className="line"/><div className="dot">4</div></div><div className="labels"><span>Find</span><span>Book</span><span>Visit</span><span>Follow-up</span></div></div></div>
         </div>
       </div>
-    </section>
-  );
+    </div>
+  </section>;
 }
