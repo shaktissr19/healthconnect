@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
 import Hero, { type PlatformStats } from '@/components/landing/Hero';
-import PlatformSpoke from '@/components/landing/PlatformSpoke';
-import HealthJourney from '@/components/landing/HealthJourney';
+import PlatformImpact from '@/components/landing/PlatformImpact';
+import PlatformExplainer from '@/components/landing/PlatformExplainer';
 import CommunitySpotlight from '@/components/landing/CommunitySpotlight';
+import HealthJourney from '@/components/landing/HealthJourney';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
 import TrustSection from '@/components/landing/TrustSection';
 import FinalCTA from '@/components/landing/FinalCTA';
@@ -94,9 +95,10 @@ export default function LandingPage(){
     <PublicNavbar/>
     <main>
       <Hero stats={stats}/>
-      <PlatformSpoke/>
-      <HealthJourney/>
+      <PlatformImpact stats={stats}/>
+      <PlatformExplainer/>
       <CommunitySpotlight/>
+      <HealthJourney/>
       <KnowledgeResources/>
       <TrustSection/>
       <FinalCTA/>
