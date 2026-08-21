@@ -29,7 +29,6 @@ const COLUMNS = [
       ['Privacy Policy','/privacy'],
       ['Terms of Use','/terms'],
       ['Data & Privacy','/data-privacy'],
-      ['Data Deletion','/data-deletion'],
     ],
   },
 ] as const;
