@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
-import Hero, { type PlatformStats } from '@/components/landing/Hero';
-import PlatformImpact from '@/components/landing/PlatformImpact';
-import PlatformExplainer from '@/components/landing/PlatformExplainer';
-import CommunitySpotlight from '@/components/landing/CommunitySpotlight';
-import HealthJourney from '@/components/landing/HealthJourney';
+import LandingHero from '@/components/landing/LandingHero';
+import PlatformNumbers, { type PlatformStats } from '@/components/landing/PlatformNumbers';
+import CommunityMyHealth from '@/components/landing/CommunityMyHealth';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
 import TrustSection from '@/components/landing/TrustSection';
 import FinalCTA from '@/components/landing/FinalCTA';
@@ -94,11 +92,9 @@ export default function LandingPage(){
   return <>
     <PublicNavbar/>
     <main>
-      <Hero stats={stats}/>
-      <PlatformImpact stats={stats}/>
-      <PlatformExplainer/>
-      <CommunitySpotlight/>
-      <HealthJourney/>
+      <LandingHero/>
+      <PlatformNumbers stats={stats}/>
+      <CommunityMyHealth/>
       <KnowledgeResources/>
       <TrustSection/>
       <FinalCTA/>
