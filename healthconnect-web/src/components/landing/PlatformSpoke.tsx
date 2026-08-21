@@ -1,152 +1,69 @@
 'use client';
+
 import { useState } from 'react';
 import Link from 'next/link';
 
 const SPOKES = [
   {
-    icon:'❤️', title:'Patient Dashboard', short:'Health records & score',
-    desc:'Your complete medical history, 7-parameter health score, medications, appointments, and vitals — all encrypted in one private space. Built for the needs of Indian patients managing chronic conditions like diabetes, hypertension, and heart disease.',
-    benefits:['Track health score across 7 parameters','Upload prescriptions, reports, doctor notes','Set medication reminders and track adherence','Book verified doctors and manage appointments'],
-    access:'Requires a free HealthConnect account.',
-    color:'#1A6BB5', href:'/?home=1#signup',
+    icon:'♥', title:'My Health', short:'Your health journey', color:'#38BDF8', href:'/?home=1&auth=login',
+    desc:'Keep the patient side of HealthConnect in one place: profile, medical history, vitals, symptoms, medicines, reports and appointments.',
+    benefits:['Health profile and medical history','Vitals, symptoms and medicines','Reports and prescriptions','Appointments and follow-up'],
+    access:'Sign in with a Patient account to open My Health.',
   },
   {
-    icon:'🩺', title:'Doctor Directory', short:'NMC-verified, book in 2 min',
-    desc:'37+ NMC/MCI-verified doctors each with a tamper-proof HCD identity. See real-time availability, book in under 2 minutes, read genuine patient reviews. Covers all major Indian cities and specialties including general physicians, diabetologists, cardiologists, and more.',
-    benefits:['NMC/MCI verified with HCD identity badge','Real-time availability — no phone calls','In-person, video, or home visit options','Genuine verified patient reviews'],
-    access:'Free to search and book for all users.',
-    color:'#7C3AED', href:'/doctors',
+    icon:'🩺', title:'Find Doctors', short:'Search & appointment journey', color:'#8B5CF6', href:'/doctors',
+    desc:'Search doctor profiles by specialty and location, review consultation options and move into the real appointment workflow when you are ready.',
+    benefits:['Specialty and city discovery','Provider profile and verification status','Availability and consultation options','Direct appointment journey'],
+    access:'Doctor discovery is public. Sign in when an authenticated action is required.',
   },
   {
-    icon:'🤝', title:'Health Communities', short:'Anonymous peer support',
-    desc:'Condition-specific groups covering India\'s most prevalent conditions: diabetes, hypertension, cardiac disease, PCOD, thyroid disorders, mental health, and more. Post completely anonymously. Browse for free. Every group moderated by a verified specialist.',
-    benefits:['Browse all communities without any account','Post anonymously — zero identity tracking','Specialist-moderated, evidence-based groups','+37% better outcomes in peer communities (JAMA)'],
-    access:'Browse free. Account needed to post.',
-    color:'#059669', href:'/communities',
+    icon:'🤝', title:'Health Communities', short:'Condition-focused support', color:'#10B981', href:'/communities',
+    desc:'Browse condition-focused communities, join conversations, attend community events and use anonymous posting where community rules allow it.',
+    benefits:['Public community discovery','Membership and approval rules','Anonymous-post privacy controls','Reporting, moderation, events and RSVP'],
+    access:'Browse publicly. Sign in to join and participate.',
   },
   {
-    icon:'🏥', title:'Hospital Directory', short:'340+ hospitals, Ayushman Bharat',
-    desc:'Find hospitals across India by location, specialty, and live bed availability. Fully integrated with Ayushman Bharat PM-JAY for cashless treatment at 340+ partner hospitals. Covers government and private hospitals across Tier 1, Tier 2, and Tier 3 cities.',
-    benefits:['Search hospitals free — no account needed','Live bed availability tracking nationwide','Ayushman Bharat PM-JAY cashless integration','Emergency SOS with real-time locator'],
-    access:'Free to search for all users.',
-    color:'#D97706', href:'/hospitals',
+    icon:'🏥', title:'Find Hospitals', short:'Know before you visit', color:'#F59E0B', href:'/hospitals',
+    desc:'Compare hospital profiles, departments, facilities, accepted insurance or government-scheme information, affiliated doctors and hospital-specific OPD.',
+    benefits:['Departments and facilities','Affiliated doctor profiles','Insurance and scheme information','Hospital-specific OPD booking'],
+    access:'Hospital discovery is public; booking uses the authenticated patient workflow.',
   },
   {
-    icon:'📚', title:'Knowledge Hub', short:'Doctor-reviewed health info',
-    desc:'Articles, condition guides, drug information, and India-wide health trends — all reviewed by verified doctors on HealthConnect. Covers India-specific health conditions, ICMR guidelines, seasonal disease alerts, and ABDM-compliant health standards. Zero ads.',
-    benefits:['Every article reviewed by a verified doctor','India-specific conditions and ICMR guidelines','Drug information and treatment guides','Zero ads, zero sponsored content — always free'],
-    access:'Entirely free for everyone.',
-    color:'#E11D48', href:'/learn',
+    icon:'📚', title:'Knowledge Hub', short:'Health explainers & guides', color:'#E11D48', href:'/learn',
+    desc:'Explore health explainers and condition guides written for the Indian healthcare context, then return to professional care when a medical decision is needed.',
+    benefits:['Condition explainers','India-focused health topics','Practical patient education','Clear separation from diagnosis and treatment'],
+    access:'Knowledge content is available publicly.',
   },
-];
+] as const;
 
-export default function PlatformSpoke() {
-  const [active, setActive] = useState(0);
-  const s = SPOKES[active];
+export default function PlatformSpoke(){
+  const [active,setActive]=useState(0);
+  const item=SPOKES[active];
 
-  return (
-    <section style={{ background:'#fff', padding:'52px 48px' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+  return <section className="platform-section">
+    <style>{`
+      .platform-section{background:#fff;padding:34px 28px 54px;font-family:'DM Sans',Arial,sans-serif}.platform-inner{max-width:1280px;margin:0 auto;background:radial-gradient(circle at 88% 8%,rgba(59,130,246,.12),transparent 28%),linear-gradient(135deg,#061225 0%,#0A1628 52%,#0D2140 100%);border-radius:20px;padding:34px 42px 36px;position:relative;overflow:hidden;box-shadow:0 14px 42px rgba(15,23,42,.12)}
+      .platform-head{display:grid;grid-template-columns:1fr .72fr;gap:34px;align-items:end;margin-bottom:24px}.platform-kicker{font-size:10px;font-weight:900;letter-spacing:.18em;color:#60A5FA;margin-bottom:8px}.platform-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,3vw,3.25rem);line-height:1.06;letter-spacing:-.04em;color:#F8FBFF;margin:0}.platform-copy{font-size:13px;line-height:1.65;color:#91AAC5;margin:0}
+      .platform-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:19px}.platform-tab{position:relative;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.035);border-radius:12px;padding:13px 8px 12px;text-align:center;cursor:pointer;color:#93AAC3;transition:.18s}.platform-tab:hover{transform:translateY(-1px);color:#fff}.platform-tab.active{background:#fff;border-color:var(--c);color:var(--c);box-shadow:0 8px 24px rgba(0,0,0,.18)}.platform-tab .icon{width:36px;height:36px;border-radius:10px;margin:0 auto 8px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 13%,transparent);font-size:17px}.platform-tab.active .icon{background:var(--c);color:#fff}.platform-tab b{display:block;font-size:10px;line-height:1.25}.platform-tab small{display:block;font-size:7.5px;line-height:1.25;margin-top:3px;opacity:.72}
+      .platform-detail{display:grid;grid-template-columns:1fr 1fr;border:1px solid color-mix(in srgb,var(--c) 28%,transparent);border-top:3px solid var(--c);background:rgba(255,255,255,.045)}.platform-left,.platform-right{padding:22px 27px}.platform-left{border-right:1px solid rgba(148,163,184,.12)}.platform-label{font-size:9px;font-weight:900;letter-spacing:.12em;color:var(--c);margin-bottom:5px;text-transform:uppercase}.platform-detail h3{font-family:'Sora',sans-serif;font-size:20px;color:#F8FBFF;margin:0 0 9px}.platform-detail p{font-size:11px;line-height:1.62;color:#AAC0D7;margin:0 0 12px}.platform-access{font-size:9px;color:#A8C0D7;padding:7px 9px;background:rgba(255,255,255,.035);border-left:2px solid var(--c);margin-bottom:13px}.platform-link{display:inline-flex;text-decoration:none;background:var(--c);color:#071426;border-radius:8px;padding:9px 13px;font-size:9.5px;font-weight:900}.platform-right>small{display:block;font-size:8px;font-weight:900;letter-spacing:.12em;color:#718BA6;margin-bottom:7px}.benefit{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(148,163,184,.1);font-size:10px;color:#C0D0E0}.benefit:last-child{border-bottom:0}.benefit i{width:16px;height:16px;border-radius:5px;background:var(--c);display:grid;place-items:center;color:#fff;font-style:normal;font-size:8px;font-weight:900;flex:0 0 16px}
+      @media(max-width:900px){.platform-head,.platform-detail{grid-template-columns:1fr}.platform-tabs{grid-template-columns:repeat(3,1fr)}.platform-left{border-right:0;border-bottom:1px solid rgba(148,163,184,.12)}}
+      @media(max-width:600px){.platform-section{padding:24px 12px 42px}.platform-inner{padding:26px 16px}.platform-tabs{grid-template-columns:1fr 1fr}.platform-head{gap:14px}.platform-detail h3{font-size:17px}}
+    `}</style>
 
-        .ps-node{cursor:pointer;transition:all 0.25s ease;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 12px;border-radius:14px;border:2px solid transparent;position:relative;flex:1;}
-        .ps-node:hover{transform:translateY(-2px);}
-        .ps-node.act{border-color:var(--c);background:#fff;box-shadow:0 6px 24px rgba(0,0,0,0.12);}
-        .ps-icon{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;transition:all 0.25s ease;}
-        .ps-line{flex:1;height:1.5px;align-self:center;margin-top:-24px;opacity:0.3;background:rgba(150,185,230,0.4);}
-        @keyframes psIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        .ps-in{animation:psIn 0.38s ease both;}
-        .ps-ben{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.08);font-family:'DM Sans',sans-serif;font-size:13px;color:rgba(210,228,255,0.8);font-weight:500;line-height:1.4;}
-        .ps-ben:last-child{border-bottom:none;}
-        .ps-cta{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border:none;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;text-transform:uppercase;letter-spacing:0.05em;color:#fff;transition:all 0.2s;}
-        .ps-cta:hover{transform:translateX(3px);}
-        .ps-dot{transition:all 0.3s;border:none;cursor:pointer;padding:0;}
-
-        /* Heading — synced with Hero clamp */
-        .ps-heading{font-family:'Sora',sans-serif;font-size:clamp(2.1rem,3.4vw,3.8rem);font-weight:900;color:#EEF4FF;letter-spacing:-0.03em;line-height:1.1;margin:0;}
-
-        @media(max-width:1024px){
-          .ps-detail{grid-template-columns:1fr!important;}
-        }
-        @media(max-width:768px){
-          .ps-nodes{flex-wrap:wrap;gap:8px!important;}
-          .ps-node{min-width:100px;flex:calc(50% - 8px);}
-          .ps-line{display:none!important;}
-          .ps-inner{margin:0 16px!important;padding:36px 24px!important;}
-        }
-      `}</style>
-
-      {/* Inner dark card — height reduced ~17% via tighter padding */}
-      <div className="ps-inner" style={{ background:'linear-gradient(135deg,#060E1E 0%,#0A1628 50%,#0D2140 100%)', padding:'44px 52px', borderRadius:16, position:'relative', overflow:'hidden' }}>
-
-        {/* Background lines */}
-        <div style={{ position:'absolute', inset:0, pointerEvents:'none', overflow:'hidden' }}>
-          <svg viewBox="0 0 800 600" style={{ position:'absolute', right:0, top:0, width:'50%', height:'100%', opacity:0.07 }} preserveAspectRatio="none">
-            <line x1="800" y1="0" x2="400" y2="600" stroke="#5B9CF6" strokeWidth="1"/>
-            <line x1="700" y1="0" x2="300" y2="600" stroke="#5B9CF6" strokeWidth="0.6"/>
-            <line x1="600" y1="0" x2="200" y2="600" stroke="#5B9CF6" strokeWidth="0.4"/>
-          </svg>
-        </div>
-
-        {/* Header */}
-        <div style={{ marginBottom:36, position:'relative', zIndex:2 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-            <div style={{ width:28, height:1, background:'#1A6BB5' }}/>
-            <span style={{ fontSize:11, fontWeight:700, color:'#5B9CF6', letterSpacing:'0.18em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif" }}>Platform Features</span>
-          </div>
-          <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
-            <h2 className="ps-heading">Everything you need.<br/>Nothing you don't.</h2>
-            <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, color:'rgba(180,210,255,0.5)', maxWidth:340, lineHeight:1.6, margin:0 }}>
-              Five integrated pillars — click any to see what it does, who it's for, and what's free.
-            </p>
-          </div>
-        </div>
-
-        {/* Spoke nodes */}
-        <div className="ps-nodes" style={{ display:'flex', alignItems:'flex-start', justifyContent:'center', marginBottom:36, position:'relative', zIndex:2, gap:0 }}>
-          {SPOKES.map((sp,i) => (
-            <>
-              <div key={sp.title} className={`ps-node ${active===i?'act':''}`} style={{ '--c':sp.color } as React.CSSProperties} onClick={()=>setActive(i)}>
-                <div className="ps-icon" style={{ background:active===i?sp.color:`${sp.color}20` }}>{sp.icon}</div>
-                <div style={{ fontSize:11, fontWeight:700, color:active===i?sp.color:'rgba(180,210,255,0.5)', textAlign:'center', fontFamily:"'DM Sans',sans-serif", lineHeight:1.3 }}>{sp.title}</div>
-                {active===i && <div style={{ position:'absolute', bottom:-16, left:'50%', transform:'translateX(-50%)', width:1.5, height:16, background:sp.color }}/>}
-              </div>
-              {i<SPOKES.length-1 && <div key={`l${i}`} className="ps-line"/>}
-            </>
-          ))}
-        </div>
-
-        {/* Detail panel */}
-        <div key={active} className="ps-in ps-detail" style={{ position:'relative', zIndex:2, display:'grid', gridTemplateColumns:'1fr 1fr', background:'rgba(255,255,255,0.04)', border:`1px solid ${s.color}28`, borderTop:`3px solid ${s.color}`, borderRadius:0 }}>
-          <div style={{ padding:'28px 32px', borderRight:`1px solid ${s.color}18` }}>
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
-              <div style={{ width:40, height:40, borderRadius:11, background:`${s.color}22`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:19 }}>{s.icon}</div>
-              <div>
-                <div style={{ fontSize:10, fontWeight:700, color:s.color, letterSpacing:'0.12em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif", marginBottom:2 }}>{s.short}</div>
-                <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1rem,1.5vw,1.4rem)', fontWeight:900, color:'#EEF4FF', letterSpacing:'-0.02em', margin:0 }}>{s.title}</h3>
-              </div>
-            </div>
-            <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, lineHeight:1.7, color:'rgba(195,215,255,0.7)', margin:'0 0 14px' }}>{s.desc}</p>
-            <div style={{ fontSize:11, color:`${s.color}CC`, fontFamily:"'DM Sans',sans-serif", marginBottom:18, padding:'6px 10px', background:`${s.color}14`, borderLeft:`2px solid ${s.color}` }}>
-              {s.access}
-            </div>
-            <Link href={s.href} className="ps-cta" style={{ background:s.color, boxShadow:`0 4px 14px ${s.color}38` }}>Explore →</Link>
-          </div>
-          <div style={{ padding:'28px 32px' }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'rgba(180,210,255,0.45)', letterSpacing:'0.14em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif", marginBottom:16 }}>What you get</div>
-            <div>{s.benefits.map((b,i)=>(
-              <div key={i} className="ps-ben">
-                <div style={{ width:17, height:17, borderRadius:5, background:s.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
-                  <span style={{ color:'#fff', fontSize:9, fontWeight:800 }}>✓</span>
-                </div>{b}
-              </div>
-            ))}</div>
-            <div style={{ display:'flex', gap:6, marginTop:20 }}>
-              {SPOKES.map((_,i)=>(<button key={i} className="ps-dot" onClick={()=>setActive(i)} style={{ width:i===active?18:5, height:5, borderRadius:999, background:i===active?s.color:'rgba(255,255,255,0.18)' }}/>))}
-            </div>
-          </div>
-        </div>
+    <div className="platform-inner" style={{'--c':item.color} as React.CSSProperties}>
+      <div className="platform-head">
+        <div><div className="platform-kicker">THE HEALTHCONNECT PLATFORM</div><h2 className="platform-title">Everything you need. Nothing you don't.</h2></div>
+        <p className="platform-copy">Five connected parts, explained in familiar language. Start with the one you need today and discover the rest when it becomes relevant.</p>
       </div>
-    </section>
-  );
+
+      <div className="platform-tabs">
+        {SPOKES.map((sp,i)=><button key={sp.title} className={`platform-tab ${active===i?'active':''}`} style={{'--c':sp.color} as React.CSSProperties} onClick={()=>setActive(i)}><span className="icon">{sp.icon}</span><b>{sp.title}</b><small>{sp.short}</small></button>)}
+      </div>
+
+      <div className="platform-detail" key={item.title}>
+        <div className="platform-left"><div className="platform-label">{item.short}</div><h3>{item.title}</h3><p>{item.desc}</p><div className="platform-access">{item.access}</div><Link className="platform-link" href={item.href}>Explore {item.title} →</Link></div>
+        <div className="platform-right"><small>WHAT YOU CAN DO</small>{item.benefits.map(b=><div className="benefit" key={b}><i>✓</i>{b}</div>)}</div>
+      </div>
+    </div>
+  </section>;
 }
