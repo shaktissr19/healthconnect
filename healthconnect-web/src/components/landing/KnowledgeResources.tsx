@@ -43,7 +43,7 @@ export default function KnowledgeResources(){
     <div className="knowledge-inner">
       <div className="knowledge-head"><div><div className="knowledge-kicker">KNOWLEDGE HUB</div><h2 className="knowledge-title">Health information that helps you ask better questions.</h2></div><div className="knowledge-head-right"><p>Explore health explainers and condition guides built for the Indian healthcare context. Knowledge content should support informed conversations with a clinician — not replace them.</p><Link href="/learn" className="knowledge-all">Visit Knowledge Hub →</Link></div></div>
       <div className="knowledge-grid">{ARTICLES.map(article=><Link href={article.href} className="knowledge-card" key={article.href}><div className="knowledge-photo" style={{backgroundImage:`url(${article.photo})`}}/><div className="knowledge-body"><span className="knowledge-cat" style={{color:article.color,background:`${article.color}12`}}>{article.cat}</span><h3>{article.title}</h3><span className="knowledge-read">Read article →</span></div></Link>)}</div>
-      <div className="knowledge-disclaimer"><span><strong>No fabricated testimonials.</strong> The landing page intentionally avoids presenting illustrative stock stories as real patient or provider endorsements.</span><span>Health information is educational and not a diagnosis.</span></div>
+      <div className="knowledge-disclaimer"><span><strong>Use knowledge as a starting point.</strong> Bring questions, symptoms and concerns to a qualified healthcare professional when you need personal medical guidance.</span><span>Educational content is not a diagnosis.</span></div>
     </div>
   </section>;
 }
