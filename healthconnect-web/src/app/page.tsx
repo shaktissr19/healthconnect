@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
 import Hero, { type PlatformStats } from '@/components/landing/Hero';
-import CareDiscovery from '@/components/landing/CareDiscovery';
+import PlatformSpoke from '@/components/landing/PlatformSpoke';
 import HealthJourney from '@/components/landing/HealthJourney';
 import CommunitySpotlight from '@/components/landing/CommunitySpotlight';
-import ProviderPlatform from '@/components/landing/ProviderPlatform';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
 import TrustSection from '@/components/landing/TrustSection';
 import FinalCTA from '@/components/landing/FinalCTA';
@@ -84,8 +83,7 @@ export default function LandingPage(){
 
   useEffect(()=>{
     if(!authChecked) return;
-    const hash = window.location.hash;
-    if(hash==='#signup') openAuthModal('register');
+    if(window.location.hash==='#signup') openAuthModal('register');
   },[authChecked,openAuthModal]);
 
   if(!authChecked){
@@ -96,10 +94,9 @@ export default function LandingPage(){
     <PublicNavbar/>
     <main>
       <Hero stats={stats}/>
-      <CareDiscovery/>
+      <PlatformSpoke/>
       <HealthJourney/>
       <CommunitySpotlight/>
-      <ProviderPlatform/>
       <KnowledgeResources/>
       <TrustSection/>
       <FinalCTA/>
