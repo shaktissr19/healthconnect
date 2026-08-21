@@ -14,7 +14,7 @@ export default function CommunitySpotlight() {
     let alive = true;
     const load = async () => {
       try {
-        let result: any = await communityApiV2.list({ featured: 'true', limit: 4 });
+        let result: any = await communityApiV2.list({ featured: true, limit: 4 });
         let communities = Array.isArray(result?.communities) ? result.communities : [];
         if (communities.length < 3) {
           result = await communityApiV2.list({ limit: 4 });
