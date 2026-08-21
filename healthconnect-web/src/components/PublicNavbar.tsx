@@ -91,7 +91,7 @@ export default function PublicNavbar(){
           <button className="hc-nav-link" title="Doctor workspace for patients, schedules and consultations" onClick={()=>accountShortcut('patients')}>My Patients</button>
         </div>
         <div className="hc-nav-auth">
-          {_hasHydrated&&isAuthenticated&&user?<><button className="hc-dashboard-btn" onClick={()=>router.push(getDashRoute(user.role))}>My Dashboard</button><UserMenu user={user} onSignOut={clearAuth}/></>:<><button className="hc-signin" onClick={()=>requestAuth('login')}>Sign In</button><button className="hc-signup" onClick={()=>requestAuth('register')}>Sign Up Free</button></>}
+          {_hasHydrated&&isAuthenticated&&user?<><button className="hc-dashboard-btn" onClick={()=>router.push(getDashRoute(user.role))}>My Dashboard</button><UserMenu user={user} onSignOut={clearAuth}/></>:<><button className="hc-signin" onClick={()=>requestAuth('login')}>Sign In</button><button className="hc-signup" onClick={()=>requestAuth('register')}>Sign Up</button></>}
         </div>
         <button className="hc-hamburger" aria-label="Open menu" onClick={()=>setMobileOpen(v=>!v)}>{mobileOpen?'×':'☰'}</button>
       </div>
@@ -101,7 +101,7 @@ export default function PublicNavbar(){
       <div className="hc-mobile-divider"/>
       <button onClick={()=>accountShortcut('health')}>♡ My Health <span style={{float:'right',opacity:.4}}>→</span></button><div className="hc-mobile-help">Your reports, medicines, appointments and health journey.</div>
       <button onClick={()=>accountShortcut('patients')}>👥 My Patients <span style={{float:'right',opacity:.4}}>→</span></button><div className="hc-mobile-help">Doctor workspace for patients, schedules and consultations.</div>
-      <div className="hc-mobile-auth">{isAuthenticated&&user?<><button className="primary" onClick={()=>{router.push(getDashRoute(user.role));setMobileOpen(false)}}>My Dashboard</button><button onClick={()=>{clearAuth();setMobileOpen(false);goHome()}}>Sign Out</button></>:<><button onClick={()=>requestAuth('login')}>Sign In</button><button className="primary" onClick={()=>requestAuth('register')}>Sign Up Free</button></>}</div>
+      <div className="hc-mobile-auth">{isAuthenticated&&user?<><button className="primary" onClick={()=>{router.push(getDashRoute(user.role));setMobileOpen(false)}}>My Dashboard</button><button onClick={()=>{clearAuth();setMobileOpen(false);goHome()}}>Sign Out</button></>:<><button onClick={()=>requestAuth('login')}>Sign In</button><button className="primary" onClick={()=>requestAuth('register')}>Sign Up</button></>}</div>
     </div>
   </>;
 }
