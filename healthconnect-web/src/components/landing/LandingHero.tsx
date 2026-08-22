@@ -107,26 +107,27 @@ export default function LandingHero() {
     <style>{`
       .lh-shell{background:#fff;padding:82px 28px 18px;font-family:'DM Sans',Arial,sans-serif}
       .lh-wrap{max-width:1280px;height:500px;margin:0 auto;border-radius:22px;overflow:hidden;background:radial-gradient(circle at 88% 8%,rgba(20,184,166,.16),transparent 30%),linear-gradient(135deg,#061225 0%,#0A1A33 58%,#0B2943 100%);box-shadow:0 16px 42px rgba(15,23,42,.14);border:1px solid rgba(148,163,184,.15);display:grid;grid-template-rows:62px 1fr 44px}
-      .lh-tabs{display:flex;align-items:end;gap:7px;padding:13px 28px 0;overflow-x:auto;scrollbar-width:none}
-      .lh-tab{position:relative;overflow:hidden;border:1px solid rgba(148,163,184,.18);background:rgba(255,255,255,.035);color:#AFC2D8;border-radius:10px;padding:10px 14px;font-weight:850;font-size:11.5px;cursor:pointer;white-space:nowrap;min-height:42px}
-      .lh-tab.active{color:#fff;border-color:var(--accent);background:rgba(255,255,255,.075)}
-      .lh-tab.active:after{content:'';position:absolute;left:0;bottom:0;height:2px;background:var(--accent);animation:lhProgress 5.8s linear forwards}
+      .lh-tabs{display:flex;align-items:end;gap:8px;padding:13px 28px 0;overflow-x:auto;scrollbar-width:none}
+      .lh-tab{position:relative;overflow:hidden;border:1px solid var(--tab-border);background:var(--tab-bg);color:#F3F8FC;border-radius:11px;padding:10px 14px;font-weight:850;font-size:11.5px;cursor:pointer;white-space:nowrap;min-height:42px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:.16s}
+      .lh-tab:hover{transform:translateY(-1px);background:var(--tab-hover);border-color:var(--accent)}
+      .lh-tab.active{color:#fff;border-color:var(--accent);background:var(--tab-active);box-shadow:0 5px 16px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.08)}
+      .lh-tab.active:after{content:'';position:absolute;left:0;bottom:0;height:3px;background:var(--accent);animation:lhProgress 5.8s linear forwards}
       .lh-tab span{margin-right:6px}
       @keyframes lhProgress{from{width:0}to{width:100%}}
       .lh-main{display:grid;grid-template-columns:minmax(0,1.03fr) minmax(390px,.97fr);gap:38px;align-items:center;padding:20px 54px;height:100%;min-height:0}
       .lh-copy{align-self:center}.lh-eyebrow{font-size:10px;letter-spacing:.18em;font-weight:900;color:var(--accent);margin-bottom:9px}
       .lh-copy h1{font-family:'Sora','DM Sans',sans-serif;color:#F8FBFF;font-size:clamp(2.2rem,3.2vw,3.3rem);line-height:1.03;letter-spacing:-.045em;margin:0 0 11px;max-width:700px}
       .lh-copy>p{font-size:13.5px;line-height:1.58;color:#BCD0E5;margin:0 0 15px;max-width:650px}
-      .lh-actions{display:flex;gap:9px;flex-wrap:wrap}.lh-btn{border-radius:9px;padding:10px 16px;font-size:11.5px;font-weight:900;cursor:pointer;font-family:inherit}
-      .lh-primary{border:1px solid var(--accent);background:var(--accent);color:#061225}.lh-secondary{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.04);color:#fff}
-      .lh-links{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}.lh-link{border:0;background:none;color:#91B5D7;padding:0;font-size:10.5px;font-weight:800;cursor:pointer}.lh-link:hover{color:#fff;text-decoration:underline}
-      .lh-preview{background:rgba(255,255,255,.055);border:1px solid rgba(148,163,184,.18);border-radius:17px;padding:13px;box-shadow:0 18px 50px rgba(0,0,0,.2);height:235px;display:flex;flex-direction:column;justify-content:center}
-      .lh-preview-head{display:flex;justify-content:space-between;align-items:center;color:#8CA6C4;font-size:8.5px;font-weight:900;letter-spacing:.13em;margin-bottom:9px}.lh-live{color:#86EFAC}
+      .lh-actions{display:flex;gap:9px;flex-wrap:wrap}.lh-btn{border-radius:10px;padding:10px 16px;font-size:11.5px;font-weight:900;cursor:pointer;font-family:inherit;transition:.16s;box-shadow:0 5px 14px rgba(0,0,0,.13)}.lh-btn:hover{transform:translateY(-1px)}
+      .lh-primary{border:1px solid var(--accent);background:var(--accent);color:#061225}.lh-secondary{border:1px solid rgba(255,255,255,.72);background:#F8FBFF;color:#16324B}
+      .lh-links{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}.lh-link{border:0;background:none;color:#A9C7E2;padding:0;font-size:10.5px;font-weight:800;cursor:pointer}.lh-link:hover{color:#fff;text-decoration:underline}
+      .lh-preview{background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.045));border:1px solid rgba(148,163,184,.22);border-radius:17px;padding:13px;box-shadow:0 18px 50px rgba(0,0,0,.2);height:235px;display:flex;flex-direction:column;justify-content:center}
+      .lh-preview-head{display:flex;justify-content:space-between;align-items:center;color:#A0B7D0;font-size:8.5px;font-weight:900;letter-spacing:.13em;margin-bottom:9px}.lh-live{color:#86EFAC}
       .lh-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.lh-preview-stack{display:grid;gap:8px}
       .lh-card{background:#F8FBFF;border:1px solid #DCE7F0;border-radius:11px;padding:10px;color:#10233C;min-width:0}.lh-card.wide{grid-column:1/-1}.lh-card.green{background:#F0FDF4;border-color:#BBF7D0}.lh-card.knowledge-feature{background:linear-gradient(135deg,#EFF6FF,#F8FBFF);border-color:#BFDBFE}
       .lh-card small{display:block;color:#718BA9;font-size:8px;font-weight:900;letter-spacing:.1em;margin-bottom:5px}.lh-card b{display:block;font-size:10.5px;line-height:1.4}.lh-card p{font-size:8.5px;line-height:1.42;color:#64748B;margin:4px 0 0}
       .lh-score{font-family:'Sora',sans-serif;font-size:28px;color:#0D9488;font-weight:850}.lh-score span{font-size:8px;color:#64748B}
-      .lh-flow{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.lh-flow span{font-size:7.5px;font-weight:850;background:#EDF4FA;color:#24405F;padding:4px 6px;border-radius:6px}.lh-flow i{height:1px;width:8px;background:#B8C8D9}
+      .lh-flow{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.lh-flow span{font-size:7.5px;font-weight:850;background:#E7F2FB;color:#24405F;padding:4px 6px;border-radius:6px}.lh-flow i{height:1px;width:8px;background:#B8C8D9}
       .lh-row{display:grid;grid-template-columns:48px 1fr auto;gap:7px;align-items:center;padding:5px 0;border-bottom:1px solid #E5EDF4;font-size:8px}.lh-row:last-child{border-bottom:0}.lh-row em{font-style:normal;background:#CCFBF1;color:#0F766E;padding:3px 5px;border-radius:999px;font-size:7px}.lh-kpi{font-family:'Sora',sans-serif;font-size:24px;color:#0F4C81;font-weight:850}
       .lh-carousel{border-top:1px solid rgba(148,163,184,.14);background:rgba(2,12,27,.32);display:flex;align-items:center;justify-content:space-between;padding:0 28px;color:#819AB6;font-size:9px}
       .lh-dots{display:flex;gap:6px}.lh-dot{width:24px;height:3px;border-radius:999px;background:rgba(148,163,184,.24);border:0;padding:0;cursor:pointer}.lh-dot.active{background:var(--accent)}
@@ -137,7 +138,20 @@ export default function LandingHero() {
 
     <div className="lh-wrap" style={{ '--accent': current.accent } as CSSProperties}>
       <div className="lh-tabs" role="tablist" aria-label="HealthConnect audiences">
-        {ROLES.map(role => <button key={role.id} role="tab" aria-selected={active === role.id} className={`lh-tab ${active === role.id ? 'active' : ''}`} style={{ '--accent': role.accent } as CSSProperties} onClick={() => setActive(role.id)}><span>{role.icon}</span>{role.label}</button>)}
+        {ROLES.map(role => <button
+          key={role.id}
+          role="tab"
+          aria-selected={active === role.id}
+          className={`lh-tab ${active === role.id ? 'active' : ''}`}
+          style={{
+            '--accent': role.accent,
+            '--tab-bg': `${role.accent}14`,
+            '--tab-hover': `${role.accent}24`,
+            '--tab-active': `${role.accent}30`,
+            '--tab-border': `${role.accent}38`,
+          } as CSSProperties}
+          onClick={() => setActive(role.id)}
+        ><span>{role.icon}</span>{role.label}</button>)}
       </div>
 
       <div className="lh-main">
