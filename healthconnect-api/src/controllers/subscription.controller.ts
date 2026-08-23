@@ -58,7 +58,8 @@ export const createCheckout = async (req: Request, res: Response, next: NextFunc
       billingCycle: req.body?.billingCycle || 'MONTHLY',
       promotionCode: req.body?.promotionCode || null,
     });
-    return ApiResponse.created(res, checkout, checkout?.reused ? 'Existing secure checkout resumed' : 'Subscription checkout created');
+    const reused = 'reused' in checkout && checkout.reused === true;
+    return ApiResponse.created(res, checkout, reused ? 'Existing secure checkout resumed' : 'Subscription checkout created');
   } catch (error) {
     return handleBillingError(error, res, next);
   }
