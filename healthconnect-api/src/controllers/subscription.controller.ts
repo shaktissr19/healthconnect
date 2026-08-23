@@ -4,12 +4,14 @@ import { BillingError } from '../services/razorpayBilling.service';
 import {
   cancelUserSubscription,
   changeUserPlan,
-  createSubscriptionCheckout,
   getCurrentSubscriptionForUser,
-  getPublishedPlans,
   getSubscriptionHistoryForUser,
-  verifySubscriptionCheckout,
 } from '../services/subscriptionBilling.service';
+import {
+  getPublishedPlansForUser,
+  prepareSubscriptionCheckout,
+  verifySubscriptionCheckoutGuarded,
+} from '../services/subscriptionCheckoutGuard.service';
 import { processRazorpayWebhook } from '../services/billingWebhook.service';
 
 const handleBillingError = (error: unknown, res: Response, next: NextFunction) => {
@@ -19,9 +21,9 @@ const handleBillingError = (error: unknown, res: Response, next: NextFunction) =
   return next(error);
 };
 
-export const getPlans = async (_req: Request, res: Response, next: NextFunction) => {
+export const getPlans = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    return ApiResponse.success(res, await getPublishedPlans());
+    return ApiResponse.success(res, await getPublishedPlansForUser(req.user?.userId || null));
   } catch (error) {
     return handleBillingError(error, res, next);
   }
@@ -49,14 +51,14 @@ export const createCheckout = async (req: Request, res: Response, next: NextFunc
     if (!planIdOrName) {
       return ApiResponse.validationError(res, [{ field: 'planId', message: 'planId is required' }]);
     }
-    const checkout = await createSubscriptionCheckout({
+    const checkout = await prepareSubscriptionCheckout({
       userId: req.user!.userId,
       role: req.user!.role,
       planIdOrName,
       billingCycle: req.body?.billingCycle || 'MONTHLY',
       promotionCode: req.body?.promotionCode || null,
     });
-    return ApiResponse.created(res, checkout, 'Subscription checkout created');
+    return ApiResponse.created(res, checkout, checkout?.reused ? 'Existing secure checkout resumed' : 'Subscription checkout created');
   } catch (error) {
     return handleBillingError(error, res, next);
   }
@@ -64,7 +66,7 @@ export const createCheckout = async (req: Request, res: Response, next: NextFunc
 
 export const verifyCheckout = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await verifySubscriptionCheckout({
+    const result = await verifySubscriptionCheckoutGuarded({
       userId: req.user!.userId,
       paymentId: String(req.body?.razorpay_payment_id || req.body?.paymentId || ''),
       subscriptionId: String(req.body?.razorpay_subscription_id || req.body?.subscriptionId || ''),
@@ -108,12 +110,24 @@ export const changePlan = async (req: Request, res: Response, next: NextFunction
     if (!planIdOrName) {
       return ApiResponse.validationError(res, [{ field: 'planId', message: 'planId is required' }]);
     }
-    const result = await changeUserPlan({
+
+    const result = await prepareSubscriptionCheckout({
       userId: req.user!.userId,
       role: req.user!.role,
       planIdOrName,
       billingCycle: req.body?.billingCycle || 'MONTHLY',
       promotionCode: req.body?.promotionCode || null,
+    }).catch(async (error) => {
+      if (error instanceof BillingError && error.code === 'FREE_PLAN_NO_CHECKOUT') {
+        return changeUserPlan({
+          userId: req.user!.userId,
+          role: req.user!.role,
+          planIdOrName,
+          billingCycle: req.body?.billingCycle || 'MONTHLY',
+          promotionCode: req.body?.promotionCode || null,
+        });
+      }
+      throw error;
     });
     return ApiResponse.success(res, result, 'Plan change prepared');
   } catch (error) {
