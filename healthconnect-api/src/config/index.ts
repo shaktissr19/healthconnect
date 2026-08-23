@@ -70,8 +70,10 @@ export const config = {
   },
 
   razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID!,
-    keySecret: process.env.RAZORPAY_KEY_SECRET!,
+    keyId: process.env.RAZORPAY_KEY_ID,
+    keySecret: process.env.RAZORPAY_KEY_SECRET,
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
+    launch99OfferId: process.env.RAZORPAY_LAUNCH99_OFFER_ID,
   },
 
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',

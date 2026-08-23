@@ -1,154 +1,190 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
 
-const PLANS = [
-  {
-    id: 'free', name: 'Free', price: 0, period: '', color: '#5A7A9B', badge: null,
-    features: ['Basic health tracking', '5 reports storage', 'Community access', 'Email support'],
-  },
-  {
-    id: 'premium', name: 'Premium', price: 299, period: '/month', color: '#B45309', badge: 'RECOMMENDED',
-    features: ['Unlimited reports storage', 'AI health insights', 'Priority doctor booking', 'Video consultations', 'Advanced analytics', '24/7 support', 'Family health profiles'],
-  },
-  {
-    id: 'annual', name: 'Premium Annual', price: 2499, period: '/year', color: '#1A6BB5', badge: 'BEST VALUE',
-    features: ['Everything in Premium', '2 months free', 'Dedicated health advisor', 'Priority emergency support', 'Family health profiles'],
-  },
-];
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import { openRazorpayCheckout } from '@/lib/razorpayCheckout';
+
+const C = {
+  page: '#F5F4F0', card: '#FDFCFB', border: '#D8D6CF', text: '#1E293B', muted: '#64748B',
+  blue: '#2563EB', blueDark: '#1849A9', teal: '#0D9488', green: '#16A34A', amber: '#D97706', red: '#DC2626',
+};
+
+const money = (paise: number) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const unwrap = (response: any) => response?.data?.data ?? response?.data ?? null;
 
 export default function SubscriptionPage() {
-  const [current,  setCurrent]  = useState<any>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [upgrading, setUpgrading] = useState('');
-  const [toast,    setToast]    = useState('');
+  const router = useRouter();
+  const user = useAuthStore(s => (s as any).user);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [current, setCurrent] = useState<any>(null);
+  const [history, setHistory] = useState<any>({ subscriptions: [], charges: [], invoices: [] });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
+  const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
 
-  useEffect(() => {
-    api.get('/patient/subscription').then((r: any) => {
-      setCurrent(r?.data?.data ?? r?.data ?? {});
-    }).catch(() => setCurrent({ tier: 'FREE' })).finally(() => setLoading(false));
+  const notify = (text: string, error = false) => {
+    setToast({ text, error });
+    window.setTimeout(() => setToast(null), 4200);
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [plansRes, currentRes, historyRes] = await Promise.all([
+        api.get('/subscription/plans'),
+        api.get('/subscription/current'),
+        api.get('/subscription/billing-history'),
+      ]);
+      const allPlans = unwrap(plansRes) || [];
+      setPlans((Array.isArray(allPlans) ? allPlans : []).filter((p: any) => p.targetRole === 'PATIENT'));
+      setCurrent(unwrap(currentRes));
+      setHistory(unwrap(historyRes) || { subscriptions: [], charges: [], invoices: [] });
+    } catch (e: any) {
+      notify(e?.response?.data?.message || 'Unable to load membership information.', true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const currentTier = (current?.tier ?? current?.plan ?? 'FREE').toLowerCase();
-  const isActive = current?.status === 'ACTIVE' || current?.isActive;
+  useEffect(() => { void load(); }, [load]);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+  const premium = useMemo(() => plans.find(p => p.name === 'premium'), [plans]);
+  const basic = useMemo(() => plans.find(p => p.name === 'basic'), [plans]);
+  const hasPaidMembership = Boolean(current && ['ACTIVE', 'TRIALING', 'PAST_DUE'].includes(current.status) && Number(current.amountPaise || 0) > 0);
+  const currentName = current?.plan?.displayName || (hasPaidMembership ? 'Premium' : 'Free');
+  const cancelScheduled = Boolean(current?.state?.cancelAtCycleEnd || (current && current.autoRenew === false && current.status === 'ACTIVE'));
 
-  const handleUpgrade = async (planId: string) => {
-    setUpgrading(planId);
+  const startCheckout = async (plan: any) => {
+    setBusy(plan.id);
     try {
-      await api.post('/patient/subscription/upgrade', { plan: planId.toUpperCase() });
-      showToast('✓ Subscription updated successfully');
-      const r: any = await api.get('/patient/subscription');
-      setCurrent(r?.data?.data ?? r?.data ?? {});
+      const promotionCode = plan?.introOffer?.available ? 'LAUNCH99' : undefined;
+      const checkoutRes = await api.post('/subscription/checkout', {
+        planId: plan.id,
+        billingCycle: 'MONTHLY',
+        ...(promotionCode ? { promotionCode } : {}),
+      });
+      const checkout = unwrap(checkoutRes);
+      if (!checkout?.subscriptionId || !checkout?.keyId) throw new Error('Payment checkout could not be initialized.');
+
+      const result = await openRazorpayCheckout({
+        key: checkout.keyId,
+        subscription_id: checkout.subscriptionId,
+        name: 'HealthConnect India',
+        description: `${checkout.plan?.displayName || plan.displayName} membership`,
+        prefill: { email: user?.email || undefined, name: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || undefined },
+        notes: { hc_local_subscription_id: checkout.localSubscriptionId || '' },
+      });
+      if (!result) {
+        notify('Checkout closed. No membership was activated.');
+        return;
+      }
+
+      await api.post('/subscription/verify', result);
+      notify('✓ Membership activated successfully.');
+      await load();
     } catch (e: any) {
-      showToast(e?.response?.data?.message ?? 'Could not process upgrade. Please try again.');
+      notify(e?.response?.data?.message || e?.message || 'Membership payment could not be completed.', true);
+    } finally {
+      setBusy('');
     }
-    setUpgrading('');
   };
 
-  const C = {
-    bg: '#C8E0F4', white: '#FFFFFF', border: '#C8DFF0',
-    navy: '#0A1628', blue: '#1A365D', mid: '#2C5282', muted: '#5A7A9B',
-    teal: '#1A6BB5',
+  const cancelAtCycleEnd = async () => {
+    if (!confirm('Turn off auto-renewal? Your paid access will remain available until the current billing cycle ends.')) return;
+    setBusy('cancel');
+    try {
+      const r = await api.post('/subscription/cancel', { atCycleEnd: true });
+      notify(r?.data?.message || 'Auto-renewal turned off.');
+      await load();
+    } catch (e: any) {
+      notify(e?.response?.data?.message || 'Unable to change auto-renewal.', true);
+    } finally {
+      setBusy('');
+    }
   };
 
-  return (
-    <div style={{ maxWidth: 900 }}>
-
-      {toast && (
-        <div style={{ position:'fixed', bottom:24, right:24, zIndex:9999, background:'#0A1628', color:'#fff', padding:'11px 18px', borderRadius:10, fontSize:13, fontWeight:600, boxShadow:'0 8px 24px rgba(0,0,0,0.3)' }}>
-          {toast}
-        </div>
-      )}
-
-      {/* Header */}
-      <div style={{ marginBottom:20 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, color:C.navy, margin:'0 0 4px' }}>⭐ Subscription</h1>
-        <p style={{ fontSize:13, color:C.mid, margin:0 }}>Manage your HealthConnect plan</p>
-      </div>
-
-      {/* Current plan banner */}
-      {!loading && current && (
-        <div style={{ background:'linear-gradient(135deg,#0D3349,#1A3A6B)', borderRadius:16, padding:'16px 22px', marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12, boxShadow:'0 4px 16px rgba(13,51,73,0.25)' }}>
-          <div>
-            <div style={{ fontSize:11, color:'rgba(168,200,255,0.6)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Current Plan</div>
-            <div style={{ fontSize:18, fontWeight:800, color:'#FCD34D', display:'flex', alignItems:'center', gap:8 }}>
-              ⭐ {(current?.tier ?? 'FREE').charAt(0) + (current?.tier ?? 'FREE').slice(1).toLowerCase()}
-            </div>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:100, background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)', border: `1px solid ${isActive ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}` }}>
-            <div style={{ width:7, height:7, borderRadius:'50%', background: isActive ? '#4ADE80' : '#F87171' }}/>
-            <span style={{ fontSize:12, fontWeight:700, color: isActive ? '#4ADE80' : '#F87171' }}>{isActive ? 'Active' : 'Inactive'}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Plans grid */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
-        {PLANS.map(plan => {
-          const isCurrent = currentTier === plan.id || (currentTier === 'premium' && plan.id === 'premium');
-          const isDisabled = isCurrent || !!upgrading;
-          return (
-            <div key={plan.id} style={{ background:C.white, borderRadius:16, border: isCurrent ? `2px solid ${plan.color}` : `1px solid ${C.border}`, padding:'18px 18px 16px', boxShadow: isCurrent ? `0 4px 20px ${plan.color}22` : '0 2px 8px rgba(27,59,111,0.07)', position:'relative', transition:'all 0.2s' }}>
-              {/* Badge */}
-              {plan.badge && (
-                <div style={{ position:'absolute', top:-1, right:14, padding:'2px 10px', borderRadius:'0 0 8px 8px', background: plan.color, color:'#fff', fontSize:9, fontWeight:800, letterSpacing:'0.06em' }}>
-                  {plan.badge}
-                </div>
-              )}
-
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontSize:15, fontWeight:800, color:C.navy, marginBottom:4 }}>{plan.name}</div>
-                <div style={{ display:'flex', alignItems:'baseline', gap:3 }}>
-                  {plan.price === 0 ? (
-                    <span style={{ fontSize:22, fontWeight:900, color:C.navy }}>Free</span>
-                  ) : (
-                    <>
-                      <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>₹</span>
-                      <span style={{ fontSize:26, fontWeight:900, color: plan.color }}>{plan.price.toLocaleString()}</span>
-                      <span style={{ fontSize:11, color:C.muted }}>{plan.period}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Divider */}
-              <div style={{ height:1, background:C.border, margin:'0 0 12px' }}/>
-
-              {/* Features */}
-              <ul style={{ listStyle:'none', padding:0, margin:'0 0 14px', display:'flex', flexDirection:'column', gap:7 }}>
-                {plan.features.map((f, i) => (
-                  <li key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:12, color:C.blue }}>
-                    <span style={{ color:'#16A34A', fontWeight:700, flexShrink:0, marginTop:1 }}>✓</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
-              {isCurrent ? (
-                <div style={{ padding:'9px 0', borderRadius:10, background:'rgba(26,107,181,0.06)', border:`1px solid ${plan.color}30`, textAlign:'center', fontSize:12, fontWeight:700, color: plan.color }}>
-                  ✓ Current Plan
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleUpgrade(plan.id)}
-                  disabled={isDisabled}
-                  style={{ width:'100%', padding:'9px 0', borderRadius:10, border:'none', background: isDisabled ? '#E2EEF0' : `linear-gradient(135deg,${plan.color},${plan.color}CC)`, color: isDisabled ? '#94A3B8' : '#fff', fontSize:13, fontWeight:700, cursor: isDisabled ? 'not-allowed' : 'pointer', fontFamily:'inherit', transition:'all 0.2s' }}
-                >
-                  {upgrading === plan.id ? '⏳ Processing…' : plan.price === 0 ? 'Downgrade' : 'Upgrade →'}
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Info note */}
-      <div style={{ marginTop:16, padding:'12px 16px', background:'rgba(26,107,181,0.06)', border:'1px solid #C8DFF0', borderRadius:10, fontSize:12, color:C.mid, lineHeight:1.6 }}>
-        💳 Payments are processed securely. Cancel anytime from your account settings. For billing issues contact support@healthconnect.sbs
-      </div>
+  if (loading) return (
+    <div style={{ minHeight: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 38, height: 38, borderRadius: '50%', border: '3px solid #D8D6CF', borderTopColor: C.blue, animation: 'hcSubSpin .8s linear infinite' }} />
+      <style>{`@keyframes hcSubSpin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
+
+  const charges = Array.isArray(history?.charges) ? history.charges : [];
+  const invoices = Array.isArray(history?.invoices) ? history.invoices : [];
+
+  return (
+    <div style={{ maxWidth: 1060, margin: '0 auto', color: C.text }}>
+      {toast && <div style={{ position: 'fixed', right: 26, bottom: 26, zIndex: 9999, maxWidth: 390, padding: '12px 18px', borderRadius: 12, color: '#fff', background: toast.error ? '#991B1B' : '#0F766E', boxShadow: '0 12px 30px rgba(0,0,0,.22)', fontSize: 13, fontWeight: 650 }}>{toast.text}</div>}
+
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800 }}>Membership & Billing</h1>
+        <p style={{ margin: '6px 0 0', color: C.muted, fontSize: 14 }}>Manage HealthConnect membership and consultation payments securely.</p>
+      </div>
+
+      <div style={{ background: 'linear-gradient(135deg,#0F3D39,#155E75)', color: '#fff', borderRadius: 18, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 22, boxShadow: '0 8px 24px rgba(15,61,57,.16)' }}>
+        <div>
+          <div style={{ textTransform: 'uppercase', letterSpacing: '.08em', fontSize: 10, opacity: .7, fontWeight: 700 }}>Current membership</div>
+          <div style={{ fontSize: 23, fontWeight: 850, marginTop: 4 }}>{currentName}</div>
+          {current?.endDate && <div style={{ fontSize: 12, opacity: .78, marginTop: 5 }}>Current cycle through {new Date(current.endDate).toLocaleDateString('en-IN')}</div>}
+          {cancelScheduled && <div style={{ marginTop: 8, display: 'inline-flex', padding: '4px 9px', borderRadius: 100, background: 'rgba(245,158,11,.18)', color: '#FDE68A', fontSize: 11, fontWeight: 700 }}>Auto-renewal off</div>}
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => router.push('/dashboard/payments')} style={{ border: '1px solid rgba(255,255,255,.28)', background: 'rgba(255,255,255,.08)', color: '#fff', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>Consultation Payments →</button>
+          {hasPaidMembership && !cancelScheduled && <button disabled={busy === 'cancel'} onClick={cancelAtCycleEnd} style={{ border: '1px solid rgba(255,255,255,.28)', background: '#fff', color: '#0F3D39', padding: '10px 14px', borderRadius: 10, cursor: 'pointer', fontWeight: 750, fontSize: 12 }}>{busy === 'cancel' ? 'Updating…' : 'Turn off auto-renew'}</button>}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16, marginBottom: 24 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: 22, boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}>
+          <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 750 }}>Essential</div>
+          <div style={{ fontSize: 20, fontWeight: 850, marginTop: 5 }}>{basic?.displayName || 'Free'}</div>
+          <div style={{ fontSize: 28, fontWeight: 900, margin: '8px 0 16px' }}>₹0</div>
+          <FeatureList features={basic?.features || ['Health profile', 'Medical history', 'Public communities', 'Doctor discovery']} />
+          <div style={{ marginTop: 18, padding: '10px', textAlign: 'center', borderRadius: 10, background: !hasPaidMembership ? '#ECFDF5' : '#F1F5F9', color: !hasPaidMembership ? C.green : C.muted, fontSize: 12, fontWeight: 750 }}>{!hasPaidMembership ? '✓ Your base access' : 'Included with Premium'}</div>
+        </div>
+
+        <div style={{ background: C.card, border: `2px solid ${C.blue}`, borderRadius: 18, padding: 22, boxShadow: '0 8px 24px rgba(37,99,235,.10)', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: -1, right: 18, padding: '4px 12px', borderRadius: '0 0 9px 9px', background: C.blue, color: '#fff', fontSize: 9, fontWeight: 850, letterSpacing: '.08em' }}>PREMIUM</div>
+          <div style={{ fontSize: 11, color: C.blue, textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 750 }}>Patient membership</div>
+          <div style={{ fontSize: 20, fontWeight: 850, marginTop: 5 }}>{premium?.displayName || 'Premium'}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 8 }}><span style={{ fontSize: 30, fontWeight: 900, color: C.blue }}>{money(premium?.pricing?.monthlyPaise || 14900)}</span><span style={{ fontSize: 12, color: C.muted }}>/month</span></div>
+          {premium?.introOffer?.available && <div style={{ margin: '10px 0 14px', padding: '10px 12px', borderRadius: 10, background: '#FFF7ED', border: '1px solid #FED7AA', color: '#9A3412', fontSize: 12, lineHeight: 1.45 }}><strong>LAUNCH99:</strong> ₹99/month for the first 3 billing cycles, then ₹149/month. Applied automatically for eligible new memberships.</div>}
+          {!premium?.introOffer?.available && <div style={{ height: 8 }} />}
+          <FeatureList features={premium?.features || ['Everything in Free', 'Health Score', 'Unlimited reports', 'Medication reminders', 'Priority booking']} />
+          {hasPaidMembership ? (
+            <div style={{ marginTop: 18, padding: '10px', textAlign: 'center', borderRadius: 10, background: '#EFF6FF', color: C.blue, fontSize: 12, fontWeight: 750 }}>✓ Current paid membership</div>
+          ) : (
+            <button disabled={!premium || Boolean(busy)} onClick={() => premium && startCheckout(premium)} style={{ marginTop: 18, width: '100%', padding: '11px 14px', border: 0, borderRadius: 10, background: busy ? '#CBD5E1' : `linear-gradient(135deg,${C.blueDark},${C.blue})`, color: '#fff', fontSize: 13, fontWeight: 800, cursor: busy ? 'not-allowed' : 'pointer' }}>{busy === premium?.id ? 'Opening secure checkout…' : premium?.introOffer?.available ? 'Start with LAUNCH99 →' : 'Upgrade to Premium →'}</button>
+          )}
+        </div>
+      </div>
+
+      <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 18 }}>
+        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: 800, fontSize: 14 }}>Membership payment history</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Server-verified Razorpay charges</div></div><button onClick={() => void load()} style={{ border: `1px solid ${C.border}`, background: '#fff', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', fontSize: 11, color: C.muted }}>Refresh</button></div>
+        {charges.length === 0 ? <Empty text="No membership payments recorded yet." /> : <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}><thead><tr style={{ background: '#F8FAFC' }}>{['Plan','Amount','Status','Payment ID','Paid'].map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase' }}>{h}</th>)}</tr></thead><tbody>{charges.slice(0, 20).map((p: any) => <tr key={p.id} style={{ borderTop: '1px solid #F1F5F9' }}><td style={{ padding: '11px 14px', fontWeight: 650 }}>{p.planName || 'Membership'}</td><td style={{ padding: '11px 14px' }}>{money(p.amountPaise)}</td><td style={{ padding: '11px 14px' }}><Status value={p.status} /></td><td style={{ padding: '11px 14px', color: C.muted, fontFamily: 'monospace', fontSize: 10 }}>{p.providerPaymentId || (p.legacy ? 'Legacy record' : '—')}</td><td style={{ padding: '11px 14px', color: C.muted }}>{p.paidAt ? new Date(p.paidAt).toLocaleString('en-IN') : '—'}</td></tr>)}</tbody></table></div>}
+      </section>
+
+      {invoices.length > 0 && <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 18 }}><div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>Invoices</div><div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{invoices.slice(0, 10).map((i: any) => <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, background: '#F8FAFC' }}><div><div style={{ fontSize: 12, fontWeight: 700 }}>{i.invoiceNumber || i.providerInvoiceId}</div><div style={{ fontSize: 11, color: C.muted }}>{money(i.amountPaise)} · {i.status}</div></div>{i.shortUrl ? <a href={i.shortUrl} target="_blank" rel="noreferrer" style={{ color: C.blue, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>View invoice ↗</a> : null}</div>)}</div></section>}
+
+      <div style={{ marginTop: 16, color: C.muted, fontSize: 11, lineHeight: 1.6 }}>Payments are processed by Razorpay. HealthConnect verifies each payment on the server before activating paid access. Consultation fees are managed separately in Consultation Payments.</div>
+    </div>
+  );
+}
+
+function FeatureList({ features }: { features: unknown }) {
+  const list = Array.isArray(features) ? features.map(String) : [];
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{list.slice(0, 8).map(feature => <div key={feature} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#475569' }}><span style={{ color: C.green, fontWeight: 900 }}>✓</span><span>{feature}</span></div>)}</div>;
+}
+
+function Status({ value }: { value: string }) {
+  const upper = String(value || 'UNKNOWN').toUpperCase();
+  const color = upper === 'CAPTURED' || upper === 'ACTIVE' ? C.green : upper.includes('FAIL') || upper === 'CANCELLED' ? C.red : C.amber;
+  return <span style={{ padding: '3px 8px', borderRadius: 100, color, background: `${color}12`, border: `1px solid ${color}28`, fontSize: 10, fontWeight: 800 }}>{upper}</span>;
+}
+
+function Empty({ text }: { text: string }) {
+  return <div style={{ padding: '28px 18px', textAlign: 'center', color: C.muted, fontSize: 12 }}>{text}</div>;
 }
