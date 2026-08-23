@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import * as subscriptionController from '../controllers/subscription.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
-// Public catalog. Checkout/verification remains authenticated and role-bound.
-router.get('/plans', subscriptionController.getPlans);
+// Public catalog remains browseable. Optional auth lets the API hide a launch
+// offer already redeemed by the currently signed-in account without making the
+// catalog private.
+router.get('/plans', optionalAuth, subscriptionController.getPlans);
 
 router.use(authenticate);
 
