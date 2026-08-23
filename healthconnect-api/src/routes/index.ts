@@ -3,6 +3,7 @@ import authRoutes         from './auth.routes';
 import patientRoutes      from './patient.routes';
 import hospitalRoutes     from './hospital.routes';
 import appointmentRoutes  from './appointment.routes';
+import paymentRoutes      from './payment.routes';
 import communityRoutes    from './community.routes';
 import articleRoutes      from './article.routes';
 import subscriptionRoutes from './subscription.routes';
@@ -27,6 +28,7 @@ router.use('/auth',         authRoutes);
 router.use('/',             patientRoutes);
 router.use('/hospitals',    hospitalRoutes);
 router.use('/appointments', appointmentRoutes);
+router.use('/payments',     paymentRoutes);
 router.use('/communities',  communityRoutes);
 
 // Backward-compatible read-only alias for the Patient dashboard global-search
