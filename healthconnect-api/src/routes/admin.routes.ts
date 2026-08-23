@@ -1,6 +1,7 @@
 // src/routes/admin.routes.ts
 import { Router } from 'express';
 import * as Admin from '../controllers/admin.controller';
+import * as BillingAdmin from '../controllers/billingAdmin.controller';
 import * as CommunityAdmin from '../controllers/communityAdmin.controller';
 import * as HospitalAdmin from '../modules/hospital/adminHospital.controller';
 import { authenticate } from '../middleware/auth';
@@ -29,8 +30,12 @@ router.get('/hospitals/pending',     ...admin, HospitalAdmin.getPendingHospitals
 router.get('/hospitals',             ...admin, HospitalAdmin.getAllHospitals);
 router.post('/hospitals/:id/verify', ...admin, HospitalAdmin.verifyHospital);
 
-// Subscriptions & revenue
-router.get('/subscriptions', ...admin, Admin.getSubscriptionStats);
+// Production billing, memberships, consultation revenue and refunds.
+router.get('/billing/summary', ...admin, BillingAdmin.getSummary);
+router.post('/billing/refunds', ...admin, BillingAdmin.refundPayment);
+// Backward-compatible aliases used by the existing Admin navigation.
+router.get('/subscriptions', ...admin, BillingAdmin.getSummary);
+router.get('/revenue', ...admin, BillingAdmin.getSummary);
 
 // Community requests — real CommunityRequest-backed workflow
 router.get('/communities/requests',              ...admin, CommunityAdmin.getCommunityRequests);
