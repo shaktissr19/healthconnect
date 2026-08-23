@@ -17,10 +17,10 @@ export const getAdminBillingSummary = async () => {
   const totals = await prisma.$queryRaw<any[]>`
     SELECT
       COALESCE((SELECT SUM(amount_paise) FROM billing.subscription_charges WHERE status = 'CAPTURED'), 0)::bigint AS "membershipRevenuePaise",
-      COALESCE((SELECT SUM(amount_paise - amount_refunded_paise) FROM billing.appointment_payments WHERE status IN ('CAPTURED','PARTIALLY_REFUNDED')), 0)::bigint AS "consultationRevenuePaise",
+      COALESCE((SELECT SUM(amount_paise) FROM billing.appointment_payments WHERE status IN ('CAPTURED','PARTIALLY_REFUNDED','REFUNDED')), 0)::bigint AS "consultationRevenuePaise",
       COALESCE((SELECT SUM(amount_paise) FROM billing.refunds WHERE status = 'PROCESSED'), 0)::bigint AS "refundsPaise",
       COALESCE((SELECT SUM(amount_paise) FROM billing.subscription_charges WHERE status = 'CAPTURED' AND paid_at >= date_trunc('month', CURRENT_TIMESTAMP)), 0)::bigint AS "membershipMonthPaise",
-      COALESCE((SELECT SUM(amount_paise - amount_refunded_paise) FROM billing.appointment_payments WHERE status IN ('CAPTURED','PARTIALLY_REFUNDED') AND captured_at >= date_trunc('month', CURRENT_TIMESTAMP)), 0)::bigint AS "consultationMonthPaise",
+      COALESCE((SELECT SUM(amount_paise) FROM billing.appointment_payments WHERE status IN ('CAPTURED','PARTIALLY_REFUNDED','REFUNDED') AND captured_at >= date_trunc('month', CURRENT_TIMESTAMP)), 0)::bigint AS "consultationMonthPaise",
       COALESCE((SELECT COUNT(*) FROM billing.subscription_charges WHERE status = 'FAILED'), 0)::int AS "failedMembershipPayments",
       COALESCE((SELECT COUNT(*) FROM billing.appointment_payments WHERE status = 'FAILED'), 0)::int AS "failedAppointmentPayments"
   `;
@@ -41,7 +41,13 @@ export const getAdminBillingSummary = async () => {
         'SUBSCRIPTION'::text AS "sourceKind",
         sc.id AS "sourceId",
         sc.amount_paise AS "amountPaise",
-        0::int AS "amountRefundedPaise",
+        COALESCE((
+          SELECT SUM(r.amount_paise)
+          FROM billing.refunds r
+          WHERE r.source_kind = 'SUBSCRIPTION'
+            AND r.source_id = sc.id
+            AND r.status = 'PROCESSED'
+        ), 0)::int AS "amountRefundedPaise",
         sc.currency,
         sc.status,
         sc.provider_payment_id AS "providerPaymentId",
