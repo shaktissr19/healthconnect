@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 import DoctorSidebar from '@/components/doctor/layout/DoctorSidebar';
@@ -17,12 +17,14 @@ const TOPBAR_H       = 64;
 
 export default function DoctorDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const uiStore = useUIStore() as any;
   const collapsed = uiStore.sidebarOpen === false;
   const activePage = uiStore.activePage ?? 'home';
   const [authChecked, setAuthChecked] = useState(false);
   const [sessionToast, setSessionToast] = useState(false);
   const hasRun = useRef(false);
+  const isMembershipRoute = pathname?.startsWith('/doctor-dashboard/membership') === true;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -98,13 +100,25 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
       <DoctorSidebar />
       <div style={{ marginLeft:sidebarW, paddingTop:TOPBAR_H, minHeight:'100vh', background:'#F5F4F0', overflowX:'hidden', transition:'margin-left 0.25s cubic-bezier(.4,0,.2,1)' }}>
         <main style={{ padding:24 }}>
-          {activePage === 'profile'
-            ? <div style={{ maxWidth:1180, margin:'0 auto', display:'flex', flexDirection:'column', gap:16 }}><DoctorProfileV2 /><DoctorHospitalAffiliations /></div>
-            : activePage === 'availability'
-              ? <DoctorAvailabilityV2 />
-              : activePage === 'appointments'
-                ? <DoctorAppointmentsV2 />
-                : children}
+          {!isMembershipRoute && (activePage === 'home' || activePage === 'earnings') && (
+            <div style={{ maxWidth:1180, margin:'0 auto 12px', display:'flex', justifyContent:'flex-end' }}>
+              <button
+                onClick={() => router.push('/doctor-dashboard/membership')}
+                style={{ border:'1px solid rgba(13,148,136,.22)', background:'#FDFCFB', color:'#0F766E', borderRadius:999, padding:'8px 13px', fontSize:11.5, fontWeight:750, cursor:'pointer', boxShadow:'0 2px 7px rgba(15,23,42,.04)' }}
+              >
+                Membership & Billing · ₹799/month
+              </button>
+            </div>
+          )}
+          {isMembershipRoute
+            ? children
+            : activePage === 'profile'
+              ? <div style={{ maxWidth:1180, margin:'0 auto', display:'flex', flexDirection:'column', gap:16 }}><DoctorProfileV2 /><DoctorHospitalAffiliations /></div>
+              : activePage === 'availability'
+                ? <DoctorAvailabilityV2 />
+                : activePage === 'appointments'
+                  ? <DoctorAppointmentsV2 />
+                  : children}
         </main>
       </div>
     </div>

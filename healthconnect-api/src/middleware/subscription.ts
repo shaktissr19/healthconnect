@@ -1,8 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { ApiResponse } from '../utils/apiResponse';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
+const hasFeature = (features: unknown, featureName: string): boolean => {
+  const wanted = featureName.trim().toLowerCase();
+  if (!wanted) return true;
+
+  if (Array.isArray(features)) {
+    return features.some(feature => String(feature).trim().toLowerCase() === wanted);
+  }
+
+  if (features && typeof features === 'object') {
+    const record = features as Record<string, unknown>;
+    return Object.entries(record).some(
+      ([key, enabled]) => key.trim().toLowerCase() === wanted && Boolean(enabled),
+    );
+  }
+
+  return false;
+};
 
 export const requireSubscription = (featureName?: string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -20,33 +36,30 @@ export const requireSubscription = (featureName?: string) => {
         include: {
           plan: true,
         },
+        orderBy: { createdAt: 'desc' },
       });
 
       if (!subscription) {
         return ApiResponse.error(
           res,
           'SUBSCRIPTION_REQUIRED',
-          'Premium subscription required for this feature',
-          403
+          'An active membership is required for this feature.',
+          403,
         );
       }
 
-      // Check specific feature if provided
-      if (featureName && subscription.plan.features) {
-        const features = subscription.plan.features as Record<string, boolean>;
-        if (!features[featureName]) {
-          return ApiResponse.error(
-            res,
-            'SUBSCRIPTION_REQUIRED',
-            `Your plan does not include ${featureName}`,
-            403
-          );
-        }
+      if (featureName && !hasFeature(subscription.plan.features, featureName)) {
+        return ApiResponse.error(
+          res,
+          'SUBSCRIPTION_REQUIRED',
+          `Your plan does not include ${featureName}.`,
+          403,
+        );
       }
 
-      next();
+      return next();
     } catch (error) {
-      next(error);
+      return next(error);
     }
   };
 };
