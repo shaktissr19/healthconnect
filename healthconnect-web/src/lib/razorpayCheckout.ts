@@ -61,7 +61,8 @@ export const loadRazorpayCheckout = (): Promise<void> => {
 
 export const openRazorpayCheckout = async (options: CheckoutOptions): Promise<RazorpayResult | null> => {
   await loadRazorpayCheckout();
-  if (!window.Razorpay) throw new Error('Razorpay Checkout did not initialize.');
+  const RazorpayCtor = window.Razorpay;
+  if (!RazorpayCtor) throw new Error('Razorpay Checkout did not initialize.');
 
   return new Promise<RazorpayResult | null>((resolve, reject) => {
     let settled = false;
@@ -71,7 +72,7 @@ export const openRazorpayCheckout = async (options: CheckoutOptions): Promise<Ra
       resolve(value);
     };
 
-    const razorpay = new window.Razorpay({
+    const razorpay = new RazorpayCtor({
       ...options,
       name: options.name || 'HealthConnect India',
       theme: { color: '#0D9488', ...(options.theme || {}) },
