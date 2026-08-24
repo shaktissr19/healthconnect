@@ -1,151 +1,92 @@
 'use client';
 
-import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 
-type JourneyId = 'my-health'|'find-doctors'|'find-hospitals'|'doctor-dashboard'|'my-patients'|'consultations';
-type Journey = {
-  id: JourneyId;
-  label: string;
-  kicker: string;
-  title: string;
-  body: string;
-  canDo: string[];
-  works: string[];
-  helps: string[];
-  cta: string;
-  href?: string;
-  accent: string;
-  wash: string;
-  visual: 'health'|'doctor-search'|'hospital-search'|'doctor-dashboard'|'patients'|'consultations';
-};
+type PathId='my-health'|'doctors'|'hospitals'|'communities'|'knowledge';
+type Path={id:PathId;label:string;kicker:string;title:string;copy:string;cta:string;accent:string;wash:string;image?:string;visual:'health'|'photo'|'community'};
 
-const PATIENT_JOURNEYS: Journey[] = [
-  {
-    id:'my-health', label:'My Health', kicker:'YOUR HEALTH, ORGANISED',
-    title:'Carry your health story from one visit to the next.',
-    body:'My Health brings your medical history, reports, prescriptions, medicines, symptoms, vitals and appointments into one private patient workspace.',
-    canDo:['Store reports, prescriptions and medical history','Track medicines, symptoms and vitals','Manage appointments and follow-ups'],
-    works:['Create your secure patient account','Add or update records as your care changes','Return to one timeline before your next visit'],
-    helps:['Less searching for old health information','Better prepared conversations with doctors','More continuity between appointments'],
-    cta:'Open My Health', accent:'#0D9488', wash:'#ECF9F6', visual:'health',
-  },
-  {
-    id:'find-doctors', label:'Find Doctors', kicker:'CARE DISCOVERY',
-    title:'Find the right doctor with more context before you book.',
-    body:'Browse HealthConnect doctor profiles by specialty and location, review practice information and availability, then move into the appointment journey.',
-    canDo:['Search by specialty and location','Review doctor profiles and consultation options','Move from discovery into booking'],
-    works:['Choose the care you are looking for','Compare relevant doctor profiles','Select an available consultation option'],
-    helps:['Less calling around to find care','More informed choice before booking','A smoother path from search to appointment'],
-    cta:'Find Doctors', href:'/doctors', accent:'#2563EB', wash:'#EDF5FF', visual:'doctor-search',
-  },
-  {
-    id:'find-hospitals', label:'Find Hospitals', kicker:'KNOW BEFORE YOU GO',
-    title:'Compare hospitals before deciding where to visit.',
-    body:'See hospital profiles, departments, facilities, affiliated doctors and hospital-specific OPD information in one discovery experience.',
-    canDo:['Compare departments and facilities','Review affiliated doctors and OPD information','Check available insurance or scheme information where listed'],
-    works:['Search the hospital directory','Open a hospital profile for more detail','Move into doctor or OPD discovery from the same journey'],
-    helps:['More context before travelling to a facility','Easier comparison across hospitals','Fewer disconnected steps when choosing care'],
-    cta:'Find Hospitals', href:'/hospitals', accent:'#EA580C', wash:'#FFF4EA', visual:'hospital-search',
-  },
+const PATHS:Path[]=[
+  {id:'my-health',label:'My Health',kicker:'FOR PATIENTS & FAMILIES',title:'Your health information, ready for the next visit.',copy:'Keep reports, medicines, symptoms, vitals and follow-ups together in one private patient journey.',cta:'Explore My Health',accent:'#0D9488',wash:'#EAF8F4',visual:'health'},
+  {id:'doctors',label:'Find Doctors',kicker:'CARE DISCOVERY',title:'Find the right doctor with more context.',copy:'Search by specialty and location, review profiles and consultation options, then move into booking.',cta:'Find Doctors',accent:'#2563EB',wash:'#EDF5FF',image:'/images/doctors-intro.png',visual:'photo'},
+  {id:'hospitals',label:'Find Hospitals',kicker:'KNOW BEFORE YOU GO',title:'Compare hospitals before deciding where to visit.',copy:'Review departments, facilities, hospital OPD information and affiliated doctors in one discovery journey.',cta:'Find Hospitals',accent:'#EA580C',wash:'#FFF3E8',image:'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1400&q=84',visual:'photo'},
+  {id:'communities',label:'Health Communities',kicker:'BETWEEN APPOINTMENTS',title:'Support from people who understand the journey.',copy:'Join condition-focused spaces for shared experience, practical questions and ongoing peer support.',cta:'Explore Communities',accent:'#7C3AED',wash:'#F5F0FF',visual:'community'},
+  {id:'knowledge',label:'Knowledge Hub',kicker:'LEARN & PREPARE',title:'Health information that helps you ask better questions.',copy:'Use India-focused explainers and condition guides to prepare for better health conversations.',cta:'Visit Knowledge Hub',accent:'#0891B2',wash:'#EAF8FB',image:'https://images.unsplash.com/photo-1676313496812-f8fc7c4304cf?auto=format&fit=crop&w=1400&q=84',visual:'photo'},
 ];
 
-const DOCTOR_JOURNEYS: Journey[] = [
-  {
-    id:'doctor-dashboard', label:'Doctor Dashboard', kicker:'DIGITAL PRACTICE',
-    title:'One workspace for your patients, schedule and practice.',
-    body:'The Doctor workspace connects your professional profile, availability, appointments, consultations and patient-shared context without mixing them into separate tools.',
-    canDo:['Manage availability and appointments','Work with patient-shared health context','Keep profile and practice workflows together'],
-    works:['Set up your Doctor profile and availability','Receive and manage appointment activity','Use the workspace through the consultation and follow-up journey'],
-    helps:['Less fragmented practice administration','Better continuity with returning patients','A clearer view of daily care activity'],
-    cta:'Open Doctor Workspace', accent:'#2563EB', wash:'#EEF5FF', visual:'doctor-dashboard',
-  },
-  {
-    id:'my-patients', label:'My Patients', kicker:'PATIENT CONTEXT',
-    title:'See the patient context shared with you for care.',
-    body:'My Patients is the Doctor-side view for patient relationships and the health information patients have shared through the platform.',
-    canDo:['See patient summaries and relevant history','Move between patient and appointment context','Keep follow-up activity tied to the patient journey'],
-    works:['Patient connects through HealthConnect','Relevant information is shared through authorised workflows','Doctor reviews context alongside appointment activity'],
-    helps:['Less re-collection of the same information','More organised follow-up','Stronger continuity across repeat consultations'],
-    cta:'Open My Patients', accent:'#0E7490', wash:'#ECF8FB', visual:'patients',
-  },
-  {
-    id:'consultations', label:'Consultations', kicker:'FROM SCHEDULE TO FOLLOW-UP',
-    title:'Appointments and consultations stay part of the same care workflow.',
-    body:'Scheduling is not a separate HealthConnect product. It is built into the Patient and Doctor journeys so discovery, booking, consultation and follow-up stay connected.',
-    canDo:['Review upcoming appointments','Move consultation status through the care journey','Keep follow-up linked to the patient and visit'],
-    works:['Patient books from Doctor or Hospital discovery','Doctor manages the appointment in the workspace','Both sides return to their own history and follow-up context'],
-    helps:['One connected appointment lifecycle','Clearer hand-off from booking to consultation','Less duplication across separate scheduling tools'],
-    cta:'Join as a Doctor', accent:'#7C3AED', wash:'#F5F0FF', visual:'consultations',
-  },
-];
+function HealthVisual(){return <div className="ej-health-visual"><div className="ej-health-screen"><div className="ej-health-head"><b>My Health</b><span>Private workspace</span></div><div className="ej-health-score"><small>Health Score</small><strong>82</strong><em>Good</em></div><div className="ej-health-list"><span>Reports <b>8</b></span><span>Medicines <b>3</b></span><span>Upcoming care <b>2</b></span></div></div><div className="ej-health-phone"><b>Health timeline</b><span>Prescription added</span><span>Blood test report</span><span>Follow-up visit</span></div></div>}
+function CommunityVisual(){return <div className="ej-mini-community"><div className="ej-community-line l1"/><div className="ej-community-line l2"/><span className="ej-member m1">AS</span><span className="ej-member m2">RM</span><span className="ej-member m3">MK</span><span className="ej-member m4">VK</span><span className="ej-member hub">HC</span><div className="ej-bubble b1">Managing diabetes</div><div className="ej-bubble b2">Heart health</div></div>}
 
-function Visual({type,accent}:{type:Journey['visual'];accent:string}){
-  if(type==='health') return <div className="aj-device-stage">
-    <div className="aj-screen desktop"><div className="aj-screen-head"><b>Good morning</b><span>My Health</span></div><div className="aj-kpis"><i>Health Score<strong>82</strong></i><i>Upcoming<strong>2</strong></i><i>Reports<strong>8</strong></i></div><div className="aj-lines"><span/><span/><span/><span/></div></div>
-    <div className="aj-phone"><b>Health Timeline</b><span>Blood test report</span><span>Prescription added</span><span>Follow-up visit</span><em>View full timeline</em></div>
-  </div>;
-  if(type==='doctor-search') return <div className="aj-directory"><div className="aj-search">Search specialty or doctor</div>{['Cardiologist','General Physician','Dermatologist'].map((x,i)=><div className="aj-doctor-row" key={x}><span className="aj-avatar">{i===0?'RK':i===1?'SM':'AK'}</span><div><b>{x}</b><small>{i===0?'15 yrs experience · Video / Clinic':i===1?'Available today · Clinic':'Profile & availability'}</small></div><button>View</button></div>)}</div>;
-  if(type==='hospital-search') return <div className="aj-hospital"><div className="aj-hospital-photo">HOSPITAL</div><div className="aj-hospital-body"><b>Compare Hospital Profiles</b><div className="aj-chiprow"><span>Cardiology</span><span>Orthopaedics</span><span>24×7 Emergency</span></div><div className="aj-lines"><span/><span/><span/></div><button>View hospital details</button></div></div>;
-  if(type==='doctor-dashboard') return <div className="aj-workspace"><aside><b>HC</b><span>Overview</span><span>My Patients</span><span>Appointments</span><span>Consultations</span><span>Reports</span></aside><main><div className="aj-screen-head"><b>Today&apos;s practice</b><span>Doctor workspace</span></div><div className="aj-kpis"><i>Appointments<strong>12</strong></i><i>Patients<strong>8</strong></i><i>Follow-ups<strong>4</strong></i></div><div className="aj-table"><span>09:30 · Consultation</span><span>10:00 · Follow-up</span><span>10:30 · Consultation</span><span>11:15 · New patient</span></div></main></div>;
-  if(type==='patients') return <div className="aj-patient-list"><div className="aj-screen-head"><b>My Patients</b><span>Shared care context</span></div>{['Ramesh Kumar','Sunita Patel','Aisha Shah','Manoj Verma'].map((x,i)=><div className="aj-doctor-row" key={x}><span className="aj-avatar">{x.split(' ').map(v=>v[0]).join('')}</span><div><b>{x}</b><small>{i%2?'Follow-up · Reports shared':'Upcoming visit · History available'}</small></div><button>Open</button></div>)}</div>;
-  return <div className="aj-consult"><div className="aj-flow"><span>Discover</span><i>→</i><span>Book</span><i>→</i><span>Consult</span><i>→</i><span>Follow-up</span></div><div className="aj-appointment-card"><small>TODAY</small><b>10:30 AM · Consultation</b><p>Appointment, patient context and follow-up stay connected.</p><button style={{background:accent}}>Open appointment</button></div></div>;
-}
-
-function AudienceSection({kind,items}:{kind:'patient'|'doctor';items:Journey[]}){
-  const [activeId,setActiveId]=useState(items[0].id);
-  const active=items.find(x=>x.id===activeId) || items[0];
+export default function AudienceJourneys(){
   const router=useRouter();
   const {user,isAuthenticated}=useAuthStore();
   const {openAuthModal}=useUIStore();
+  const [start,setStart]=useState(0);
+  const visible=useMemo(()=>[0,1,2].map(offset=>PATHS[(start+offset)%PATHS.length]),[start]);
 
-  const act=()=>{
-    if(active.href){router.push(active.href);return;}
-    if(kind==='patient'){
-      if(!isAuthenticated||!user){try{sessionStorage.setItem('hc_post_login_redirect','/dashboard')}catch{};openAuthModal('login');return;}
-      const role=String(user.role||'').toUpperCase();
-      router.push(role==='PATIENT'?'/dashboard':role==='DOCTOR'?'/doctor-dashboard':role==='HOSPITAL'?'/hospital-dashboard':'/admin-dashboard');
-      return;
-    }
+  const openMyHealth=()=>{
+    if(!isAuthenticated||!user){try{sessionStorage.setItem('hc_post_login_redirect','/dashboard')}catch{};openAuthModal('login');return;}
+    const role=String(user.role||'').toUpperCase();
+    router.push(role==='PATIENT'?'/dashboard':role==='DOCTOR'?'/doctor-dashboard':role==='HOSPITAL'?'/hospital-dashboard':'/admin-dashboard');
+  };
+  const openDoctorPlatform=()=>{
     if(isAuthenticated&&user){const role=String(user.role||'').toUpperCase();router.push(role==='DOCTOR'?'/doctor-dashboard':role==='PATIENT'?'/dashboard':role==='HOSPITAL'?'/hospital-dashboard':'/admin-dashboard');return;}
     try{sessionStorage.setItem('hc_signup_role','DOCTOR')}catch{}
     openAuthModal('register');
   };
+  const act=(id:PathId)=>{
+    if(id==='my-health'){openMyHealth();return;}
+    if(id==='doctors'){router.push('/doctors');return;}
+    if(id==='hospitals'){router.push('/hospitals');return;}
+    if(id==='communities'){router.push('/communities');return;}
+    router.push('/learn');
+  };
 
-  return <section className={`aj-audience ${kind}`}>
-    <div className="aj-audience-label">{kind==='patient'?'For Patients & Families':'For Doctors'}</div>
-    <div className="aj-tabs" role="tablist">
-      {items.map(item=><button key={item.id} role="tab" aria-selected={active.id===item.id} className={active.id===item.id?'active':''} onClick={()=>setActiveId(item.id)} style={active.id===item.id?{borderColor:item.accent,color:item.accent,boxShadow:`inset 0 -3px ${item.accent}`}:{}}>{item.label}</button>)}
-    </div>
-    <div className="aj-panel" style={{background:`linear-gradient(120deg,${active.wash} 0%,#FFFFFF 72%)`,borderColor:`${active.accent}24`}}>
-      <div className="aj-visual"><Visual type={active.visual} accent={active.accent}/></div>
-      <div className="aj-copy">
-        <div className="aj-kicker" style={{color:active.accent}}>{active.kicker}</div>
-        <h3>{active.title}</h3><p className="aj-body">{active.body}</p>
-        <div className="aj-detail-grid">
-          <div><b>What you can do</b>{active.canDo.map(x=><span key={x}>✓ {x}</span>)}</div>
-          <div><b>How it works</b>{active.works.map((x,i)=><span key={x}><em>{i+1}</em>{x}</span>)}</div>
-          <div><b>Why it helps</b>{active.helps.map(x=><span key={x}>○ {x}</span>)}</div>
-        </div>
-        <button className="aj-cta" onClick={act} style={{background:active.accent}}>{active.cta} →</button>
+  return <section className="ej-section" id="platform-tour">
+    <style>{`
+      .ej-section{font-family:'DM Sans',Arial,sans-serif;color:#10233C;background:#FCFDFD;padding:96px 0 0}.ej-container{max-width:1340px;margin:0 auto;padding:0 34px}.ej-intro{text-align:center;max-width:790px;margin:0 auto 36px}.ej-eyebrow{font-size:10px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0D9488;margin-bottom:11px}.ej-intro h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.6rem,4vw,4.35rem);line-height:1.02;letter-spacing:-.052em;margin:0 0 13px;color:#0B1D32}.ej-intro p{margin:0 auto;max-width:650px;color:#607487;font-size:14px;line-height:1.65}.ej-paths{position:relative}.ej-path-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.ej-path-card{border:0;background:transparent;text-align:left;padding:0;cursor:pointer;font-family:inherit;min-width:0}.ej-path-visual{height:220px;border-radius:20px;overflow:hidden;position:relative;background:#EEF5F6;border:1px solid #E0E9EC;box-shadow:0 10px 26px rgba(26,61,78,.06)}.ej-path-photo{position:absolute;inset:0;background-size:cover;background-position:center}.ej-path-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 54%,rgba(8,33,50,.16))}.ej-path-copy{padding:18px 3px 0}.ej-path-kicker{font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;margin-bottom:7px}.ej-path-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:22px;line-height:1.12;letter-spacing:-.025em;color:#10233C;margin:0 0 8px}.ej-path-copy p{font-size:12.5px;line-height:1.56;color:#5A7285;margin:0 0 12px;max-width:390px}.ej-path-link{font-size:11px;font-weight:900}.ej-arrow{position:absolute;top:88px;width:42px;height:42px;border-radius:50%;border:1px solid #D5E3E5;background:#fff;color:#0F766E;box-shadow:0 7px 18px rgba(22,62,78,.08);display:grid;place-items:center;font-size:18px;cursor:pointer;z-index:3}.ej-arrow.prev{left:-20px}.ej-arrow.next{right:-20px}.ej-dots{display:flex;justify-content:center;gap:7px;margin-top:25px}.ej-dot{width:7px;height:7px;border-radius:50%;border:0;padding:0;background:#D5E0E3;cursor:pointer}.ej-dot.active{width:24px;border-radius:8px;background:#0D9488}
+      .ej-health-visual{position:absolute;inset:0;background:linear-gradient(135deg,#ECF9F6,#F7FCFB);display:grid;place-items:center}.ej-health-screen{width:72%;height:76%;background:#fff;border:1px solid #D6E7E4;border-radius:14px;box-shadow:0 14px 28px rgba(24,79,73,.10);padding:15px}.ej-health-head{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#3B596A;border-bottom:1px solid #EDF3F4;padding-bottom:9px}.ej-health-head span{font-size:8px;color:#86A0AA}.ej-health-score{margin-top:12px;background:#F1FAF7;border-radius:10px;padding:11px;display:grid;grid-template-columns:1fr auto;align-items:end}.ej-health-score small{grid-column:1/3;font-size:8px;color:#60788A}.ej-health-score strong{font-size:29px;color:#0D9488;line-height:1}.ej-health-score em{font-style:normal;font-size:8px;color:#0D9488}.ej-health-list{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}.ej-health-list span{background:#F7FAFB;border-radius:7px;padding:8px 6px;font-size:7px;color:#6B8292}.ej-health-list b{display:block;color:#183C52;font-size:12px;margin-top:3px}.ej-health-phone{position:absolute;right:11%;bottom:13%;width:25%;height:62%;background:#fff;border:5px solid #10283A;border-radius:22px;box-shadow:0 15px 30px rgba(18,52,70,.16);padding:16px 9px 9px;display:flex;flex-direction:column;gap:7px}.ej-health-phone b{font-size:9px}.ej-health-phone span{font-size:6.5px;background:#F2F7F8;border-radius:6px;padding:7px 5px;color:#587085}
+      .ej-mini-community{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,#F2EBFF 0 15%,#F8F4FF 44%,#FCFAFF 77%)}.ej-community-line{position:absolute;left:20%;right:20%;top:50%;height:1px;background:repeating-linear-gradient(90deg,#C7B2EA 0 7px,transparent 7px 12px);transform-origin:center}.ej-community-line.l1{transform:rotate(14deg)}.ej-community-line.l2{transform:rotate(-14deg)}.ej-member{position:absolute;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:#fff;border:3px solid #E2D4F7;color:#6D28D9;font-size:9px;font-weight:900;box-shadow:0 8px 18px rgba(83,57,125,.10)}.ej-member.hub{left:50%;top:50%;transform:translate(-50%,-50%);width:58px;height:58px;background:#7C3AED;color:#fff;border-color:#E5DAFA}.ej-member.m1{left:16%;top:23%}.ej-member.m2{left:18%;bottom:20%}.ej-member.m3{right:17%;top:22%}.ej-member.m4{right:19%;bottom:19%}.ej-bubble{position:absolute;background:#fff;border:1px solid #E7DDF6;border-radius:11px;padding:8px 10px;font-size:7px;color:#655B74;box-shadow:0 7px 16px rgba(70,47,108,.07)}.ej-bubble.b1{left:6%;top:7%}.ej-bubble.b2{right:6%;bottom:7%}
+      .ej-story{margin-top:104px;padding:92px 0}.ej-story.mint{background:linear-gradient(115deg,#EAF8F4 0%,#F7FBFA 67%,#FFFFFF 100%)}.ej-story.blue{background:linear-gradient(115deg,#EDF5FF 0%,#F7FAFE 68%,#FFFFFF 100%)}.ej-story-inner{max-width:1340px;margin:0 auto;padding:0 34px;display:grid;grid-template-columns:1.05fr .95fr;gap:88px;align-items:center}.ej-story-inner.reverse{grid-template-columns:.94fr 1.06fr}.ej-story-copy .ej-eyebrow{text-align:left;margin-bottom:10px}.ej-story-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.55rem,3.8vw,4.15rem);line-height:1.02;letter-spacing:-.05em;margin:0 0 17px;color:#0B1D32;max-width:650px}.ej-story-copy>p{font-size:15px;line-height:1.68;color:#536D80;margin:0 0 27px;max-width:610px}.ej-benefits{display:grid;gap:15px;margin:0 0 28px}.ej-benefit{display:grid;grid-template-columns:38px 1fr;gap:13px;align-items:start}.ej-benefit-icon{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:900}.ej-benefit b{display:block;font-size:13px;color:#15384C;margin-bottom:3px}.ej-benefit span{display:block;font-size:11.5px;line-height:1.48;color:#63798A;max-width:480px}.ej-story-btn{border:0;border-radius:10px;padding:12px 17px;color:#fff;font-size:11.5px;font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(24,64,80,.12)}.ej-product-scene{min-height:410px;position:relative;display:grid;place-items:center}.ej-product-main{width:82%;height:330px;background:#fff;border:1px solid #D4E7E3;border-radius:22px;box-shadow:0 20px 45px rgba(30,74,78,.12);padding:22px}.ej-product-title{display:flex;justify-content:space-between;font-size:11px;color:#527084;border-bottom:1px solid #EBF3F2;padding-bottom:12px}.ej-product-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.ej-product-kpis div{background:#F4FAF8;border-radius:11px;padding:14px}.ej-product-kpis small{display:block;font-size:7px;color:#738A98}.ej-product-kpis b{display:block;font-size:23px;color:#0D9488;margin-top:3px}.ej-product-rows{display:grid;gap:8px;margin-top:14px}.ej-product-rows span{height:33px;border-radius:8px;background:linear-gradient(90deg,#EDF4F5 0 62%,#F6F9FA 62%)}.ej-product-phone{position:absolute;right:7%;bottom:20px;width:26%;height:292px;background:#fff;border:7px solid #10293B;border-radius:29px;box-shadow:0 18px 40px rgba(18,52,70,.18);padding:24px 11px 11px}.ej-product-phone b{font-size:9px}.ej-product-phone span{display:block;margin-top:9px;padding:9px 7px;border-radius:7px;background:#F1F6F7;color:#5F7688;font-size:7px}
+      .ej-discovery{padding:96px 0;background:#fff}.ej-discovery-head{max-width:760px;margin:0 auto 35px;text-align:center}.ej-discovery-head h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.45rem,3.5vw,3.9rem);line-height:1.03;letter-spacing:-.048em;margin:0 0 12px;color:#0B1D32}.ej-discovery-head p{margin:0;color:#5F7587;font-size:14px;line-height:1.62}.ej-care-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.ej-care-card{border-radius:24px;overflow:hidden;border:1px solid #E0E8EB;background:#fff;box-shadow:0 12px 30px rgba(28,61,78,.06)}.ej-care-photo{height:270px;background-size:cover;background-position:center;position:relative}.ej-care-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(9,33,50,.12))}.ej-care-copy{padding:25px 27px 28px}.ej-care-copy .ej-path-kicker{margin-bottom:8px}.ej-care-copy h4{font-family:'Sora','DM Sans',sans-serif;font-size:26px;line-height:1.08;letter-spacing:-.035em;margin:0 0 10px;color:#0F263A}.ej-care-copy p{font-size:12.5px;line-height:1.6;color:#5B7385;margin:0 0 15px}.ej-care-copy button{border:0;background:none;padding:0;font-size:11px;font-weight:900;cursor:pointer}
+      .ej-doctor-photo{min-height:430px;border-radius:28px;background:url('/images/doctors-intro.png') center/cover no-repeat,#EAF1F6;border:1px solid #D8E5EC;box-shadow:0 18px 42px rgba(28,61,78,.09)}
+      @media(max-width:980px){.ej-path-grid{grid-template-columns:repeat(2,1fr)}.ej-path-card:nth-child(3){display:none}.ej-story-inner,.ej-story-inner.reverse{grid-template-columns:1fr;gap:44px}.ej-product-scene{min-height:360px}.ej-care-grid{grid-template-columns:1fr}.ej-doctor-photo{min-height:360px}}
+      @media(max-width:650px){.ej-section{padding-top:66px}.ej-container,.ej-story-inner{padding-left:16px;padding-right:16px}.ej-intro{text-align:left}.ej-intro h2{font-size:2.65rem}.ej-path-grid{grid-template-columns:1fr}.ej-path-card:nth-child(n+2){display:none}.ej-path-visual{height:235px}.ej-arrow.prev{left:-7px}.ej-arrow.next{right:-7px}.ej-story{margin-top:76px;padding:64px 0}.ej-story-copy h3,.ej-discovery-head h3{font-size:2.55rem}.ej-product-main{width:92%;height:300px}.ej-product-phone{right:0;width:31%;height:260px}.ej-discovery{padding:70px 0}.ej-care-photo{height:220px}}
+    `}</style>
+
+    <div className="ej-container">
+      <div className="ej-intro"><div className="ej-eyebrow">How HealthConnect helps</div><h2>Start with what you need today.</h2><p>HealthConnect connects the parts of a healthcare journey without making you learn the whole platform first. Explore one path, then go deeper when it matters.</p></div>
+      <div className="ej-paths">
+        <button className="ej-arrow prev" aria-label="Previous platform paths" onClick={()=>setStart(v=>(v-1+PATHS.length)%PATHS.length)}>‹</button>
+        <div className="ej-path-grid">{visible.map(item=><button key={`${start}-${item.id}`} className="ej-path-card" onClick={()=>act(item.id)}>
+          <div className="ej-path-visual" style={{background:item.wash}}>{item.visual==='health'?<HealthVisual/>:item.visual==='community'?<CommunityVisual/>:<div className="ej-path-photo" style={{backgroundImage:`url('${item.image}')`}}/>}</div>
+          <div className="ej-path-copy"><div className="ej-path-kicker" style={{color:item.accent}}>{item.kicker}</div><h3>{item.label}</h3><p>{item.copy}</p><span className="ej-path-link" style={{color:item.accent}}>{item.cta} →</span></div>
+        </button>)}</div>
+        <button className="ej-arrow next" aria-label="Next platform paths" onClick={()=>setStart(v=>(v+1)%PATHS.length)}>›</button>
+        <div className="ej-dots">{PATHS.map((_,i)=><button key={i} aria-label={`Show platform path ${i+1}`} className={`ej-dot ${i===start?'active':''}`} onClick={()=>setStart(i)}/>)}</div>
       </div>
     </div>
-  </section>;
-}
 
-export default function AudienceJourneys(){
-  return <section className="aj-wrap" id="platform-tour">
-    <style>{`
-      .aj-wrap{font-family:'DM Sans',Arial,sans-serif;background:linear-gradient(180deg,#F7FBFA 0%,#F2F8FC 45%,#F8FAFD 100%);padding:58px 28px 68px;color:#10233C;border-top:1px solid #DCEBE8;border-bottom:1px solid #DCE7EE}.aj-head{max-width:1280px;margin:0 auto 32px;display:flex;justify-content:space-between;align-items:end;gap:36px}.aj-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.4rem,3.8vw,4.15rem);letter-spacing:-.05em;line-height:1.01;margin:0;max-width:760px}.aj-head p{max-width:410px;margin:0;color:#587087;font-size:14px;line-height:1.6}.aj-audience{max-width:1280px;margin:0 auto 30px}.aj-audience-label{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.15em;margin:0 0 10px}.aj-audience.patient .aj-audience-label{color:#0D9488}.aj-audience.doctor .aj-audience-label{color:#2563EB}.aj-tabs{display:flex;gap:8px;margin-bottom:10px}.aj-tabs button{flex:1;min-height:54px;border:1px solid #D9E6E9;background:rgba(255,255,255,.86);border-radius:12px;padding:10px 14px;color:#36556D;font-size:12px;font-weight:850;cursor:pointer;transition:.16s}.aj-tabs button:hover{background:#fff;transform:translateY(-1px)}.aj-tabs button.active{background:#fff}.aj-panel{display:grid;grid-template-columns:minmax(360px,.92fr) minmax(0,1.08fr);gap:38px;border:1px solid;border-radius:22px;padding:32px;box-shadow:0 14px 34px rgba(25,61,79,.07);min-height:430px}.aj-visual{display:flex;align-items:center;justify-content:center;min-height:360px}.aj-copy{display:flex;flex-direction:column;justify-content:center}.aj-kicker{font-size:10px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}.aj-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,2.8vw,3rem);line-height:1.04;letter-spacing:-.04em;margin:0 0 12px;color:#0B1D32}.aj-body{font-size:14px;line-height:1.6;color:#567086;margin:0 0 20px;max-width:660px}.aj-detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:22px}.aj-detail-grid>div{border-left:1px solid #D7E6EA;padding-left:15px}.aj-detail-grid b{display:block;color:#173B52;font-size:11px;margin-bottom:9px}.aj-detail-grid span{display:flex;gap:7px;color:#537086;font-size:10.5px;line-height:1.45;margin:0 0 8px}.aj-detail-grid em{font-style:normal;width:18px;height:18px;flex:0 0 18px;border-radius:50%;display:grid;place-items:center;background:#E6F1F4;color:#28536B;font-size:9px;font-weight:900}.aj-cta{align-self:flex-start;border:0;border-radius:10px;color:#fff;padding:11px 16px;font-size:11px;font-weight:900;cursor:pointer;box-shadow:0 7px 16px rgba(26,66,88,.12)}
-      .aj-device-stage{position:relative;width:100%;max-width:470px;height:315px}.aj-screen{background:#fff;border:1px solid #CFE0E5;border-radius:14px;box-shadow:0 15px 35px rgba(36,68,84,.12)}.aj-screen.desktop{position:absolute;left:0;top:20px;width:78%;height:260px;padding:18px}.aj-screen-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid #EAF0F2;color:#17384E;font-size:11px}.aj-screen-head span{font-size:9px;color:#7890A0}.aj-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0}.aj-kpis i{font-style:normal;font-size:8px;color:#708799;background:#F7FAFB;border:1px solid #E7EEF1;border-radius:8px;padding:9px}.aj-kpis strong{display:block;font-size:20px;color:#0D9488;margin-top:4px}.doctor .aj-kpis strong{color:#2563EB}.aj-lines{display:grid;gap:9px}.aj-lines span{height:11px;border-radius:5px;background:linear-gradient(90deg,#E8F2F3 0 70%,transparent 70%)}.aj-phone{position:absolute;right:0;bottom:0;width:36%;height:245px;background:#fff;border:5px solid #182A38;border-radius:25px;padding:22px 10px 12px;box-shadow:0 15px 30px rgba(26,55,70,.16);display:flex;flex-direction:column;gap:11px}.aj-phone b{font-size:10px;color:#13364C}.aj-phone span{font-size:8px;padding:7px;border-radius:7px;background:#F4F8FA;color:#5D7486}.aj-phone em{font-style:normal;font-size:8px;font-weight:800;color:#0D9488;margin-top:auto}.aj-directory,.aj-patient-list{width:100%;max-width:470px;background:#fff;border:1px solid #D8E5E9;border-radius:16px;padding:18px;box-shadow:0 15px 34px rgba(25,61,79,.10)}.aj-search{border:1px solid #DCE7EA;border-radius:9px;padding:10px 12px;color:#8AA0AE;font-size:9px;margin-bottom:10px}.aj-doctor-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #EEF3F5}.aj-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#E9F6F2;color:#0D9488;font-size:10px;font-weight:900}.doctor .aj-avatar{background:#EAF2FF;color:#2563EB}.aj-doctor-row b{display:block;font-size:10px;color:#17384E}.aj-doctor-row small{display:block;margin-top:3px;font-size:8px;color:#7B909F}.aj-doctor-row button,.aj-hospital button{border:1px solid #C9DFDB;background:#fff;border-radius:7px;padding:6px 9px;color:#0D9488;font-size:8px;font-weight:850}.aj-hospital{width:100%;max-width:470px;border-radius:17px;overflow:hidden;background:#fff;border:1px solid #E4DFDA;box-shadow:0 15px 35px rgba(72,57,41,.10)}.aj-hospital-photo{height:145px;background:linear-gradient(145deg,#DDEAF0,#AFC7D4);display:grid;place-items:center;color:#52748A;letter-spacing:.18em;font-size:12px;font-weight:900}.aj-hospital-body{padding:18px}.aj-hospital-body>b{font-family:'Sora',sans-serif;font-size:16px;color:#17384E}.aj-chiprow{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.aj-chiprow span{font-size:8px;padding:5px 7px;border-radius:999px;background:#FFF4EA;color:#B45309}.aj-workspace{width:100%;max-width:490px;min-height:300px;display:grid;grid-template-columns:105px 1fr;background:#fff;border:1px solid #D7E3EA;border-radius:16px;overflow:hidden;box-shadow:0 16px 36px rgba(35,68,91,.12)}.aj-workspace aside{background:#EFF5FB;padding:16px 12px;display:flex;flex-direction:column;gap:13px;color:#537087;font-size:8px}.aj-workspace aside b{font-size:14px;color:#2563EB}.aj-workspace main{padding:18px}.aj-table{display:grid;gap:8px}.aj-table span{background:#F7FAFD;border:1px solid #E7EEF4;border-radius:7px;padding:8px;color:#506D84;font-size:8px}.aj-consult{width:100%;max-width:470px}.aj-flow{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;margin-bottom:25px}.aj-flow span{background:#fff;border:1px solid #DDD7EB;border-radius:999px;padding:9px 12px;color:#5B4E79;font-size:9px;font-weight:850}.aj-flow i{font-style:normal;color:#9A8DB8}.aj-appointment-card{max-width:330px;margin:auto;background:#fff;border:1px solid #DFD8ED;border-radius:16px;padding:22px;box-shadow:0 15px 34px rgba(75,55,106,.10)}.aj-appointment-card small{color:#7C3AED;font-weight:900}.aj-appointment-card b{display:block;margin:8px 0;color:#1D2940}.aj-appointment-card p{font-size:10px;line-height:1.5;color:#667A8C}.aj-appointment-card button{border:0;color:#fff;border-radius:8px;padding:9px 11px;font-size:9px;font-weight:850}
-      @media(max-width:980px){.aj-head{align-items:start;flex-direction:column;gap:10px}.aj-panel{grid-template-columns:1fr}.aj-visual{min-height:300px}.aj-detail-grid{grid-template-columns:1fr 1fr 1fr}}
-      @media(max-width:680px){.aj-wrap{padding:42px 12px 50px}.aj-head h2{font-size:2.55rem}.aj-tabs{overflow-x:auto}.aj-tabs button{min-width:145px}.aj-panel{padding:22px;border-radius:17px}.aj-detail-grid{grid-template-columns:1fr}.aj-detail-grid>div{border-left:0;border-top:1px solid #D7E6EA;padding:12px 0 0}.aj-visual{min-height:260px}.aj-device-stage{transform:scale(.86);transform-origin:center}.aj-copy h3{font-size:2.1rem}}
-    `}</style>
-    <div className="aj-head"><div><h2>See how HealthConnect helps in real healthcare journeys.</h2></div><p>Instead of repeating feature lists, each section shows the job HealthConnect does for the person using it — and where appointments fit into that journey.</p></div>
-    <AudienceSection kind="patient" items={PATIENT_JOURNEYS}/>
-    <AudienceSection kind="doctor" items={DOCTOR_JOURNEYS}/>
+    <section className="ej-story mint" id="my-health-story"><div className="ej-story-inner">
+      <div className="ej-product-scene"><div className="ej-product-main"><div className="ej-product-title"><b>My Health</b><span>Your private health workspace</span></div><div className="ej-product-kpis"><div><small>HEALTH SCORE</small><b>82</b></div><div><small>UPCOMING</small><b>2</b></div><div><small>REPORTS</small><b>8</b></div></div><div className="ej-product-rows"><span/><span/><span/><span/></div></div><div className="ej-product-phone"><b>Health timeline</b><span>Prescription</span><span>Lab report</span><span>Follow-up</span><span>Medicines</span></div></div>
+      <div className="ej-story-copy"><div className="ej-eyebrow">For patients & families</div><h3>Your health history shouldn&apos;t start over at every visit.</h3><p>My Health keeps the information you need to understand and manage your journey in one authenticated patient workspace.</p><div className="ej-benefits">
+        <div className="ej-benefit"><span className="ej-benefit-icon" style={{background:'#DDF5EF',color:'#0D9488'}}>1</span><div><b>Keep it together</b><span>Reports, prescriptions, medicines, symptoms, vitals and appointments stay part of one health journey.</span></div></div>
+        <div className="ej-benefit"><span className="ej-benefit-icon" style={{background:'#DDF5EF',color:'#0D9488'}}>2</span><div><b>Stay ahead</b><span>Track medicines, reminders, upcoming care and follow-ups without searching across separate places.</span></div></div>
+        <div className="ej-benefit"><span className="ej-benefit-icon" style={{background:'#DDF5EF',color:'#0D9488'}}>3</span><div><b>Be better prepared</b><span>Carry important health context into the next conversation with a doctor.</span></div></div>
+      </div><button className="ej-story-btn" style={{background:'#0D9488'}} onClick={openMyHealth}>See how My Health works →</button></div>
+    </div></section>
+
+    <section className="ej-discovery"><div className="ej-container"><div className="ej-discovery-head"><div className="ej-eyebrow">Care discovery</div><h3>Find care with more context before you book.</h3><p>Doctor and hospital discovery belong together: understand your options first, then move into the appointment journey when you are ready.</p></div><div className="ej-care-grid">
+      <article className="ej-care-card"><div className="ej-care-photo" style={{backgroundImage:"url('/images/doctors-intro.png')"}}/><div className="ej-care-copy"><div className="ej-path-kicker" style={{color:'#2563EB'}}>FIND DOCTORS</div><h4>Choose a doctor with more confidence.</h4><p>Search by specialty and location, review profiles and consultation options, and move directly into booking.</p><button style={{color:'#2563EB'}} onClick={()=>router.push('/doctors')}>Find Doctors →</button></div></article>
+      <article className="ej-care-card"><div className="ej-care-photo" style={{backgroundImage:"url('https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1400&q=84')"}}/><div className="ej-care-copy"><div className="ej-path-kicker" style={{color:'#EA580C'}}>FIND HOSPITALS</div><h4>Know more before you travel for care.</h4><p>Compare departments, facilities, hospital-specific OPD information and affiliated doctors before deciding where to visit.</p><button style={{color:'#EA580C'}} onClick={()=>router.push('/hospitals')}>Find Hospitals →</button></div></article>
+    </div></div></section>
+
+    <section className="ej-story blue" id="doctor-platform-story"><div className="ej-story-inner reverse"><div className="ej-story-copy"><div className="ej-eyebrow" style={{color:'#2563EB'}}>For doctors</div><h3>A connected workspace for your practice.</h3><p>The Doctor platform brings patient relationships, availability, appointments and consultations into one professional workflow rather than separate tools.</p><div className="ej-benefits">
+      <div className="ej-benefit"><span className="ej-benefit-icon" style={{background:'#DBEAFE',color:'#2563EB'}}>1</span><div><b>My Patients</b><span>Review patient-shared context and keep returning-care relationships organised.</span></div></div>
+      <div className="ej-benefit"><span className="ej-benefit-icon" style={{background:'#DBEAFE',color:'#2563EB'}}>2</span><div><b>Practice & schedule</b><span>Manage availability, appointments and follow-ups inside the Doctor workspace.</span></div></div>
+      <div className="ej-benefit"><span className="ej-benefit-icon" style={{background:'#DBEAFE',color:'#2563EB'}}>3</span><div><b>Consultations</b><span>Move from booking through consultation and continued patient care in the same journey.</span></div></div>
+    </div><button className="ej-story-btn" style={{background:'#2563EB'}} onClick={openDoctorPlatform}>Explore the Doctor Platform →</button></div><div className="ej-doctor-photo" aria-label="HealthConnect doctor platform"/></div></section>
   </section>;
 }
