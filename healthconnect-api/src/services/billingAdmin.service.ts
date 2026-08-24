@@ -25,14 +25,17 @@ export const getAdminBillingSummary = async () => {
       COALESCE((SELECT COUNT(*) FROM billing.appointment_payments WHERE status = 'FAILED'), 0)::int AS "failedAppointmentPayments"
   `;
 
-  const recentSubscriptions = await prisma.userSubscription.findMany({
+  const recentSubscriptionRows = await prisma.userSubscription.findMany({
     orderBy: { createdAt: 'desc' },
-    take: 25,
+    take: 100,
     include: {
       plan: true,
       user: { select: { email: true, role: true } },
     },
   });
+  const recentSubscriptions = recentSubscriptionRows
+    .filter(row => canonicalAmountPaise(row.plan, 'MONTHLY') > 0 || canonicalAmountPaise(row.plan, 'ANNUAL') > 0)
+    .slice(0, 25);
 
   const recentPayments = await prisma.$queryRaw<any[]>`
     (
@@ -104,13 +107,10 @@ export const getAdminBillingSummary = async () => {
     LIMIT 25
   `;
 
-  const activeSubscribers = await prisma.userSubscription.count({ where: { status: 'ACTIVE' } });
-  const cancelledSubscribers = await prisma.userSubscription.count({ where: { status: 'CANCELLED' } });
-  const pastDueSubscribers = await prisma.userSubscription.count({ where: { status: 'PAST_DUE' } });
-
   const planRows = plans.map(plan => {
     const counts = subscriptionCounts.filter(row => row.planId === plan.id);
     const count = (status: string) => counts.find(row => row.status === status)?._count || 0;
+    const totalCount = counts.reduce((sum, row) => sum + Number(row._count || 0), 0);
     return {
       ...plan,
       monthlyPrice: canonicalAmountPaise(plan, 'MONTHLY') / 100,
@@ -118,10 +118,26 @@ export const getAdminBillingSummary = async () => {
       monthlyPricePaise: canonicalAmountPaise(plan, 'MONTHLY'),
       annualPricePaise: canonicalAmountPaise(plan, 'ANNUAL'),
       activeCount: count('ACTIVE'),
+      trialingCount: count('TRIALING'),
       cancelledCount: count('CANCELLED'),
       pastDueCount: count('PAST_DUE'),
+      expiredCount: count('EXPIRED'),
+      totalCount,
     };
   });
+
+  const paidPlanRows = planRows.filter(plan => Number(plan.monthlyPricePaise || 0) > 0 || Number(plan.annualPricePaise || 0) > 0);
+  const sumStatus = (field: 'activeCount' | 'trialingCount' | 'cancelledCount' | 'pastDueCount' | 'expiredCount') =>
+    paidPlanRows.reduce((sum, plan) => sum + Number(plan[field] || 0), 0);
+  const activePaidSubscribers = sumStatus('activeCount');
+  const trialingSubscribers = sumStatus('trialingCount');
+  const cancelledSubscribers = sumStatus('cancelledCount');
+  const pastDueSubscribers = sumStatus('pastDueCount');
+  const expiredSubscribers = sumStatus('expiredCount');
+  const membershipsStarted = paidPlanRows.reduce((sum, plan) => sum + Number(plan.totalCount || 0), 0);
+  const patientActiveSubscribers = paidPlanRows.filter(plan => plan.targetRole === 'PATIENT').reduce((sum, plan) => sum + Number(plan.activeCount || 0), 0);
+  const doctorActiveSubscribers = paidPlanRows.filter(plan => plan.targetRole === 'DOCTOR').reduce((sum, plan) => sum + Number(plan.activeCount || 0), 0);
+  const estimatedMrrPaise = paidPlanRows.reduce((sum, plan) => sum + Number(plan.monthlyPricePaise || 0) * Number(plan.activeCount || 0), 0);
 
   const t = totals[0] || {};
   const membershipRevenuePaise = Number(t.membershipRevenuePaise || 0);
@@ -140,9 +156,16 @@ export const getAdminBillingSummary = async () => {
       monthRevenuePaise: membershipMonthPaise + consultationMonthPaise,
       membershipMonthPaise,
       consultationMonthPaise,
-      activeSubscribers,
+      membershipsStarted,
+      activeSubscribers: activePaidSubscribers,
+      activePaidSubscribers,
+      patientActiveSubscribers,
+      doctorActiveSubscribers,
+      trialingSubscribers,
       cancelledSubscribers,
       pastDueSubscribers,
+      expiredSubscribers,
+      estimatedMrrPaise,
       failedPayments: Number(t.failedMembershipPayments || 0) + Number(t.failedAppointmentPayments || 0),
     },
     plans: planRows,
