@@ -7,6 +7,7 @@ import LandingHero from '@/components/landing/LandingHero';
 import PlatformNumbers, { type PlatformStats } from '@/components/landing/PlatformNumbers';
 import CommunityMyHealth from '@/components/landing/CommunityMyHealth';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
+import MembershipPlans from '@/components/landing/MembershipPlans';
 import TrustSection from '@/components/landing/TrustSection';
 import FinalCTA from '@/components/landing/FinalCTA';
 import Footer from '@/components/landing/Footer';
@@ -96,6 +97,7 @@ export default function LandingPage(){
       <PlatformNumbers stats={stats}/>
       <CommunityMyHealth/>
       <KnowledgeResources/>
+      <MembershipPlans/>
       <TrustSection/>
       <FinalCTA/>
     </main>
