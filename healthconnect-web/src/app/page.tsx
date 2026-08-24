@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
 import LandingHero from '@/components/landing/LandingHero';
 import PlatformNumbers, { type PlatformStats } from '@/components/landing/PlatformNumbers';
+import PlatformNumbersLegacy from '@/components/landing/PlatformNumbersLegacy';
 import CommunityMyHealth from '@/components/landing/CommunityMyHealth';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
 import MembershipPlans from '@/components/landing/MembershipPlans';
@@ -92,12 +93,61 @@ export default function LandingPage(){
 
   return <>
     <PublicNavbar/>
+    <style>{`
+      /* Keep the restored Section 2 exactly as the previous pictorial/count section.
+         The newer six-module story remains below it, but now has its own visual band. */
+      .landing-module-showcase .ps-section{
+        background:linear-gradient(180deg,#ECF7F6 0%,#F2F7FC 52%,#EEF5FA 100%)!important;
+        border-top:1px solid #D4E8E6;
+        border-bottom:1px solid #D7E5EC;
+      }
+      .landing-module-showcase .ps-module{background:rgba(255,255,255,.82)!important}
+      .landing-module-showcase .ps-stage{box-shadow:0 18px 42px rgba(34,77,94,.10)!important}
+
+      /* Membership should read as a compact commercial band, not another oversized hero. */
+      .landing-membership .hc-plans{
+        background:linear-gradient(135deg,#E8F5F2 0%,#EEF5FB 52%,#F3F8F7 100%)!important;
+        padding:48px 28px 52px!important;
+        border-top:1px solid #D4E7E3;
+        border-bottom:1px solid #D8E5EA;
+      }
+      .landing-membership .hc-plans-wrap{max-width:1120px!important}
+      .landing-membership .hc-plans-head{
+        grid-template-columns:minmax(0,1fr) minmax(280px,.65fr)!important;
+        gap:44px!important;
+        margin-bottom:22px!important;
+      }
+      .landing-membership .hc-plans h2{
+        font-size:clamp(2.15rem,3.3vw,3.45rem)!important;
+        max-width:650px!important;
+      }
+      .landing-membership .hc-plans-head p{font-size:14px!important;line-height:1.55!important}
+      .landing-membership .hc-plan-grid{gap:16px!important}
+      .landing-membership .hc-plan-card{
+        border-radius:18px!important;
+        padding:22px 24px 21px!important;
+        box-shadow:0 10px 28px rgba(18,55,68,.07)!important;
+      }
+      .landing-membership .hc-plan-title{font-size:22px!important}
+      .landing-membership .hc-plan-price{margin:12px 0 4px!important}
+      .landing-membership .hc-plan-price strong{font-size:36px!important}
+      .landing-membership .hc-plan-sub{font-size:12.5px!important;margin-bottom:12px!important}
+      .landing-membership .hc-plan-list{margin-bottom:17px!important}
+      .landing-membership .hc-plan-list li{padding:7px 0!important;font-size:12px!important}
+      .landing-membership .hc-plan-btn{padding:11px 15px!important;font-size:12px!important}
+      .landing-membership .hc-plan-note{margin-top:16px!important;padding:13px 16px!important}
+
+      @media(max-width:850px){
+        .landing-membership .hc-plans-head{grid-template-columns:1fr!important;gap:12px!important}
+      }
+    `}</style>
     <main>
       <LandingHero/>
-      <PlatformNumbers stats={stats}/>
+      <PlatformNumbersLegacy stats={stats}/>
+      <div className="landing-module-showcase"><PlatformNumbers stats={stats}/></div>
       <CommunityMyHealth/>
       <KnowledgeResources/>
-      <MembershipPlans/>
+      <div className="landing-membership"><MembershipPlans/></div>
       <TrustSection/>
       <FinalCTA/>
     </main>
