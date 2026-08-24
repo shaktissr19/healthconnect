@@ -59,14 +59,17 @@ export default function MembershipPlans(){
   const doctor = useMemo(()=>plans.find(p=>p.targetRole==='DOCTOR'&&Number(p.pricing?.monthlyPaise||0)>0) || plans.find(p=>p.targetRole==='DOCTOR'),[plans]);
 
   const choose=(role:'PATIENT'|'DOCTOR')=>{
+    const destination=role==='PATIENT'?'/dashboard?tab=subscription':'/doctor-dashboard/membership';
     if(isAuthenticated&&user){
       const current=String(user.role||'').toUpperCase();
-      if(role==='PATIENT'&&current==='PATIENT'){ router.push('/dashboard?tab=subscription'); return; }
-      if(role==='DOCTOR'&&current==='DOCTOR'){ router.push('/doctor-dashboard/membership'); return; }
+      if(current===role){ router.push(destination); return; }
       router.push(current==='ADMIN'?'/admin-dashboard':current==='HOSPITAL'?'/hospital-dashboard':current==='DOCTOR'?'/doctor-dashboard':'/dashboard');
       return;
     }
-    try{ sessionStorage.setItem('hc_signup_role',role); }catch{}
+    try{
+      sessionStorage.setItem('hc_signup_role',role);
+      sessionStorage.setItem('hc_post_login_redirect',destination);
+    }catch{}
     openAuthModal('register');
   };
 
