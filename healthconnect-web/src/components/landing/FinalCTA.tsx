@@ -6,27 +6,22 @@ import { useUIStore } from '@/store/uiStore';
 import { useRouter } from 'next/navigation';
 
 export default function FinalCTA(){
-  const { isAuthenticated, user } = useAuthStore();
-  const { openAuthModal } = useUIStore();
-  const router = useRouter();
+  const {isAuthenticated,user}=useAuthStore();
+  const {openAuthModal}=useUIStore();
+  const router=useRouter();
 
-  const openAccount = () => {
-    if (!isAuthenticated || !user) {
-      try { sessionStorage.setItem('hc_signup_role','PATIENT'); } catch {}
-      openAuthModal('register');
-      return;
-    }
-    const role = String(user.role ?? '').toUpperCase();
+  const openAccount=()=>{
+    if(!isAuthenticated||!user){try{sessionStorage.setItem('hc_signup_role','PATIENT')}catch{};openAuthModal('register');return;}
+    const role=String(user.role??'').toUpperCase();
     router.push(role==='DOCTOR'?'/doctor-dashboard':role==='HOSPITAL'?'/hospital-dashboard':role==='ADMIN'?'/admin-dashboard':'/dashboard');
   };
 
-  return <section className="final-cta-section">
+  return <section className="final-photo-section">
     <style>{`
-      .final-cta-section{background:#fff;padding:28px 28px 46px;font-family:'DM Sans',Arial,sans-serif}.final-cta{max-width:1280px;margin:0 auto;border-radius:20px;position:relative;overflow:hidden;background:linear-gradient(120deg,#071A2C 0%,#0B3D4A 56%,#0D766C 100%);padding:27px 34px;display:grid;grid-template-columns:1fr auto;gap:30px;align-items:center;box-shadow:0 13px 34px rgba(15,23,42,.12)}.final-cta:after{content:'';position:absolute;width:230px;height:230px;border-radius:50%;right:-85px;top:-115px;background:rgba(94,234,212,.1)}.final-cta-kicker{font-size:9px;font-weight:900;letter-spacing:.16em;color:#99F6E4;margin-bottom:6px}.final-cta h2{font-family:'Sora',sans-serif;font-size:clamp(1.55rem,2.4vw,2.45rem);line-height:1.08;letter-spacing:-.035em;color:#fff;margin:0 0 5px}.final-cta p{font-size:11px;line-height:1.5;color:#C0D6E4;margin:0;max-width:690px}.final-actions{display:flex;gap:8px;position:relative;z-index:1;flex-wrap:wrap}.final-primary,.final-secondary{border-radius:9px;padding:10px 14px;font-size:10px;font-weight:900;text-decoration:none;cursor:pointer;white-space:nowrap}.final-primary{border:1px solid #5EEAD4;background:#5EEAD4;color:#073126}.final-secondary{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.045);color:#fff}
-      @media(max-width:850px){.final-cta{grid-template-columns:1fr}.final-actions{justify-content:flex-start}}
-      @media(max-width:600px){.final-cta-section{padding:24px 14px 38px}.final-cta{padding:26px 22px}.final-actions{display:grid;grid-template-columns:1fr 1fr}.final-primary,.final-secondary{text-align:center;padding:10px}}
+      .final-photo-section{background:#fff;padding:76px 28px 48px;font-family:'DM Sans',Arial,sans-serif}.final-photo{max-width:1280px;min-height:310px;margin:0 auto;border-radius:24px;position:relative;overflow:hidden;background:#073B43;box-shadow:0 18px 42px rgba(15,48,61,.13)}.final-photo-image{position:absolute;inset:0 0 0 48%;background:url('/images/hero-intro.png') center/cover no-repeat}.final-photo:before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,#073B43 0%,#07505A 42%,rgba(7,80,90,.92) 50%,rgba(7,80,90,.35) 69%,rgba(7,80,90,.03) 100%)}.final-photo-copy{position:relative;z-index:2;width:min(600px,56%);padding:54px 48px}.final-photo-kicker{font-size:9px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#99F6E4;margin-bottom:10px}.final-photo h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,3.2vw,3.35rem);line-height:1.04;letter-spacing:-.045em;color:#fff;margin:0 0 11px}.final-photo p{font-size:13px;line-height:1.62;color:#D0E5E8;margin:0;max-width:535px}.final-photo-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:23px}.final-photo-primary,.final-photo-secondary{border-radius:10px;padding:11px 16px;font-size:10.5px;font-weight:900;text-decoration:none;cursor:pointer;white-space:nowrap}.final-photo-primary{border:1px solid #5EEAD4;background:#5EEAD4;color:#073126}.final-photo-secondary{border:1px solid rgba(255,255,255,.44);background:rgba(255,255,255,.08);color:#fff;backdrop-filter:blur(6px)}
+      @media(max-width:850px){.final-photo-image{inset:0;background-position:68% center}.final-photo:before{background:linear-gradient(90deg,#073B43 0%,rgba(7,59,67,.96) 48%,rgba(7,59,67,.55) 78%,rgba(7,59,67,.22) 100%)}.final-photo-copy{width:min(620px,76%);padding:48px 36px}}
+      @media(max-width:600px){.final-photo-section{padding:54px 14px 34px}.final-photo{min-height:430px}.final-photo-image{background-position:68% bottom}.final-photo:before{background:linear-gradient(180deg,#073B43 0%,rgba(7,59,67,.97) 57%,rgba(7,59,67,.55) 82%,rgba(7,59,67,.18) 100%)}.final-photo-copy{width:100%;padding:38px 24px 190px}.final-photo-actions{display:grid;grid-template-columns:1fr 1fr}.final-photo-primary,.final-photo-secondary{text-align:center}}
     `}</style>
-
-    <div className="final-cta"><div><div className="final-cta-kicker">READY WHEN YOU ARE</div><h2>Start with the health need you have today.</h2><p>Search first, learn first or create an account when you are ready to keep your healthcare journey connected.</p></div><div className="final-actions"><Link href="/doctors" className="final-secondary">Find Doctors</Link><Link href="/hospitals" className="final-secondary">Find Hospitals</Link><button onClick={openAccount} className="final-primary">{isAuthenticated?'Open Dashboard':'Sign Up Free'} →</button></div></div>
+    <div className="final-photo"><div className="final-photo-image"/><div className="final-photo-copy"><div className="final-photo-kicker">Better connection. Better continuity.</div><h2>Better care starts with better connection.</h2><p>Start with the health need you have today. Find care, learn, or create your HealthConnect account when you are ready to keep the journey connected.</p><div className="final-photo-actions"><Link href="/doctors" className="final-photo-secondary">Find a Doctor →</Link><button onClick={openAccount} className="final-photo-primary">{isAuthenticated?'Open Dashboard':'Create Account'} →</button></div></div></div>
   </section>;
 }
