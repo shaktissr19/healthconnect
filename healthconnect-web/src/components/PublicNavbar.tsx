@@ -51,6 +51,7 @@ export default function PublicNavbar(){
   const goHome=()=>{window.location.href='/?home=1'};
   const go=(href:string)=>{setMobileOpen(false);if(href==='/'){goHome();return;}router.push(href)};
   const active=(href:string)=>href==='/'?pathname==='/':pathname===href||pathname.startsWith(`${href}/`);
+  const goPlans=()=>{setMobileOpen(false);if(pathname==='/'){document.getElementById('plans')?.scrollIntoView({behavior:'smooth',block:'start'});return;}window.location.href='/?home=1#plans';};
 
   const accountShortcut=(intent:'health'|'patients')=>{
     setMobileOpen(false);
@@ -99,6 +100,7 @@ export default function PublicNavbar(){
         <button className="hc-brand" onClick={goHome}><span className="hc-brand-logo">HC</span><span className="hc-brand-copy"><strong>HealthConnect</strong><span>India's Unified Healthcare Platform</span></span></button>
         <div className="hc-nav-links">
           {links.map(([label,href])=><button key={href} className={`hc-nav-link ${active(href)?'active':''}`} onClick={()=>go(href)}>{label}</button>)}
+          <button className="hc-nav-link" onClick={goPlans}>Plans</button>
           <div className="hc-nav-separator"/>
           <button className="hc-nav-link" title="Your reports, medicines, appointments and health journey" onClick={()=>accountShortcut('health')}>My Health</button>
           <button className="hc-nav-link" title="Doctor workspace for patients, schedules and consultations" onClick={()=>accountShortcut('patients')}>My Patients</button>
@@ -111,6 +113,7 @@ export default function PublicNavbar(){
     </nav>
     <div className={`hc-mobile-menu ${mobileOpen?'open':''}`}>
       {links.map(([label,href])=><button key={href} className={active(href)?'active':''} onClick={()=>go(href)}>{label} <span style={{float:'right',opacity:.4}}>→</span></button>)}
+      <button onClick={goPlans}>Plans <span style={{float:'right',opacity:.4}}>→</span></button>
       <div className="hc-mobile-divider"/>
       <button onClick={()=>accountShortcut('health')}>♡ My Health <span style={{float:'right',opacity:.4}}>→</span></button><div className="hc-mobile-help">Your reports, medicines, appointments and health journey.</div>
       <button onClick={()=>accountShortcut('patients')}>👥 My Patients <span style={{float:'right',opacity:.4}}>→</span></button><div className="hc-mobile-help">Doctor workspace for patients, schedules and consultations.</div>
