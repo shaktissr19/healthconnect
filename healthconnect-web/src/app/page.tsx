@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
 import LandingHero from '@/components/landing/LandingHero';
-import PlatformNumbers, { type PlatformStats } from '@/components/landing/PlatformNumbers';
-import PlatformNumbersLegacy from '@/components/landing/PlatformNumbersLegacy';
-import CommunityMyHealth from '@/components/landing/CommunityMyHealth';
+import PlatformNumbersLegacy, { type PlatformStats } from '@/components/landing/PlatformNumbersLegacy';
+import AudienceJourneys from '@/components/landing/AudienceJourneys';
+import CommunityBenefits from '@/components/landing/CommunityBenefits';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
 import MembershipPlans from '@/components/landing/MembershipPlans';
 import TrustSection from '@/components/landing/TrustSection';
@@ -94,58 +94,52 @@ export default function LandingPage(){
   return <>
     <PublicNavbar/>
     <style>{`
-      /* Keep the restored Section 2 exactly as the previous pictorial/count section.
-         The newer six-module story remains below it, but now has its own visual band. */
-      .landing-module-showcase .ps-section{
-        background:linear-gradient(180deg,#ECF7F6 0%,#F2F7FC 52%,#EEF5FA 100%)!important;
-        border-top:1px solid #D4E8E6;
-        border-bottom:1px solid #D7E5EC;
-      }
-      .landing-module-showcase .ps-module{background:rgba(255,255,255,.82)!important}
-      .landing-module-showcase .ps-stage{box-shadow:0 18px 42px rgba(34,77,94,.10)!important}
-
-      /* Membership should read as a compact commercial band, not another oversized hero. */
+      /* Commercial content should remain present without becoming another hero-sized section. */
       .landing-membership .hc-plans{
-        background:linear-gradient(135deg,#E8F5F2 0%,#EEF5FB 52%,#F3F8F7 100%)!important;
-        padding:48px 28px 52px!important;
-        border-top:1px solid #D4E7E3;
-        border-bottom:1px solid #D8E5EA;
+        background:linear-gradient(135deg,#EAF7F4 0%,#EEF5FB 54%,#F7F5FC 100%)!important;
+        padding:34px 28px 38px!important;
+        border-top:1px solid #D6E8E4;
+        border-bottom:1px solid #DCE5EC;
       }
       .landing-membership .hc-plans-wrap{max-width:1120px!important}
       .landing-membership .hc-plans-head{
-        grid-template-columns:minmax(0,1fr) minmax(280px,.65fr)!important;
-        gap:44px!important;
-        margin-bottom:22px!important;
+        grid-template-columns:minmax(0,1fr) minmax(290px,.62fr)!important;
+        gap:34px!important;
+        margin-bottom:16px!important;
       }
+      .landing-membership .hc-plans-kicker{margin-bottom:7px!important;font-size:9px!important}
       .landing-membership .hc-plans h2{
-        font-size:clamp(2.15rem,3.3vw,3.45rem)!important;
-        max-width:650px!important;
+        font-size:clamp(1.9rem,2.7vw,2.75rem)!important;
+        max-width:620px!important;
       }
-      .landing-membership .hc-plans-head p{font-size:14px!important;line-height:1.55!important}
-      .landing-membership .hc-plan-grid{gap:16px!important}
+      .landing-membership .hc-plans-head p{font-size:12.5px!important;line-height:1.5!important}
+      .landing-membership .hc-plan-grid{gap:14px!important}
       .landing-membership .hc-plan-card{
-        border-radius:18px!important;
-        padding:22px 24px 21px!important;
-        box-shadow:0 10px 28px rgba(18,55,68,.07)!important;
+        border-radius:16px!important;
+        padding:17px 20px 17px!important;
+        box-shadow:0 8px 22px rgba(18,55,68,.06)!important;
       }
-      .landing-membership .hc-plan-title{font-size:22px!important}
-      .landing-membership .hc-plan-price{margin:12px 0 4px!important}
-      .landing-membership .hc-plan-price strong{font-size:36px!important}
-      .landing-membership .hc-plan-sub{font-size:12.5px!important;margin-bottom:12px!important}
-      .landing-membership .hc-plan-list{margin-bottom:17px!important}
-      .landing-membership .hc-plan-list li{padding:7px 0!important;font-size:12px!important}
-      .landing-membership .hc-plan-btn{padding:11px 15px!important;font-size:12px!important}
-      .landing-membership .hc-plan-note{margin-top:16px!important;padding:13px 16px!important}
-
+      .landing-membership .hc-plan-role{font-size:8px!important;margin-bottom:5px!important}
+      .landing-membership .hc-plan-title{font-size:19px!important}
+      .landing-membership .hc-plan-price{margin:8px 0 2px!important}
+      .landing-membership .hc-plan-price strong{font-size:30px!important}
+      .landing-membership .hc-plan-price span{font-size:11px!important}
+      .landing-membership .hc-plan-sub{font-size:11px!important;margin-bottom:8px!important}
+      .landing-membership .hc-plan-list{margin-bottom:11px!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:0 12px!important}
+      .landing-membership .hc-plan-list li{padding:5px 0!important;font-size:10px!important;border-bottom:0!important}
+      .landing-membership .hc-plan-list li:before{width:17px!important;height:17px!important;flex-basis:17px!important;font-size:8px!important}
+      .landing-membership .hc-plan-btn{padding:9px 13px!important;font-size:10.5px!important;border-radius:9px!important}
+      .landing-membership .hc-plan-note{margin-top:11px!important;padding:10px 13px!important;border-radius:11px!important;font-size:10.5px!important}
       @media(max-width:850px){
-        .landing-membership .hc-plans-head{grid-template-columns:1fr!important;gap:12px!important}
+        .landing-membership .hc-plans-head{grid-template-columns:1fr!important;gap:8px!important}
+        .landing-membership .hc-plan-list{grid-template-columns:1fr!important}
       }
     `}</style>
     <main>
       <LandingHero/>
+      <AudienceJourneys/>
+      <CommunityBenefits/>
       <PlatformNumbersLegacy stats={stats}/>
-      <div className="landing-module-showcase"><PlatformNumbers stats={stats}/></div>
-      <CommunityMyHealth/>
       <KnowledgeResources/>
       <div className="landing-membership"><MembershipPlans/></div>
       <TrustSection/>
