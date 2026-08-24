@@ -112,7 +112,7 @@ export default function MembershipPlans(){
         </article>
       </div>
 
-      <div className="hc-plan-note"><div><strong>Consultation fees are not included in membership.</strong> The consultation amount shown during booking comes from the individual doctor&apos;s configured fee and is paid separately.</div><div className="hc-plan-public">Public discovery remains accessible → Doctors · Hospitals · Knowledge Hub</div></div>
+      <div className="hc-plan-note"><div><strong>Consultation fees are separate.</strong> They are set by individual doctors and shown clearly during appointment booking.</div><div className="hc-plan-public">Public access → Find Doctors · Find Hospitals · Knowledge Hub</div></div>
     </div>
   </section>;
 }
