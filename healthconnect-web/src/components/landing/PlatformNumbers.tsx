@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 export type PlatformStats = {
@@ -12,88 +12,227 @@ export type PlatformStats = {
 
 type CountKey = keyof PlatformStats;
 
-type Card = {
+type Module = {
+  id: string;
+  icon: string;
   label: string;
-  sub: string;
-  desc: string;
+  eyebrow: string;
+  headline: string;
+  body: string;
+  points: string[];
   cta: string;
   href: string;
-  color: string;
+  accent: string;
+  wash: string;
   photo: string;
-  countKey: CountKey;
+  photoAlt: string;
+  photoPosition?: string;
+  countKey?: CountKey;
+  metricLabel: string;
+  roleToPrepare?: 'DOCTOR';
 };
 
-const CARDS: Card[] = [
+const MODULES: Module[] = [
   {
-    label: 'Patient Profiles',
-    sub: 'My Health · appointments · records',
-    desc: 'Patient accounts bring medical history, reports, medicines, symptoms, vitals and appointments into one place so health information is easier to carry from one visit to the next.',
+    id: 'patient',
+    icon: '♥',
+    label: 'Patient Dashboard',
+    eyebrow: 'MY HEALTH',
+    headline: 'Your health story, ready when you need it.',
+    body: 'Keep records, medicines, vitals and appointments connected in one private patient workspace.',
+    points: ['Medical history', 'Health Score', 'Appointments'],
     cta: 'Open My Health',
     href: '/?auth=login&home=1',
-    color: '#1A6BB5',
-    photo: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=900&q=82',
+    accent: '#2563EB',
+    wash: '#EDF5FF',
+    photo: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1400&q=86',
+    photoAlt: 'Healthcare professional using a mobile device',
+    photoPosition: 'center',
     countKey: 'patients',
+    metricLabel: 'patient profiles',
   },
   {
-    label: 'Doctor Profiles',
-    sub: 'Discovery · availability · booking',
-    desc: 'Browse HealthConnect doctor profiles by specialty and location, review consultation options and availability, and move into the live appointment journey when you are ready.',
+    id: 'doctor-directory',
+    icon: '🩺',
+    label: 'Doctor Directory',
+    eyebrow: 'FIND CARE',
+    headline: 'Find the right doctor without the phone calls.',
+    body: 'Search by specialty and location, review profiles and availability, then move into the booking journey.',
+    points: ['Specialty search', 'Doctor profiles', 'Availability'],
     cta: 'Find Doctors',
     href: '/doctors',
-    color: '#7C3AED',
-    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=900&q=82',
+    accent: '#7C3AED',
+    wash: '#F4F0FF',
+    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=1400&q=86',
+    photoAlt: 'Doctor in a clinical setting',
+    photoPosition: 'center 28%',
     countKey: 'doctors',
+    metricLabel: 'doctor profiles',
   },
   {
+    id: 'communities',
+    icon: '🤝',
     label: 'Health Communities',
-    sub: 'Peer support between visits',
-    desc: 'Condition-focused communities give people a place to ask, share and learn beyond a consultation. Membership rules, anonymous-posting controls, reporting, moderation and Q&A events support safer participation.',
+    eyebrow: 'BETWEEN APPOINTMENTS',
+    headline: 'Support that continues after the consultation ends.',
+    body: 'Join condition-focused spaces to ask, share and learn with moderation and anonymous participation where enabled.',
+    points: ['Peer experience', 'Q&A', 'Participation controls'],
     cta: 'Explore Communities',
     href: '/communities',
-    color: '#059669',
-    photo: 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=900&q=82',
+    accent: '#0B9B78',
+    wash: '#EAF8F3',
+    photo: 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=1400&q=86',
+    photoAlt: 'People joining hands in a supportive community',
+    photoPosition: 'center',
     countKey: 'communities',
+    metricLabel: 'health communities',
   },
   {
-    label: 'Hospital Profiles',
-    sub: 'Departments · facilities · hospital OPD',
-    desc: 'Compare hospital profiles, departments, facilities, accepted insurance or government schemes, affiliated doctors and hospital-specific OPD before deciding where to visit.',
+    id: 'doctor-workspace',
+    icon: '◫',
+    label: 'Doctor Dashboard',
+    eyebrow: 'DIGITAL PRACTICE',
+    headline: 'One workspace for patients, schedules and practice.',
+    body: 'Manage availability and appointments, work with patient-shared context and keep your professional presence connected.',
+    points: ['Patients', 'Schedules', 'Practice workflow'],
+    cta: 'Join as a Doctor',
+    href: '/?home=1&auth=register',
+    accent: '#0891B2',
+    wash: '#EAF8FB',
+    // Reuses the stronger doctor visual from the earlier Knowledge Hub reference, as requested.
+    photo: 'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=1400&q=86',
+    photoAlt: 'Doctor working with digital practice tools',
+    photoPosition: 'center 42%',
+    metricLabel: 'doctor workspace',
+    roleToPrepare: 'DOCTOR',
+  },
+  {
+    id: 'hospitals',
+    icon: '🏥',
+    label: 'Hospital Directory',
+    eyebrow: 'KNOW BEFORE YOU GO',
+    headline: 'See more of the hospital before you arrive.',
+    body: 'Compare departments, facilities, affiliated doctors and hospital-specific OPD before deciding where to visit.',
+    points: ['Departments', 'Facilities', 'Hospital OPD'],
     cta: 'Find Hospitals',
     href: '/hospitals',
-    color: '#D97706',
-    photo: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=900&q=82',
+    accent: '#D97706',
+    wash: '#FFF6E8',
+    photo: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1400&q=86',
+    photoAlt: 'Modern hospital interior',
+    photoPosition: 'center',
     countKey: 'hospitals',
+    metricLabel: 'hospital profiles',
+  },
+  {
+    id: 'knowledge',
+    icon: '📚',
+    label: 'Knowledge Hub',
+    eyebrow: 'LEARN & PREPARE',
+    headline: 'Medical knowledge that is easier to use.',
+    body: 'Explore clear health explainers and India-focused guides that help you prepare better questions for your next health conversation.',
+    points: ['Health explainers', 'Condition guides', 'Everyday learning'],
+    cta: 'Open Knowledge Hub',
+    href: '/learn',
+    accent: '#3B82F6',
+    wash: '#F2F8FF',
+    // Light medical-knowledge visual: books + stethoscope, replacing the generic doctor portrait.
+    photo: 'https://images.unsplash.com/photo-1676313496812-f8fc7c4304cf?auto=format&fit=crop&w=1600&q=86',
+    photoAlt: 'Medical books with a stethoscope',
+    photoPosition: 'center',
+    metricLabel: 'public health learning',
   },
 ];
 
-const formatCount = (value:number|null) => value === null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat('en-IN').format(value);
+const formatCount = (value:number|null|undefined) => value == null || !Number.isFinite(value)
+  ? null
+  : new Intl.NumberFormat('en-IN').format(value);
 
 export default function PlatformNumbers({ stats }: { stats: PlatformStats }) {
-  const [active,setActive] = useState(2);
+  const [activeId,setActiveId] = useState(MODULES[0].id);
+  const activeIndex = MODULES.findIndex(item => item.id === activeId);
+  const active = useMemo(() => MODULES[Math.max(0,activeIndex)], [activeIndex]);
 
-  return <section className="pn-section">
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setTimeout(() => {
+      const currentIndex = Math.max(0, MODULES.findIndex(item => item.id === activeId));
+      setActiveId(MODULES[(currentIndex + 1) % MODULES.length].id);
+    }, 6200);
+    return () => window.clearTimeout(timer);
+  }, [activeId]);
+
+  const metricValue = active.countKey ? formatCount(stats[active.countKey]) : null;
+
+  const prepareRole = () => {
+    if (!active.roleToPrepare) return;
+    try { sessionStorage.setItem('hc_signup_role', active.roleToPrepare); } catch {}
+  };
+
+  return <section className="ps-section" id="platform-tour">
     <style>{`
-      .pn-section{background:#fff;padding:38px 0 34px;font-family:'DM Sans',Arial,sans-serif}.pn-head{max-width:1280px;margin:0 auto;padding:0 48px 24px;display:flex;align-items:end;justify-content:space-between;gap:28px}.pn-kicker{display:flex;align-items:center;gap:8px;margin-bottom:9px;color:#1A6BB5;font-size:10px;font-weight:850;letter-spacing:.16em;text-transform:uppercase}.pn-kicker:before{content:'';width:25px;height:1px;background:#1A6BB5}.pn-heading{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.15rem,3.1vw,3.35rem);font-weight:900;color:#0A1628;letter-spacing:-.04em;line-height:1.03;margin:0}.pn-head p{font-size:13px;line-height:1.65;color:#5B7691;max-width:330px;margin:0}.pn-stage{padding:0 48px}.pn-cards{display:flex;height:360px;max-width:1480px;margin:0 auto;border-radius:16px;overflow:hidden;box-shadow:0 10px 36px rgba(15,30,60,.12)}.pn-card{position:relative;overflow:hidden;cursor:pointer;transition:flex .48s cubic-bezier(.4,0,.2,1);border-right:1px solid rgba(255,255,255,.08)}.pn-card:last-child{border-right:0}.pn-card.col{flex:1}.pn-card.exp{flex:2.35}.pn-photo{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .4s ease}.pn-overlay{position:absolute;inset:0;transition:background .4s ease}.pn-col-txt,.pn-exp-txt{position:absolute;left:0;right:0;bottom:0;color:#fff}.pn-col-txt{padding:20px 18px}.pn-exp-txt{padding:26px 32px;animation:pnIn .35s ease both}@keyframes pnIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}.pn-stat{font-family:'Sora',sans-serif;font-size:36px;font-weight:900;line-height:1;letter-spacing:-.04em;margin-bottom:5px}.pn-exp-stat{font-family:'Sora',sans-serif;font-size:48px;font-weight:900;line-height:1;letter-spacing:-.045em;margin-bottom:4px}.pn-label{font-size:12px;font-weight:800}.pn-sub{font-size:9.5px;color:rgba(255,255,255,.58);margin-top:3px}.pn-exp-sub{font-size:9px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:rgba(255,255,255,.68);margin-bottom:5px}.pn-exp-title{font-family:'Sora',sans-serif;font-size:18px;font-weight:800;margin-bottom:8px}.pn-exp-desc{font-size:12px;line-height:1.58;color:rgba(255,255,255,.82);max-width:360px;margin:0 0 14px}.pn-cta{display:inline-flex;align-items:center;background:#fff;padding:8px 15px;border-radius:2px;font-family:'Sora',sans-serif;font-size:10px;font-weight:800;text-decoration:none;text-transform:uppercase;letter-spacing:.04em}.pn-hint{position:absolute;top:14px;right:14px;background:rgba(7,22,42,.55);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;backdrop-filter:blur(8px)}
-      @media(max-width:820px){.pn-head{padding:0 20px 22px;align-items:start;flex-direction:column}.pn-stage{padding:0 20px}.pn-cards{height:auto;flex-direction:column}.pn-card,.pn-card.col,.pn-card.exp{flex:none;min-height:250px;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}}
-      @media(max-width:520px){.pn-section{padding:30px 0}.pn-stage{padding:0 12px}.pn-head{padding:0 16px 20px}.pn-heading{font-size:2.2rem}}
+      .ps-section{background:#F8FBFB;padding:48px 28px 58px;font-family:'DM Sans',Arial,sans-serif}
+      .ps-head{max-width:1280px;margin:0 auto 27px;display:flex;align-items:end;justify-content:space-between;gap:40px}
+      .ps-kicker{font-size:10px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0B8F7C;margin-bottom:10px}
+      .ps-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.7rem,4.2vw,4.8rem);line-height:.98;letter-spacing:-.055em;color:#0B1930;margin:0;max-width:760px}
+      .ps-head p{max-width:340px;margin:0 0 4px;color:#60768A;font-size:14px;line-height:1.6}
+      .ps-modules{max-width:1280px;margin:0 auto 18px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+      .ps-module{position:relative;border:1px solid #D8E5E6;background:rgba(255,255,255,.72);border-radius:14px;min-height:90px;padding:13px 10px 11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:#527087;cursor:pointer;transition:.18s;overflow:hidden}
+      .ps-module:hover{transform:translateY(-2px);background:#fff;box-shadow:0 8px 18px rgba(15,43,58,.07)}
+      .ps-module.active{background:#fff;color:#0B1930;box-shadow:0 10px 24px rgba(15,43,58,.09)}
+      .ps-module.active:after{content:'';position:absolute;left:0;bottom:0;height:3px;background:currentColor;animation:psProgress 6.2s linear forwards}
+      @keyframes psProgress{from{width:0}to{width:100%}}
+      .ps-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;font-weight:900}
+      .ps-module strong{font-size:10.5px;line-height:1.25;text-align:center}
+      .ps-stage{max-width:1280px;min-height:410px;margin:0 auto;border:1px solid #D7E4E5;border-radius:22px;overflow:hidden;display:grid;grid-template-columns:minmax(390px,.9fr) minmax(0,1.1fr);box-shadow:0 16px 38px rgba(15,43,58,.09);position:relative}
+      .ps-copy{padding:42px 46px 38px;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:2}
+      .ps-eyebrow{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;margin-bottom:10px}
+      .ps-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.15rem,3vw,3.45rem);line-height:1.02;letter-spacing:-.045em;color:#0B1930;margin:0 0 15px;max-width:610px}
+      .ps-copy>p{font-size:15px;line-height:1.6;color:#536C80;max-width:590px;margin:0 0 18px}
+      .ps-points{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}.ps-point{padding:7px 10px;background:rgba(255,255,255,.72);border:1px solid rgba(130,160,172,.22);border-radius:999px;color:#29485E;font-size:10.5px;font-weight:800}
+      .ps-bottom{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.ps-cta{display:inline-flex;align-items:center;border-radius:10px;padding:11px 16px;color:#fff;text-decoration:none;font-size:11.5px;font-weight:900;box-shadow:0 7px 18px rgba(15,43,58,.12);transition:.16s}.ps-cta:hover{transform:translateY(-1px)}
+      .ps-metric{font-size:10px;color:#61788A;font-weight:750}.ps-metric strong{display:block;font-family:'Sora',sans-serif;font-size:17px;color:#0B1930;line-height:1.1;margin-bottom:1px}
+      .ps-photo{position:relative;min-height:410px;overflow:hidden;background:#EAF2F2}.ps-photo img{width:100%;height:100%;position:absolute;inset:0;display:block;object-fit:cover;transition:opacity .25s ease,transform .5s ease;animation:psPhotoIn .38s ease both}.ps-stage:hover .ps-photo img{transform:scale(1.015)}
+      @keyframes psPhotoIn{from{opacity:.45;transform:scale(1.025)}to{opacity:1;transform:scale(1)}}
+      .ps-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(248,251,251,.28),transparent 26%),linear-gradient(0deg,rgba(7,28,42,.08),transparent 42%);pointer-events:none}
+      .ps-photo-note{position:absolute;right:18px;bottom:18px;z-index:2;background:rgba(255,255,255,.92);border:1px solid rgba(210,226,226,.94);backdrop-filter:blur(10px);border-radius:12px;padding:9px 12px;color:#15384B;font-size:10px;font-weight:850;box-shadow:0 8px 22px rgba(15,43,58,.09)}
+      .ps-dots{max-width:1280px;margin:12px auto 0;display:flex;justify-content:center;gap:6px}.ps-dot{width:6px;height:6px;border-radius:999px;border:0;background:#C6D5D9;padding:0;cursor:pointer;transition:.18s}.ps-dot.active{width:23px}
+      @media(max-width:1000px){.ps-head{align-items:start;flex-direction:column;gap:12px}.ps-modules{grid-template-columns:repeat(3,1fr)}.ps-stage{grid-template-columns:1fr}.ps-photo{min-height:300px}.ps-copy{padding:36px 34px}}
+      @media(max-width:620px){.ps-section{padding:38px 14px 46px}.ps-head h2{font-size:2.75rem}.ps-modules{display:flex;overflow-x:auto;padding-bottom:5px;scrollbar-width:none}.ps-module{min-width:132px}.ps-stage{border-radius:17px}.ps-copy{padding:30px 24px}.ps-copy h3{font-size:2.35rem}.ps-copy>p{font-size:14px}.ps-photo{min-height:250px}}
     `}</style>
-    <div className="pn-head">
-      <div><div className="pn-kicker">Platform at a glance</div><h2 className="pn-heading">HealthConnect<br/>by the Numbers</h2></div>
-      <p>Real platform counts. Select a card to see what each part of HealthConnect actually lets you do.</p>
+
+    <div className="ps-head">
+      <div><div className="ps-kicker">Explore HealthConnect</div><h2>Everything you need.<br/>Nothing you don&apos;t.</h2></div>
+      <p>Six connected parts, each with one clear job. Choose a module or let the story move automatically.</p>
     </div>
-    <div className="pn-stage">
-      <div className="pn-cards">
-        {CARDS.map((card,index)=>{
-          const expanded=active===index;
-          const count=formatCount(stats[card.countKey]);
-          return <article key={card.label} className={`pn-card ${expanded?'exp':'col'}`} onClick={()=>setActive(index)} onMouseEnter={()=>setActive(index)}>
-            <div className="pn-photo" style={{backgroundImage:`url(${card.photo})`,opacity:expanded?1:.4}}/>
-            <div className="pn-overlay" style={{background:expanded?`linear-gradient(to top,${card.color}F2 0%,${card.color}A8 45%,rgba(10,22,40,.10) 78%)`:'linear-gradient(to top,#0A1628F2 0%,#0A16288A 65%,rgba(10,22,40,.08) 100%)'}}/>
-            {card.countKey==='communities'&&<div className="pn-hint">HealthConnect USP</div>}
-            {!expanded?<div className="pn-col-txt"><div className="pn-stat">{count}</div><div className="pn-label">{card.label}</div><div className="pn-sub">{card.sub}</div></div>:<div className="pn-exp-txt"><div className="pn-exp-sub">{card.sub}</div><div className="pn-exp-stat">{count}</div><div className="pn-exp-title">{card.label}</div><p className="pn-exp-desc">{card.desc}</p><Link href={card.href} className="pn-cta" style={{color:card.color}} onClick={e=>e.stopPropagation()}>{card.cta} →</Link></div>}
-          </article>;
-        })}
+
+    <div className="ps-modules" role="tablist" aria-label="HealthConnect modules">
+      {MODULES.map(item => {
+        const selected = item.id === active.id;
+        return <button key={item.id} type="button" role="tab" aria-selected={selected} className={`ps-module ${selected?'active':''}`} style={{color:selected?item.accent:undefined,borderColor:selected?`${item.accent}80`:undefined}} onClick={()=>setActiveId(item.id)}>
+          <span className="ps-icon" style={{background:`${item.accent}13`,color:item.accent}}>{item.icon}</span>
+          <strong>{item.label}</strong>
+        </button>;
+      })}
+    </div>
+
+    <div className="ps-stage" key={active.id} style={{background:`linear-gradient(135deg,${active.wash} 0%,#FFFFFF 76%)`}}>
+      <div className="ps-copy">
+        <div className="ps-eyebrow" style={{color:active.accent}}>{active.eyebrow}</div>
+        <h3>{active.headline}</h3>
+        <p>{active.body}</p>
+        <div className="ps-points">{active.points.map(point=><span className="ps-point" key={point}>{point}</span>)}</div>
+        <div className="ps-bottom">
+          <Link className="ps-cta" href={active.href} style={{background:active.accent}} onClick={prepareRole}>{active.cta} →</Link>
+          <div className="ps-metric">{metricValue?<><strong>{metricValue}</strong>{active.metricLabel}</>:<><strong>{active.label}</strong>{active.metricLabel}</>}</div>
+        </div>
+      </div>
+      <div className="ps-photo">
+        <img src={active.photo} alt={active.photoAlt} style={{objectPosition:active.photoPosition || 'center'}}/>
+        <div className="ps-photo-note" style={{borderColor:`${active.accent}35`}}>{active.icon} {active.label}</div>
       </div>
     </div>
+
+    <div className="ps-dots" aria-label="Module carousel controls">{MODULES.map(item=><button key={item.id} type="button" aria-label={`Show ${item.label}`} className={`ps-dot ${item.id===active.id?'active':''}`} style={{background:item.id===active.id?active.accent:undefined}} onClick={()=>setActiveId(item.id)}/>)}</div>
   </section>;
 }
