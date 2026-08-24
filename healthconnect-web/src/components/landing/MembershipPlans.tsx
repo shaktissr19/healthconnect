@@ -29,16 +29,16 @@ const money = (paise:number) => `₹${(Number(paise || 0) / 100).toLocaleString(
 const unwrap = (r:any) => r?.data?.data ?? r?.data ?? [];
 
 const patientFallback = [
-  'My Health with reports, prescriptions and medical history',
-  'Health Score, vitals, symptoms and medicines',
-  'Appointments, reminders and consultation payment history',
-  'Health Communities and connected health journey',
+  'My Health, reports and prescriptions',
+  'Health Score, vitals and medicines',
+  'Appointments, reminders and payment history',
+  'Health Communities and connected care',
 ];
 const doctorFallback = [
-  'Professional profile and HealthConnect presence',
-  'Availability, appointments and consultation workflow',
-  'Patient-shared health context and records',
-  'Practice workspace, affiliations and billing history',
+  'Professional profile and discovery',
+  'Availability and appointments',
+  'Patient-shared health context',
+  'Practice workspace and billing',
 ];
 
 export default function MembershipPlans(){
@@ -87,8 +87,8 @@ export default function MembershipPlans(){
     `}</style>
     <div className="hc-plans-wrap">
       <div className="hc-plans-head">
-        <div><div className="hc-plans-kicker">Membership & billing</div><h2>Choose the HealthConnect membership that fits your role.</h2></div>
-        <p>Membership pays for the HealthConnect platform and connected health workflows. Doctor consultation charges are separate and are set by each doctor.</p>
+        <div><div className="hc-plans-kicker">Membership & billing</div><h2>Simple memberships. Clear value.</h2></div>
+        <p>Pay for the HealthConnect platform, not for a bundled consultation. Doctor consultation fees stay separate.</p>
       </div>
 
       <div className="hc-plan-grid">
@@ -97,7 +97,7 @@ export default function MembershipPlans(){
           <h3 className="hc-plan-title">HealthConnect Patient</h3>
           <div className="hc-plan-price"><strong>{money(patientPaise)}</strong><span>/ month</span></div>
           {intro?.available&&<div className="hc-plan-offer"><strong>{intro.code||'LAUNCH99'}:</strong> {intro.description||`${money(Number(intro.amountPaise||9900))}/month for the first ${intro.cycles||3} months, then ${money(patientPaise)}/month.`}</div>}
-          <div className="hc-plan-sub">Keep your personal health journey organised and ready when you return to care.</div>
+          <div className="hc-plan-sub">Your health information and care journey, organised in one account.</div>
           <ul className="hc-plan-list">{patientFeatures.map((f,i)=><li key={`${f}-${i}`}>{f}</li>)}</ul>
           <button className="hc-plan-btn" onClick={()=>choose('PATIENT')}>{isAuthenticated&&String(user?.role).toUpperCase()==='PATIENT'?'Manage Patient Membership →':'Start Patient Membership →'}</button>
         </article>
@@ -106,7 +106,7 @@ export default function MembershipPlans(){
           <div className="hc-plan-role">For Doctors</div>
           <h3 className="hc-plan-title">HealthConnect Doctor</h3>
           <div className="hc-plan-price"><strong>{money(doctorPaise)}</strong><span>/ month</span></div>
-          <div className="hc-plan-sub">A professional workspace for discovery, appointments and connected patient care.</div>
+          <div className="hc-plan-sub">Your HealthConnect professional workspace for connected patient care.</div>
           <ul className="hc-plan-list">{doctorFeatures.map((f,i)=><li key={`${f}-${i}`}>{f}</li>)}</ul>
           <button className="hc-plan-btn" onClick={()=>choose('DOCTOR')}>{isAuthenticated&&String(user?.role).toUpperCase()==='DOCTOR'?'Manage Doctor Membership →':'Join as a Doctor →'}</button>
         </article>
