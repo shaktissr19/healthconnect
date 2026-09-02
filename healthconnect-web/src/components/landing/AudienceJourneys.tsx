@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 const NAV_ITEMS=[
   {label:'My Health',sub:'Track, organise and prepare',target:'my-health-story',accent:'#0B8F7C',wash:'#DDF5EE',icon:'♥'},
   {label:'Health Communities',sub:'Peer support between visits',target:'health-communities-story',accent:'#7C3AED',wash:'#EEE5FF',icon:'◎'},
@@ -12,6 +14,7 @@ const NAV_ITEMS=[
 const MY_HEALTH_ARTWORK='/images/my-health/my-health-overview.png';
 
 export default function AudienceJourneys(){
+  const router=useRouter();
   const goto=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
 
   return <section className="journey-root" id="platform-tour">
@@ -26,23 +29,28 @@ export default function AudienceJourneys(){
       .journey-pill b{display:block;font-size:14px;line-height:1.25;color:#10243C}
       .journey-pill span:last-child{display:block;margin-top:4px;font-size:12px;line-height:1.3;color:#405D70}
 
-      .myhealth-section{padding:72px 22px 86px;background:#fff;scroll-margin-top:94px}
-      .myhealth-artwork-shell{width:min(100%,1664px);margin:0 auto;overflow:hidden;background:#fff}
-      .myhealth-artwork{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;object-position:center center}
+      .myhealth-section{padding:52px 12px 76px;background:#fff;scroll-margin-top:92px}
+      .myhealth-exact{position:relative;width:min(100%,1664px);aspect-ratio:1664/936;margin:0 auto;background:#fff;overflow:hidden}
+      .myhealth-exact>img{display:block;width:100%;height:100%;object-fit:contain;object-position:center}
+      .mh-hotspot{position:absolute;z-index:3;border:0;background:transparent;cursor:pointer;border-radius:14px;color:transparent;font-size:0;padding:0}
+      .mh-hotspot:focus-visible{outline:3px solid #0B8F7C;outline-offset:3px;background:rgba(11,143,124,.08)}
+      .mh-book{left:16.0%;top:47.4%;width:11.5%;height:17.4%}
+      .mh-consult{left:61.0%;top:76.4%;width:7.2%;height:4.8%}
+      .mh-community{left:73.4%;top:76.4%;width:7.2%;height:4.8%}
+      .mh-health-score{left:44.5%;top:24.6%;width:14.0%;height:33.4%}
 
       @media(max-width:1080px){
         .journey-nav{grid-template-columns:repeat(3,1fr)}
-        .myhealth-section{padding:58px 18px 72px}
+        .myhealth-section{padding:44px 8px 64px}
       }
       @media(max-width:720px){
         .journey-nav-wrap{padding:24px 14px 0}
         .journey-nav{grid-template-columns:1fr 1fr}
         .journey-pill{min-height:84px}
-        .myhealth-section{padding:44px 8px 58px}
+        .myhealth-section{padding:34px 0 50px}
       }
       @media(max-width:480px){
         .journey-nav{grid-template-columns:1fr}
-        .myhealth-section{padding-left:0;padding-right:0}
       }
     `}</style>
 
@@ -54,8 +62,12 @@ export default function AudienceJourneys(){
     </div>
 
     <section className="myhealth-section" id="my-health-story" aria-label="My Health Patient Dashboard">
-      <div className="myhealth-artwork-shell">
-        <img className="myhealth-artwork" src={MY_HEALTH_ARTWORK} alt="My Health Patient Dashboard: health score, appointments, medication tracking, health communities, connected care, health history and privacy in one HealthConnect journey" />
+      <div className="myhealth-exact">
+        <img src={MY_HEALTH_ARTWORK} alt="My Health Patient Dashboard showing Health Score, appointments, medication tracking, Health Communities, connected care, health journey and privacy features" />
+        <button type="button" className="mh-hotspot mh-book" aria-label="Find doctors and book appointments" onClick={()=>router.push('/doctors')}>Book appointments</button>
+        <button type="button" className="mh-hotspot mh-health-score" aria-label="Open My Health dashboard" onClick={()=>router.push('/dashboard')}>Open My Health</button>
+        <button type="button" className="mh-hotspot mh-consult" aria-label="Consult a doctor" onClick={()=>router.push('/doctors')}>Consult now</button>
+        <button type="button" className="mh-hotspot mh-community" aria-label="Explore Health Communities" onClick={()=>router.push('/communities')}>Join community</button>
       </div>
     </section>
   </section>;
