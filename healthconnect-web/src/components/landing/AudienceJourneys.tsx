@@ -121,10 +121,12 @@ export default function AudienceJourneys(){
 
       .mh-consult{position:absolute;z-index:5;left:42.4%;top:55.5%;width:30.5%;height:24%;display:grid;grid-template-columns:58% 42%;overflow:hidden;border-radius:18px;background:linear-gradient(135deg,#EDF7F7,#D8ECEE);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
       .mh-consult-photo{width:100%;height:100%;object-fit:cover;object-position:center}
-      .mh-consult-copy{position:relative;height:100%;box-sizing:border-box;padding:16px 15px 58px;display:flex;flex-direction:column;min-width:0;background:rgba(255,255,255,.94)}
+      .mh-consult-copy{height:100%;box-sizing:border-box;padding:16px 15px 58px;display:flex;flex-direction:column;min-width:0;background:rgba(255,255,255,.94)}
       .mh-consult-copy h3,.mh-community-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.75rem,1vw,1.08rem);color:#0B665C;margin:0 0 8px}
       .mh-consult-copy p,.mh-community-copy p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.5;color:#37566A;margin:0}
-      .mh-action{position:absolute;left:15px;bottom:14px;width:112px;height:36px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border:0;border-radius:9px;background:#0B948B;color:#fff;padding:0 12px;line-height:1;font-size:clamp(.58rem,.66vw,.72rem);font-weight:900;cursor:pointer;box-shadow:0 7px 16px rgba(11,148,139,.17)}
+      .mh-action{position:absolute;bottom:16px;width:104px;height:34px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border:0;border-radius:8px;background:#0B948B;color:#fff;padding:0 10px;line-height:1;font-size:clamp(.56rem,.64vw,.7rem);font-weight:900;cursor:pointer;box-shadow:0 6px 14px rgba(11,148,139,.16);z-index:4}
+      .mh-consult>.mh-action{left:calc(58% + 15px)}
+      .mh-community-card>.mh-action{left:15px}
       .mh-action:hover{background:#087D75}
 
       .mh-community-card{position:absolute;z-index:5;right:2.3%;top:55.5%;width:24.4%;height:24%;overflow:hidden;border-radius:18px;background:#EEF7F7;border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1)}
@@ -153,14 +155,16 @@ export default function AudienceJourneys(){
         .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
         .mh-score{margin:18px 0}.mh-score-popover{right:0;left:auto;width:min(286px,80vw)}
         .mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
-        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-consult-copy,.mh-community-copy{padding:24px 20px}.mh-community-copy{width:48%}.mh-community-photo{object-position:center center;transform:scale(.92);transform-origin:right center}.mh-action{position:static;width:auto;height:36px;margin-top:16px;align-self:flex-start;padding:0 14px}
+        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-consult-copy,.mh-community-copy{padding:24px 20px 62px}.mh-community-copy{width:48%}.mh-community-photo{object-position:center center;transform:scale(.92);transform-origin:right center}
+        .mh-consult>.mh-action{left:calc(58% + 20px);bottom:20px}.mh-community-card>.mh-action{left:20px;bottom:20px}
         .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
       }
       @media(max-width:650px){
         .journey-nav-wrap{padding:24px 14px 0}.journey-nav{grid-template-columns:1fr 1fr}.journey-pill{min-height:84px}
         .mh-section{padding:46px 10px 62px}.mh-head{padding:0 4px}.mh-head h2{font-size:2.55rem}.mh-head p{font-size:16px}
         .mh-canvas{padding:14px}.mh-main-photo{height:290px}.mh-title{font-size:2.25rem}.mh-feature-grid{grid-template-columns:1fr 1fr}.mh-feature h3{font-size:.88rem}.mh-feature p{font-size:.73rem}
-        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{min-height:300px}.mh-community-copy{width:64%;padding:22px 18px}.mh-community-shade{background:linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 45%,rgba(255,255,255,.66) 67%,rgba(255,255,255,.08) 100%)}.mh-community-photo{object-position:58% center;transform:scale(.94)}
+        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{min-height:300px}.mh-community-copy{width:64%;padding:22px 18px 62px}.mh-consult-copy{padding:22px 18px 62px}.mh-community-shade{background:linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 45%,rgba(255,255,255,.66) 67%,rgba(255,255,255,.08) 100%)}.mh-community-photo{object-position:58% center;transform:scale(.94)}
+        .mh-consult>.mh-action,.mh-community-card>.mh-action{left:18px;bottom:18px}
         .mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E4E6}
       }
       @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}.mh-community-copy{width:72%}.mh-community-photo{object-position:62% center;transform:scale(.95)}}
@@ -211,13 +215,15 @@ export default function AudienceJourneys(){
 
           <article className="mh-consult">
             <img className="mh-consult-photo" src={PHOTOS.consultation} alt="Doctor consulting with a patient" loading="lazy" decoding="async" onError={hideBrokenImage}/>
-            <div className="mh-consult-copy"><h3>Connected Care</h3><p>Move from organised health context into doctor discovery, consultation and follow-up.</p><button type="button" className="mh-action" onClick={()=>router.push('/doctors')}>Consult Now</button></div>
+            <div className="mh-consult-copy"><h3>Connected Care</h3><p>Move from organised health context into doctor discovery, consultation and follow-up.</p></div>
+            <button type="button" className="mh-action" onClick={()=>router.push('/doctors')}>Consult Now</button>
           </article>
 
           <article className="mh-community-card">
             <img className="mh-community-photo" src={PHOTOS.community} alt="HealthConnect community members supporting one another online" loading="lazy" decoding="async" onError={hideBrokenImage}/>
             <div className="mh-community-shade" aria-hidden="true"/>
-            <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experiences.<br/>Support between visits.</p><span className="mh-community-note">Find condition-focused spaces where people can learn, share and feel less alone.</span><button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button></div>
+            <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experiences.<br/>Support between visits.</p><span className="mh-community-note">Find condition-focused spaces where people can learn, share and feel less alone.</span></div>
+            <button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button>
           </article>
 
           <div className="mh-bottom">
