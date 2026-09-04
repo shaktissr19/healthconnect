@@ -3,15 +3,58 @@
 import { useRouter } from 'next/navigation';
 
 const NAV_ITEMS=[
-  {label:'My Health',sub:'Track, organise and prepare',target:'my-health-story',accent:'#0B8F7C',wash:'#DDF5EE',icon:'♥'},
-  {label:'Health Communities',sub:'Peer support between visits',target:'health-communities-story',accent:'#7C3AED',wash:'#EEE5FF',icon:'◎'},
-  {label:'Doctor Platform',sub:'Patients, practice and follow-up',target:'doctor-platform-story',accent:'#2563EB',wash:'#E4EDFF',icon:'▣'},
-  {label:'Find Care',sub:'Doctors and hospitals',target:'care-discovery',accent:'#0F766E',wash:'#DDF3EF',icon:'⌕'},
-  {label:'Knowledge Hub',sub:'Understand, learn and prepare',target:'knowledge-hub',accent:'#0284C7',wash:'#E1F3FC',icon:'▤'},
-  {label:'Plans',sub:'Simple membership options',target:'plans',accent:'#C2410C',wash:'#FCEBDD',icon:'₹'},
+  {label:'My Health',sub:'Track, organise and prepare',target:'my-health-story',accent:'#0B8F7C',wash:'#DDF5EE',icon:'heart'},
+  {label:'Health Communities',sub:'Peer support between visits',target:'health-communities-story',accent:'#7C3AED',wash:'#EEE5FF',icon:'community'},
+  {label:'Doctor Platform',sub:'Patients, practice and follow-up',target:'doctor-platform-story',accent:'#2563EB',wash:'#E4EDFF',icon:'doctor'},
+  {label:'Find Care',sub:'Doctors and hospitals',target:'care-discovery',accent:'#0F766E',wash:'#DDF3EF',icon:'search'},
+  {label:'Knowledge Hub',sub:'Understand, learn and prepare',target:'knowledge-hub',accent:'#0284C7',wash:'#E1F3FC',icon:'book'},
+  {label:'Plans',sub:'Simple membership options',target:'plans',accent:'#C2410C',wash:'#FCEBDD',icon:'rupee'},
 ] as const;
 
-const MY_HEALTH_ARTWORK='/images/my-health/my-health-overview.png';
+const FEATURES=[
+  {title:'Check Health Score',copy:'See your overall health picture and understand where attention may be needed.',icon:'pulse',accent:'#0B8F7C',wash:'#E3F7F2'},
+  {title:'Book Appointments',copy:'Find trusted doctors and move into your appointment journey.',icon:'calendar',accent:'#2563EB',wash:'#E7F0FF'},
+  {title:'Track Medications',copy:'Keep medicines, reminders and medication information organised.',icon:'pill',accent:'#7C3AED',wash:'#F0E8FF'},
+  {title:'Health Communities',copy:'Connect with people on similar health journeys and get support between visits.',icon:'community',accent:'#EA580C',wash:'#FFF0E5'},
+  {title:'Share Your Journey',copy:'Keep health history, reports, prescriptions and care context together.',icon:'chat',accent:'#2563EB',wash:'#EAF2FF'},
+  {title:'Secure & Private',copy:'Your health information stays behind authenticated access and under your control.',icon:'shield',accent:'#15803D',wash:'#E8F7ED'},
+] as const;
+
+const CARE_STEPS=[
+  {title:'Book Appointments',icon:'calendar'},
+  {title:'Track Medications',icon:'pill'},
+  {title:'Check Health Score',icon:'pulse'},
+  {title:'Join Health Communities',icon:'community'},
+] as const;
+
+const PHOTOS={
+  patient:'/images/my-health/patient-main.png',
+  consultation:'/images/my-health/consultation.png',
+  community:[
+    '/images/my-health/community-1.png',
+    '/images/my-health/community-2.png',
+    '/images/my-health/community-3.png',
+    '/images/my-health/community-4.png',
+  ],
+} as const;
+
+function Icon({kind,size=24}:{kind:string;size?:number}){
+  const common={width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.9,strokeLinecap:'round' as const,strokeLinejoin:'round' as const,'aria-hidden':true};
+  if(kind==='heart') return <svg {...common}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>;
+  if(kind==='pulse') return <svg {...common}><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>;
+  if(kind==='calendar') return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h3M13 14h3M8 18h3"/></svg>;
+  if(kind==='pill') return <svg {...common}><path d="m10.5 13.5 5-5a4 4 0 1 0-5.7-5.7l-5 5a4 4 0 1 0 5.7 5.7Z"/><path d="m7.7 5 5.7 5.7"/></svg>;
+  if(kind==='community') return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>;
+  if(kind==='chat') return <svg {...common}><path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-7a4 4 0 0 1-1-2.7V8a4 4 0 0 1 4-4h11a4 4 0 0 1 4 4Z"/><path d="M7 10h.01M12 10h.01M17 10h.01"/></svg>;
+  if(kind==='shield') return <svg {...common}><path d="M12 3 19 6v5c0 4.8-2.9 8.4-7 10-4.1-1.6-7-5.2-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg>;
+  if(kind==='lock') return <svg {...common}><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>;
+  if(kind==='clock') return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>;
+  if(kind==='doctor') return <svg {...common}><path d="M8 3v4a4 4 0 0 0 8 0V3M12 11v10M8 15h8M5 21h14"/></svg>;
+  if(kind==='search') return <svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>;
+  if(kind==='book') return <svg {...common}><path d="M4 5a3 3 0 0 1 3-3h5v18H7a3 3 0 0 0-3 3Z"/><path d="M20 5a3 3 0 0 0-3-3h-5v18h5a3 3 0 0 1 3 3Z"/></svg>;
+  if(kind==='rupee') return <svg {...common}><path d="M7 5h10M7 9h10M8 5c5 0 7 2 7 4s-2 4-7 4l8 7"/></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="9"/></svg>;
+}
 
 export default function AudienceJourneys(){
   const router=useRouter();
@@ -25,49 +68,154 @@ export default function AudienceJourneys(){
       .journey-nav{padding:14px;border-radius:22px;background:linear-gradient(120deg,#064E49,#0B7168);display:grid;grid-template-columns:repeat(6,1fr);gap:10px;box-shadow:0 16px 34px rgba(5,73,67,.14)}
       .journey-pill{min-height:96px;border:0;border-radius:16px;padding:14px 13px;text-align:left;display:flex;align-items:center;gap:11px;cursor:pointer;transition:transform .17s ease,box-shadow .17s ease}
       .journey-pill:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.12)}
-      .journey-icon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.82);font-size:19px;font-weight:900}
+      .journey-icon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.82)}
       .journey-pill b{display:block;font-size:14px;line-height:1.25;color:#10243C}
       .journey-pill span:last-child{display:block;margin-top:4px;font-size:12px;line-height:1.3;color:#405D70}
 
-      .myhealth-section{padding:52px 12px 76px;background:#fff;scroll-margin-top:92px}
-      .myhealth-exact{position:relative;width:min(100%,1664px);aspect-ratio:1664/936;margin:0 auto;background:#fff;overflow:hidden}
-      .myhealth-exact>img{display:block;width:100%;height:100%;object-fit:contain;object-position:center}
-      .mh-hotspot{position:absolute;z-index:3;border:0;background:transparent;cursor:pointer;border-radius:14px;color:transparent;font-size:0;padding:0}
-      .mh-hotspot:focus-visible{outline:3px solid #0B8F7C;outline-offset:3px;background:rgba(11,143,124,.08)}
-      .mh-book{left:16.0%;top:47.4%;width:11.5%;height:17.4%}
-      .mh-consult{left:61.0%;top:76.4%;width:7.2%;height:4.8%}
-      .mh-community{left:73.4%;top:76.4%;width:7.2%;height:4.8%}
-      .mh-health-score{left:44.5%;top:24.6%;width:14.0%;height:33.4%}
+      .mh-section{padding:68px 22px 84px;background:#fff;scroll-margin-top:92px}
+      .mh-shell{width:min(100%,1664px);margin:0 auto}
+      .mh-head{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(350px,.7fr);gap:56px;align-items:end;margin-bottom:28px;padding:0 10px}
+      .mh-kicker{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0B8F7C;margin-bottom:10px}
+      .mh-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.7rem,4vw,4.6rem);line-height:1.02;letter-spacing:-.055em;color:#0B2B45;margin:0}
+      .mh-head p{font-size:18px;line-height:1.56;color:#23475E;margin:0 0 5px}
 
-      @media(max-width:1080px){
+      .mh-canvas{position:relative;aspect-ratio:1664/936;overflow:hidden;border-radius:28px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 42%,#DCEFF1 100%);box-shadow:0 20px 48px rgba(24,69,82,.08)}
+      .mh-canvas:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 39% 37%,rgba(255,255,255,.94) 0 20%,rgba(255,255,255,.48) 34%,transparent 56%);pointer-events:none;z-index:1}
+      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%}
+      .mh-photo-fallback{position:absolute;right:0;top:0;width:62%;height:78%;background:linear-gradient(135deg,#DDECEE,#BDDDE0);z-index:0}
+      .mh-left{position:absolute;z-index:3;left:2.8%;top:5.6%;width:38.2%}
+      .mh-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.9rem,3vw,3.7rem);line-height:1.02;letter-spacing:-.045em;color:#0B2B45;margin:0}
+      .mh-title span{display:block;color:#0B948B}
+      .mh-subcopy{font-size:clamp(.8rem,1.05vw,1.12rem);line-height:1.55;color:#294A5D;margin:12px 0 18px;max-width:94%}
+      .mh-rule{width:42px;height:3px;border-radius:999px;background:#0B948B;margin-bottom:18px}
+      .mh-feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+      .mh-feature{min-width:0;padding:16px 15px 15px;border-radius:18px;background:rgba(255,255,255,.9);border:1px solid rgba(203,222,225,.82);box-shadow:0 10px 26px rgba(43,77,89,.07);backdrop-filter:blur(4px)}
+      .mh-feature-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;margin-bottom:10px}
+      .mh-feature h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.7rem,.9vw,1rem);line-height:1.25;margin:0 0 6px;color:#10243C}
+      .mh-feature p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.42;color:#486275;margin:0}
+
+      .mh-score{position:absolute;z-index:5;left:44.3%;top:3.4%;width:14.6%;min-width:190px;padding:15px 16px 14px;border-radius:18px;background:rgba(255,255,255,.95);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.12);backdrop-filter:blur(8px)}
+      .mh-score-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:900;color:#15364D}
+      .mh-info{width:18px;height:18px;border:1.5px solid #466378;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900}
+      .mh-gauge{position:relative;height:96px;margin:6px 0 2px;display:grid;place-items:center}
+      .mh-gauge svg{position:absolute;width:118px;height:74px;top:13px}
+      .mh-score-num{position:relative;margin-top:10px;text-align:center;font-family:'Sora','DM Sans',sans-serif;font-size:36px;font-weight:800;color:#0B2B45;line-height:1}
+      .mh-score-num small{display:block;font-family:'DM Sans',Arial,sans-serif;font-size:12px;margin-top:3px;font-weight:800}
+      .mh-score-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-top:1px solid #E6EEF0;font-size:10.6px;color:#365468}
+      .mh-score-row b{font-size:10.2px;color:#0B8F7C}.mh-score-row.attn b{color:#E87922}
+      .mh-score-foot{display:flex;justify-content:space-between;align-items:center;padding-top:7px;border-top:1px solid #E6EEF0;font-size:9.7px;color:#647B89}
+
+      .mh-steps{position:absolute;z-index:4;right:2.8%;top:4.7%;width:15.2%;display:grid;gap:14px}
+      .mh-step{position:relative;display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center;min-height:52px}
+      .mh-step:not(:last-child):after{content:'';position:absolute;left:22px;top:47px;height:22px;border-left:1.5px dashed rgba(255,255,255,.95)}
+      .mh-step-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.95);color:#0B948B;box-shadow:0 8px 20px rgba(42,72,82,.1)}
+      .mh-step:nth-child(4) .mh-step-icon{color:#7C3AED}
+      .mh-step b{font-size:clamp(.66rem,.82vw,.92rem);line-height:1.22;color:#0B2B45;text-shadow:0 1px 0 rgba(255,255,255,.65)}
+
+      .mh-consult{position:absolute;z-index:5;left:42.4%;top:56.2%;width:30.5%;height:21.5%;display:grid;grid-template-columns:58% 42%;overflow:hidden;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
+      .mh-consult-photo{width:100%;height:100%;object-fit:cover;object-position:center}
+      .mh-consult-copy{padding:18px 16px;display:flex;flex-direction:column;min-width:0}
+      .mh-consult-copy h3,.mh-community-card h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.75rem,1vw,1.08rem);color:#0B665C;margin:0 0 8px}
+      .mh-consult-copy p,.mh-community-card p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.5;color:#37566A;margin:0}
+      .mh-action{margin-top:auto;align-self:flex-start;border:0;border-radius:10px;background:#0B948B;color:#fff;padding:9px 14px;font-size:clamp(.6rem,.72vw,.78rem);font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(11,148,139,.18)}
+      .mh-action:hover{background:#087D75}
+
+      .mh-community-card{position:absolute;z-index:5;right:2.3%;top:56.2%;width:24.4%;height:21.5%;padding:18px 16px;display:grid;grid-template-columns:1fr 44%;gap:12px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
+      .mh-community-copy{display:flex;flex-direction:column;min-width:0}
+      .mh-avatars{display:grid;grid-template-columns:1fr 1fr;gap:5px;align-content:center}
+      .mh-avatar{width:100%;aspect-ratio:1;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 4px 12px rgba(42,72,82,.12)}
+
+      .mh-bottom{position:absolute;z-index:6;left:1.2%;right:1.2%;bottom:1.4%;height:14.5%;border-radius:18px;background:rgba(255,255,255,.92);border:1px solid rgba(203,222,225,.78);display:grid;grid-template-columns:1.05fr 1fr 1.05fr 1.35fr;align-items:center;box-shadow:0 10px 25px rgba(42,72,82,.07);backdrop-filter:blur(8px)}
+      .mh-bottom-item{min-width:0;padding:0 22px;display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center}
+      .mh-bottom-item+.mh-bottom-item{border-left:1px solid #D9E4E6}
+      .mh-bottom-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:#E5F5F2;color:#0B8F7C}
+      .mh-bottom-item b{display:block;font-size:clamp(.66rem,.82vw,.92rem);line-height:1.2;color:#0B665C}
+      .mh-bottom-item span{display:block;margin-top:4px;font-size:clamp(.53rem,.65vw,.72rem);line-height:1.4;color:#486275}
+
+      @media(max-width:1180px){
+        .mh-head{grid-template-columns:1fr;gap:12px}.mh-head p{max-width:760px}
+        .mh-score{min-width:170px}.mh-feature{padding:12px}.mh-bottom-item{padding:0 14px;grid-template-columns:38px 1fr}.mh-bottom-icon{width:38px;height:38px}
+      }
+      @media(max-width:900px){
         .journey-nav{grid-template-columns:repeat(3,1fr)}
-        .myhealth-section{padding:44px 8px 64px}
+        .mh-section{padding:56px 14px 72px}.mh-canvas{aspect-ratio:auto;overflow:visible;border-radius:24px;padding:24px;background:linear-gradient(180deg,#F5FBFB,#EAF6F6)}
+        .mh-canvas:before{display:none}.mh-photo-fallback{display:none}
+        .mh-main-photo{position:relative;width:100%;height:360px;border-radius:20px;object-position:center 35%}
+        .mh-left,.mh-score,.mh-steps,.mh-consult,.mh-community-card,.mh-bottom{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:auto;height:auto;min-width:0}
+        .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
+        .mh-score{margin:18px 0}.mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
+        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:240px}
+        .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
       }
-      @media(max-width:720px){
-        .journey-nav-wrap{padding:24px 14px 0}
-        .journey-nav{grid-template-columns:1fr 1fr}
-        .journey-pill{min-height:84px}
-        .myhealth-section{padding:34px 0 50px}
+      @media(max-width:650px){
+        .journey-nav-wrap{padding:24px 14px 0}.journey-nav{grid-template-columns:1fr 1fr}.journey-pill{min-height:84px}
+        .mh-section{padding:46px 10px 62px}.mh-head{padding:0 4px}.mh-head h2{font-size:2.55rem}.mh-head p{font-size:16px}
+        .mh-canvas{padding:14px}.mh-main-photo{height:290px}.mh-title{font-size:2.25rem}.mh-feature-grid{grid-template-columns:1fr 1fr}.mh-feature h3{font-size:.88rem}.mh-feature p{font-size:.73rem}
+        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{grid-template-columns:1fr;min-height:0}.mh-avatars{grid-template-columns:repeat(4,1fr);margin-top:12px}.mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E4E6}
       }
-      @media(max-width:480px){
-        .journey-nav{grid-template-columns:1fr}
-      }
+      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}}
     `}</style>
 
     <div className="journey-nav-wrap">
       <div className="journey-nav-title">Explore HealthConnect</div>
       <div className="journey-nav">
-        {NAV_ITEMS.map(item=><button key={item.label} type="button" className="journey-pill" style={{background:item.wash}} onClick={()=>goto(item.target)}><span className="journey-icon" style={{color:item.accent}}>{item.icon}</span><span><b>{item.label}</b><span>{item.sub}</span></span></button>)}
+        {NAV_ITEMS.map(item=><button key={item.label} type="button" className="journey-pill" style={{background:item.wash}} onClick={()=>goto(item.target)}><span className="journey-icon" style={{color:item.accent}}><Icon kind={item.icon} size={20}/></span><span><b>{item.label}</b><span>{item.sub}</span></span></button>)}
       </div>
     </div>
 
-    <section className="myhealth-section" id="my-health-story" aria-label="My Health Patient Dashboard">
-      <div className="myhealth-exact">
-        <img src={MY_HEALTH_ARTWORK} alt="My Health Patient Dashboard showing Health Score, appointments, medication tracking, Health Communities, connected care, health journey and privacy features" />
-        <button type="button" className="mh-hotspot mh-book" aria-label="Find doctors and book appointments" onClick={()=>router.push('/doctors')}>Book appointments</button>
-        <button type="button" className="mh-hotspot mh-health-score" aria-label="Open My Health dashboard" onClick={()=>router.push('/dashboard')}>Open My Health</button>
-        <button type="button" className="mh-hotspot mh-consult" aria-label="Consult a doctor" onClick={()=>router.push('/doctors')}>Consult now</button>
-        <button type="button" className="mh-hotspot mh-community" aria-label="Explore Health Communities" onClick={()=>router.push('/communities')}>Join community</button>
+    <section className="mh-section" id="my-health-story" aria-labelledby="my-health-title">
+      <div className="mh-shell">
+        <div className="mh-head">
+          <div><div className="mh-kicker">My Health · Patient Dashboard</div><h2 id="my-health-title">Understand your health.<br/>Keep your journey together.</h2></div>
+          <p>My Health is your private health companion for tracking what matters, maintaining your history, preparing for qualified care and finding support between visits.</p>
+        </div>
+
+        <div className="mh-canvas">
+          <div className="mh-photo-fallback" aria-hidden="true"/>
+          <img className="mh-main-photo" src={PHOTOS.patient} alt="Indian patient using HealthConnect on a smartphone"/>
+
+          <div className="mh-left">
+            <h3 className="mh-title">Your health.<span>All in one place.</span></h3>
+            <p className="mh-subcopy">Track, understand and take charge of your health with connected care, smart tools and a community that supports you.</p>
+            <div className="mh-rule"/>
+            <div className="mh-feature-grid">
+              {FEATURES.map(feature=><article className="mh-feature" key={feature.title}><div className="mh-feature-icon" style={{background:feature.wash,color:feature.accent}}><Icon kind={feature.icon} size={22}/></div><h3>{feature.title}</h3><p>{feature.copy}</p></article>)}
+            </div>
+          </div>
+
+          <aside className="mh-score" aria-label="Illustrative Health Score preview">
+            <div className="mh-score-head"><span>Your Health Score</span><span className="mh-info">i</span></div>
+            <div className="mh-gauge">
+              <svg viewBox="0 0 120 70" aria-hidden="true"><path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#D7E3E5" strokeWidth="10" strokeLinecap="round"/><path d="M12 60 A48 48 0 0 1 96 28" fill="none" stroke="#14B8A6" strokeWidth="10" strokeLinecap="round"/></svg>
+              <div className="mh-score-num">84<small>Good</small></div>
+            </div>
+            <div className="mh-score-row"><span>Physical Health</span><b>Good</b></div>
+            <div className="mh-score-row"><span>Mental Wellbeing</span><b>Good</b></div>
+            <div className="mh-score-row attn"><span>Lifestyle</span><b>Needs Attention</b></div>
+            <div className="mh-score-foot"><span>Illustrative preview</span><Icon kind="clock" size={15}/></div>
+          </aside>
+
+          <div className="mh-steps" aria-label="Connected My Health journey">
+            {CARE_STEPS.map(step=><div className="mh-step" key={step.title}><div className="mh-step-icon"><Icon kind={step.icon} size={23}/></div><b>{step.title}</b></div>)}
+          </div>
+
+          <article className="mh-consult">
+            <img className="mh-consult-photo" src={PHOTOS.consultation} alt="Doctor consulting with a patient"/>
+            <div className="mh-consult-copy"><h3>Connected Care</h3><p>Move from organised health context into doctor discovery, consultation and follow-up.</p><button type="button" className="mh-action" onClick={()=>router.push('/doctors')}>Consult Now</button></div>
+          </article>
+
+          <article className="mh-community-card">
+            <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experience.<br/>Support between visits.</p><button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button></div>
+            <div className="mh-avatars">{PHOTOS.community.map((src,index)=><img className="mh-avatar" key={src} src={src} alt={`Health Community member ${index+1}`}/>)}</div>
+          </article>
+
+          <div className="mh-bottom">
+            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="lock" size={23}/></div><div><b>Private & Secure Workspace</b><span>Personal health information stays behind authenticated access.</span></div></div>
+            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="clock" size={23}/></div><div><b>All in One Place</b><span>Reports, medicines, appointments and health history together.</span></div></div>
+            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="community" size={23}/></div><div><b>Connected Care Journey</b><span>Health information, professional care and peer support stay connected.</span></div></div>
+            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="heart" size={23}/></div><div><b>Built around your care journey</b><span>Organise what matters and move more confidently between each care step.</span></div></div>
+          </div>
+        </div>
       </div>
     </section>
   </section>;
