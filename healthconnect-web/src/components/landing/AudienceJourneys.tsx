@@ -81,7 +81,7 @@ export default function AudienceJourneys(){
 
       .mh-canvas{position:relative;aspect-ratio:1664/936;overflow:hidden;border-radius:28px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 42%,#DCEFF1 100%);box-shadow:0 20px 48px rgba(24,69,82,.08)}
       .mh-canvas:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 39% 37%,rgba(255,255,255,.94) 0 20%,rgba(255,255,255,.48) 34%,transparent 56%);pointer-events:none;z-index:1}
-      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%;transition:opacity .25s ease}
+      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%;transform:scale(.82);transform-origin:right top;transition:opacity .25s ease,transform .25s ease}
       .mh-photo-fallback{position:absolute;right:0;top:0;width:62%;height:78%;background:linear-gradient(135deg,#DDECEE,#BDDDE0);z-index:0}
       .mh-left{position:absolute;z-index:3;left:2.8%;top:5.6%;width:38.2%}
       .mh-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.9rem,3vw,3.7rem);line-height:1.02;letter-spacing:-.045em;color:#0B2B45;margin:0}
@@ -128,7 +128,7 @@ export default function AudienceJourneys(){
       .mh-action:hover{background:#087D75}
 
       .mh-community-card{position:absolute;z-index:5;right:2.3%;top:56.2%;width:24.4%;height:21.5%;overflow:hidden;border-radius:18px;background:#EEF7F7;border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1)}
-      .mh-community-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center}
+      .mh-community-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;transform:scale(.9);transform-origin:right center;transition:transform .25s ease}
       .mh-community-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.96) 34%,rgba(255,255,255,.82) 50%,rgba(255,255,255,.24) 69%,rgba(255,255,255,0) 100%)}
       .mh-community-copy{position:relative;z-index:2;width:52%;height:100%;padding:18px 16px;display:flex;flex-direction:column;min-width:0}
       .mh-community-note{display:block;margin-top:8px;font-size:clamp(.52rem,.65vw,.72rem);line-height:1.4;color:#627784}
@@ -148,22 +148,22 @@ export default function AudienceJourneys(){
         .journey-nav{grid-template-columns:repeat(3,1fr)}
         .mh-section{padding:56px 14px 72px}.mh-canvas{aspect-ratio:auto;overflow:visible;border-radius:24px;padding:24px;background:linear-gradient(180deg,#F5FBFB,#EAF6F6)}
         .mh-canvas:before{display:none}.mh-photo-fallback{display:none}
-        .mh-main-photo{position:relative;width:100%;height:360px;border-radius:20px;object-position:center 35%}
+        .mh-main-photo{position:relative;width:100%;height:360px;border-radius:20px;object-position:center 35%;transform:none}
         .mh-left,.mh-score,.mh-steps,.mh-consult,.mh-community-card,.mh-bottom{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:auto;height:auto;min-width:0}
         .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
         .mh-score{margin:18px 0}.mh-score-popover{right:0;left:auto;width:min(286px,80vw)}
         .mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
-        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-community-copy{width:48%;padding:24px 20px}.mh-community-photo{object-position:center center}
+        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-community-copy{width:48%;padding:24px 20px}.mh-community-photo{object-position:center center;transform:scale(.92);transform-origin:right center}
         .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
       }
       @media(max-width:650px){
         .journey-nav-wrap{padding:24px 14px 0}.journey-nav{grid-template-columns:1fr 1fr}.journey-pill{min-height:84px}
         .mh-section{padding:46px 10px 62px}.mh-head{padding:0 4px}.mh-head h2{font-size:2.55rem}.mh-head p{font-size:16px}
         .mh-canvas{padding:14px}.mh-main-photo{height:290px}.mh-title{font-size:2.25rem}.mh-feature-grid{grid-template-columns:1fr 1fr}.mh-feature h3{font-size:.88rem}.mh-feature p{font-size:.73rem}
-        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{min-height:300px}.mh-community-copy{width:64%;padding:22px 18px}.mh-community-shade{background:linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 45%,rgba(255,255,255,.66) 67%,rgba(255,255,255,.08) 100%)}.mh-community-photo{object-position:58% center}
+        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{min-height:300px}.mh-community-copy{width:64%;padding:22px 18px}.mh-community-shade{background:linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 45%,rgba(255,255,255,.66) 67%,rgba(255,255,255,.08) 100%)}.mh-community-photo{object-position:58% center;transform:scale(.94)}
         .mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E4E6}
       }
-      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}.mh-community-copy{width:72%}.mh-community-photo{object-position:62% center}}
+      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}.mh-community-copy{width:72%}.mh-community-photo{object-position:62% center;transform:scale(.95)}}
     `}</style>
 
     <div className="journey-nav-wrap">
