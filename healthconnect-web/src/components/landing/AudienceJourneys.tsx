@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, type SyntheticEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 const NAV_ITEMS=[
@@ -53,7 +54,11 @@ function Icon({kind,size=24}:{kind:string;size?:number}){
 
 export default function AudienceJourneys(){
   const router=useRouter();
+  const [scoreInfoPinned,setScoreInfoPinned]=useState(false);
+  const [scoreInfoHover,setScoreInfoHover]=useState(false);
+  const showScoreInfo=scoreInfoPinned||scoreInfoHover;
   const goto=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
+  const hideBrokenImage=(event:SyntheticEvent<HTMLImageElement>)=>{event.currentTarget.style.display='none';};
 
   return <section className="journey-root" id="platform-tour">
     <style>{`
@@ -76,7 +81,7 @@ export default function AudienceJourneys(){
 
       .mh-canvas{position:relative;aspect-ratio:1664/936;overflow:hidden;border-radius:28px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 42%,#DCEFF1 100%);box-shadow:0 20px 48px rgba(24,69,82,.08)}
       .mh-canvas:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 39% 37%,rgba(255,255,255,.94) 0 20%,rgba(255,255,255,.48) 34%,transparent 56%);pointer-events:none;z-index:1}
-      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%}
+      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%;transition:opacity .25s ease}
       .mh-photo-fallback{position:absolute;right:0;top:0;width:62%;height:78%;background:linear-gradient(135deg,#DDECEE,#BDDDE0);z-index:0}
       .mh-left{position:absolute;z-index:3;left:2.8%;top:5.6%;width:38.2%}
       .mh-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.9rem,3vw,3.7rem);line-height:1.02;letter-spacing:-.045em;color:#0B2B45;margin:0}
@@ -84,14 +89,21 @@ export default function AudienceJourneys(){
       .mh-subcopy{font-size:clamp(.8rem,1.05vw,1.12rem);line-height:1.55;color:#294A5D;margin:12px 0 18px;max-width:94%}
       .mh-rule{width:42px;height:3px;border-radius:999px;background:#0B948B;margin-bottom:18px}
       .mh-feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-      .mh-feature{min-width:0;padding:16px 15px 15px;border-radius:18px;background:rgba(255,255,255,.9);border:1px solid rgba(203,222,225,.82);box-shadow:0 10px 26px rgba(43,77,89,.07);backdrop-filter:blur(4px)}
+      .mh-feature{min-width:0;padding:16px 15px 15px;border-radius:18px;background:rgba(255,255,255,.9);border:1px solid rgba(203,222,225,.82);box-shadow:0 10px 26px rgba(43,77,89,.07);backdrop-filter:blur(4px);transition:transform .18s ease,box-shadow .18s ease}
+      .mh-feature:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(43,77,89,.11)}
       .mh-feature-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;margin-bottom:10px}
       .mh-feature h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.7rem,.9vw,1rem);line-height:1.25;margin:0 0 6px;color:#10243C}
       .mh-feature p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.42;color:#486275;margin:0}
 
-      .mh-score{position:absolute;z-index:5;left:44.3%;top:3.4%;width:14.6%;min-width:190px;padding:15px 16px 14px;border-radius:18px;background:rgba(255,255,255,.95);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.12);backdrop-filter:blur(8px)}
+      .mh-score{position:absolute;z-index:8;left:44.3%;top:3.4%;width:14.6%;min-width:190px;padding:15px 16px 14px;border-radius:18px;background:rgba(255,255,255,.95);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.12);backdrop-filter:blur(8px);transition:transform .18s ease,box-shadow .18s ease}
+      .mh-score:hover{transform:translateY(-3px);box-shadow:0 20px 42px rgba(42,72,82,.16)}
       .mh-score-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:900;color:#15364D}
-      .mh-info{width:18px;height:18px;border:1.5px solid #466378;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900}
+      .mh-info-wrap{position:relative;display:inline-flex}
+      .mh-info{width:22px;height:22px;border:1.5px solid #466378;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900;background:#fff;color:#23475E;cursor:pointer;padding:0;transition:background .16s ease,color .16s ease,border-color .16s ease}
+      .mh-info:hover,.mh-info:focus-visible,.mh-info[aria-expanded='true']{background:#0B948B;color:#fff;border-color:#0B948B;outline:none}
+      .mh-score-popover{position:absolute;right:-8px;top:30px;width:286px;padding:14px 15px;border-radius:14px;background:#0B2B45;color:#fff;box-shadow:0 18px 42px rgba(11,43,69,.24);font-size:12px;font-weight:500;line-height:1.48;z-index:30}
+      .mh-score-popover:before{content:'';position:absolute;right:12px;top:-6px;width:12px;height:12px;background:#0B2B45;transform:rotate(45deg)}
+      .mh-score-popover b{display:block;margin-bottom:5px;font-size:12.5px;color:#D9FFFA}
       .mh-gauge{position:relative;height:96px;margin:6px 0 2px;display:grid;place-items:center}
       .mh-gauge svg{position:absolute;width:118px;height:74px;top:13px}
       .mh-score-num{position:relative;margin-top:10px;text-align:center;font-family:'Sora','DM Sans',sans-serif;font-size:36px;font-weight:800;color:#0B2B45;line-height:1}
@@ -107,9 +119,9 @@ export default function AudienceJourneys(){
       .mh-step:nth-child(4) .mh-step-icon{color:#7C3AED}
       .mh-step b{font-size:clamp(.66rem,.82vw,.92rem);line-height:1.22;color:#0B2B45;text-shadow:0 1px 0 rgba(255,255,255,.65)}
 
-      .mh-consult{position:absolute;z-index:5;left:42.4%;top:56.2%;width:30.5%;height:21.5%;display:grid;grid-template-columns:58% 42%;overflow:hidden;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
+      .mh-consult{position:absolute;z-index:5;left:42.4%;top:56.2%;width:30.5%;height:21.5%;display:grid;grid-template-columns:58% 42%;overflow:hidden;border-radius:18px;background:linear-gradient(135deg,#EDF7F7,#D8ECEE);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
       .mh-consult-photo{width:100%;height:100%;object-fit:cover;object-position:center}
-      .mh-consult-copy{padding:18px 16px;display:flex;flex-direction:column;min-width:0}
+      .mh-consult-copy{padding:18px 16px;display:flex;flex-direction:column;min-width:0;background:rgba(255,255,255,.94)}
       .mh-consult-copy h3,.mh-community-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.75rem,1vw,1.08rem);color:#0B665C;margin:0 0 8px}
       .mh-consult-copy p,.mh-community-copy p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.5;color:#37566A;margin:0}
       .mh-action{margin-top:auto;align-self:flex-start;border:0;border-radius:10px;background:#0B948B;color:#fff;padding:9px 14px;font-size:clamp(.6rem,.72vw,.78rem);font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(11,148,139,.18)}
@@ -139,7 +151,8 @@ export default function AudienceJourneys(){
         .mh-main-photo{position:relative;width:100%;height:360px;border-radius:20px;object-position:center 35%}
         .mh-left,.mh-score,.mh-steps,.mh-consult,.mh-community-card,.mh-bottom{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:auto;height:auto;min-width:0}
         .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
-        .mh-score{margin:18px 0}.mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
+        .mh-score{margin:18px 0}.mh-score-popover{right:0;left:auto;width:min(286px,80vw)}
+        .mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
         .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-community-copy{width:48%;padding:24px 20px}.mh-community-photo{object-position:center center}
         .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
       }
@@ -169,7 +182,7 @@ export default function AudienceJourneys(){
 
         <div className="mh-canvas">
           <div className="mh-photo-fallback" aria-hidden="true"/>
-          <img className="mh-main-photo" src={PHOTOS.patient} alt="Indian patient using HealthConnect on a smartphone"/>
+          <img className="mh-main-photo" src={PHOTOS.patient} alt="Indian patient using HealthConnect on a smartphone" loading="lazy" decoding="async" onError={hideBrokenImage}/>
 
           <div className="mh-left">
             <h3 className="mh-title">Your health.<span>All in one place.</span></h3>
@@ -181,7 +194,7 @@ export default function AudienceJourneys(){
           </div>
 
           <aside className="mh-score" aria-label="Illustrative Health Score preview">
-            <div className="mh-score-head"><span>Your Health Score</span><span className="mh-info">i</span></div>
+            <div className="mh-score-head"><span>Your Health Score</span><span className="mh-info-wrap" onMouseEnter={()=>setScoreInfoHover(true)} onMouseLeave={()=>setScoreInfoHover(false)}><button type="button" className="mh-info" aria-label="About Health Score" aria-expanded={showScoreInfo} aria-controls="mh-score-info" onClick={()=>setScoreInfoPinned(value=>!value)} onFocus={()=>setScoreInfoHover(true)} onBlur={()=>setScoreInfoHover(false)} onKeyDown={event=>{if(event.key==='Escape'){setScoreInfoPinned(false);setScoreInfoHover(false);}}}>i</button>{showScoreInfo&&<span className="mh-score-popover" id="mh-score-info" role="tooltip"><b>How Health Score works</b>The 84 shown here is an illustrative landing-page example. In My Health, your score uses the health information available in your profile across measurable areas such as physical health, wellbeing and lifestyle. It is not a diagnosis, and assessment completion is shown separately from the score.</span>}</span></div>
             <div className="mh-gauge">
               <svg viewBox="0 0 120 70" aria-hidden="true"><path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#D7E3E5" strokeWidth="10" strokeLinecap="round"/><path d="M12 60 A48 48 0 0 1 96 28" fill="none" stroke="#14B8A6" strokeWidth="10" strokeLinecap="round"/></svg>
               <div className="mh-score-num">84<small>Good</small></div>
@@ -197,12 +210,12 @@ export default function AudienceJourneys(){
           </div>
 
           <article className="mh-consult">
-            <img className="mh-consult-photo" src={PHOTOS.consultation} alt="Doctor consulting with a patient"/>
+            <img className="mh-consult-photo" src={PHOTOS.consultation} alt="Doctor consulting with a patient" loading="lazy" decoding="async" onError={hideBrokenImage}/>
             <div className="mh-consult-copy"><h3>Connected Care</h3><p>Move from organised health context into doctor discovery, consultation and follow-up.</p><button type="button" className="mh-action" onClick={()=>router.push('/doctors')}>Consult Now</button></div>
           </article>
 
           <article className="mh-community-card">
-            <img className="mh-community-photo" src={PHOTOS.community} alt="HealthConnect community members supporting one another online"/>
+            <img className="mh-community-photo" src={PHOTOS.community} alt="HealthConnect community members supporting one another online" loading="lazy" decoding="async" onError={hideBrokenImage}/>
             <div className="mh-community-shade" aria-hidden="true"/>
             <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experiences.<br/>Support between visits.</p><span className="mh-community-note">Find condition-focused spaces where people can learn, share and feel less alone.</span><button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button></div>
           </article>
