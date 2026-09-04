@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore';
 const C = { card:'#FDFCFB', border:'rgba(13,148,136,.18)', text:'#0F172A', muted:'#64748B', teal:'#0D9488', tealDark:'#0F766E', green:'#16A34A', amber:'#D97706', red:'#E11D48' };
 const unwrap=(r:any)=>r?.data?.data??r?.data??null;
 const money=(paise:number)=>`₹${(Number(paise||0)/100).toLocaleString('en-IN',{maximumFractionDigits:2})}`;
+type MembershipReason='onboarding'|'required'|'expired'|'';
 
 export default function DoctorMembershipPage(){
   const router=useRouter();
@@ -20,8 +21,17 @@ export default function DoctorMembershipPage(){
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState('');
   const [toast,setToast]=useState<{text:string;error?:boolean}|null>(null);
+  const [membershipReason,setMembershipReason]=useState<MembershipReason>('');
 
   const notify=(text:string,error=false)=>{setToast({text,error});window.setTimeout(()=>setToast(null),4200);};
+
+  useEffect(()=>{
+    if(typeof window==='undefined')return;
+    const params=new URLSearchParams(window.location.search);
+    const reason=(params.get('membership')||sessionStorage.getItem('hc_membership_notice')||'') as MembershipReason;
+    if(reason){setMembershipReason(reason);sessionStorage.removeItem('hc_membership_notice');}
+    if(window.location.search)window.history.replaceState({},'',window.location.pathname);
+  },[]);
 
   const load=useCallback(async()=>{
     setLoading(true);
@@ -40,7 +50,8 @@ export default function DoctorMembershipPage(){
   useEffect(()=>{void load();},[load]);
 
   const professional=useMemo(()=>plans.find((p:any)=>p.name==='professional')||plans.find((p:any)=>Number(p?.pricing?.monthlyPaise||0)>0),[plans]);
-  const active=Boolean(current&&['ACTIVE','TRIALING','PAST_DUE'].includes(current.status)&&Number(current.amountPaise||0)>0);
+  const endOk=!current?.endDate||new Date(current.endDate).getTime()>Date.now();
+  const active=Boolean(current&&current.status==='ACTIVE'&&endOk&&Number(current.amountPaise||0)>0);
   const cancelScheduled=Boolean(current?.state?.cancelAtCycleEnd||(current&&current.autoRenew===false&&current.status==='ACTIVE'));
 
   const subscribe=async()=>{
@@ -60,6 +71,7 @@ export default function DoctorMembershipPage(){
       });
       if(!result){notify('Checkout closed. No membership was activated.');return;}
       await api.post('/subscription/verify',result);
+      setMembershipReason('');
       notify('✓ Doctor membership activated successfully.');
       await load();
     }catch(e:any){notify(e?.response?.data?.message||e?.message||'Membership payment could not be completed.',true);}
@@ -79,13 +91,21 @@ export default function DoctorMembershipPage(){
   const charges=Array.isArray(history?.charges)?history.charges:[];
   const invoices=Array.isArray(history?.invoices)?history.invoices:[];
   const totals=earnings?.totals||earnings||{};
+  const membershipNotice=membershipReason==='onboarding'
+    ? 'Your Doctor account is ready. Activate HealthConnect Professional to continue into the private Doctor workspace.'
+    : membershipReason==='expired'
+      ? 'Your HealthConnect Doctor membership is no longer active. Renew it to continue using the private Doctor workspace.'
+      : membershipReason==='required'
+        ? 'You are signed in, but there is no active Doctor membership on this account. Activate a membership to continue.'
+        : '';
 
   return <div style={{maxWidth:1080,margin:'0 auto',color:C.text}}>
     {toast&&<div style={{position:'fixed',right:26,bottom:26,zIndex:9999,maxWidth:390,padding:'12px 18px',borderRadius:12,color:'#fff',background:toast.error?'#991B1B':C.tealDark,boxShadow:'0 12px 30px rgba(0,0,0,.22)',fontSize:13,fontWeight:650}}>{toast.text}</div>}
+    {membershipNotice&&!active&&<div style={{marginBottom:17,padding:'12px 15px',borderRadius:12,background:'#FFF7ED',border:'1px solid #FED7AA',color:'#9A3412',fontSize:12.5,lineHeight:1.5,fontWeight:650}}>{membershipNotice}</div>}
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:16,flexWrap:'wrap',marginBottom:22}}><div><button onClick={()=>router.push('/doctor-dashboard')} style={{border:0,background:'transparent',padding:0,color:C.teal,fontSize:12,fontWeight:750,cursor:'pointer',marginBottom:8}}>← Doctor workspace</button><h1 style={{margin:0,fontSize:27,fontWeight:850}}>Membership & Billing</h1><p style={{margin:'6px 0 0',fontSize:14,color:C.muted}}>Your HealthConnect platform membership is separate from consultation fees paid by patients.</p></div><button onClick={()=>void load()} style={{border:`1px solid ${C.border}`,background:'#fff',borderRadius:9,padding:'8px 12px',fontSize:11.5,color:C.muted,cursor:'pointer'}}>Refresh</button></div>
 
     <div style={{display:'grid',gridTemplateColumns:'minmax(320px,1.15fr) minmax(280px,.85fr)',gap:18,marginBottom:22}}>
-      <section style={{background:'linear-gradient(135deg,#0C3D38,#155E75)',color:'#fff',borderRadius:18,padding:24,boxShadow:'0 10px 28px rgba(12,61,56,.16)'}}><div style={{fontSize:10,letterSpacing:'.09em',fontWeight:800,opacity:.72}}>HEALTHCONNECT PROFESSIONAL</div><div style={{display:'flex',alignItems:'baseline',gap:6,marginTop:7}}><span style={{fontSize:34,fontWeight:900}}>{money(professional?.pricing?.monthlyPaise||79900)}</span><span style={{fontSize:12,opacity:.72}}>/month</span></div><p style={{fontSize:13,lineHeight:1.6,opacity:.84,maxWidth:620}}>Professional profile, availability, appointment workflows, patient-shared context, hospital affiliations and HealthConnect practice tools.</p>{active?<div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginTop:16}}><span style={{padding:'7px 11px',borderRadius:999,background:'rgba(34,197,94,.18)',color:'#BBF7D0',fontSize:11,fontWeight:800}}>✓ {current?.plan?.displayName||'Professional'} · {current.status}</span>{!cancelScheduled&&<button disabled={busy==='cancel'} onClick={cancel} style={{border:'1px solid rgba(255,255,255,.3)',background:'#fff',color:'#0C3D38',borderRadius:9,padding:'9px 13px',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>{busy==='cancel'?'Updating…':'Turn off auto-renew'}</button>}{cancelScheduled&&<span style={{color:'#FDE68A',fontSize:11.5,fontWeight:750}}>Auto-renewal is off</span>}</div>:<button disabled={!professional||busy==='subscribe'} onClick={subscribe} style={{marginTop:13,border:0,background:'#fff',color:'#0C3D38',borderRadius:10,padding:'11px 17px',fontSize:12.5,fontWeight:850,cursor:'pointer'}}>{busy==='subscribe'?'Opening secure checkout…':'Start Doctor membership →'}</button>}</section>
+      <section style={{background:'linear-gradient(135deg,#0C3D38,#155E75)',color:'#fff',borderRadius:18,padding:24,boxShadow:'0 10px 28px rgba(12,61,56,.16)'}}><div style={{fontSize:10,letterSpacing:'.09em',fontWeight:800,opacity:.72}}>HEALTHCONNECT PROFESSIONAL</div><div style={{display:'flex',alignItems:'baseline',gap:6,marginTop:7}}><span style={{fontSize:34,fontWeight:900}}>{money(professional?.pricing?.monthlyPaise||79900)}</span><span style={{fontSize:12,opacity:.72}}>/month</span></div><p style={{fontSize:13,lineHeight:1.6,opacity:.84,maxWidth:620}}>Professional profile, availability, appointment workflows, patient-shared context, hospital affiliations and HealthConnect practice tools.</p>{active?<div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginTop:16}}><span style={{padding:'7px 11px',borderRadius:999,background:'rgba(34,197,94,.18)',color:'#BBF7D0',fontSize:11,fontWeight:800}}>✓ {current?.plan?.displayName||'Professional'} · {current.status}</span>{!cancelScheduled&&<button disabled={busy==='cancel'} onClick={cancel} style={{border:'1px solid rgba(255,255,255,.3)',background:'#fff',color:'#0C3D38',borderRadius:9,padding:'9px 13px',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>{busy==='cancel'?'Updating…':'Turn off auto-renew'}</button>}{cancelScheduled&&<span style={{color:'#FDE68A',fontSize:11.5,fontWeight:750}}>Auto-renewal is off</span>}</div>:<button disabled={!professional||busy==='subscribe'} onClick={subscribe} style={{marginTop:13,border:0,background:'#fff',color:'#0C3D38',borderRadius:10,padding:'11px 17px',fontSize:12.5,fontWeight:850,cursor:'pointer'}}>{busy==='subscribe'?'Opening secure checkout…':current?'Renew Doctor membership →':'Start Doctor membership →'}</button>}</section>
       <section style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:22}}><div style={{fontSize:11,textTransform:'uppercase',letterSpacing:'.07em',color:C.muted,fontWeight:750}}>Consultation collections</div><div style={{fontSize:30,fontWeight:900,color:C.teal,marginTop:7}}>{money(Number(totals.totalPaise||0))}</div><div style={{marginTop:15,display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><Mini label="This month" value={money(Number(totals.monthPaise||0))}/><Mini label="Paid consultations" value={String(totals.paidConsultations||0)}/></div><p style={{fontSize:11.5,lineHeight:1.5,color:C.muted,margin:'14px 0 0'}}>These are patient consultation payments recorded through HealthConnect. Doctor fees remain doctor-defined.</p></section>
     </div>
 

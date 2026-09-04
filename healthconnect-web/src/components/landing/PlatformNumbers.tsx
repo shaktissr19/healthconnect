@@ -1,152 +1,238 @@
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
-const BASE_CARDS = [
+export type PlatformStats = {
+  patients: number | null;
+  doctors: number | null;
+  communities: number | null;
+  hospitals: number | null;
+};
+
+type CountKey = keyof PlatformStats;
+
+type Module = {
+  id: string;
+  icon: string;
+  label: string;
+  eyebrow: string;
+  headline: string;
+  body: string;
+  points: string[];
+  cta: string;
+  href: string;
+  accent: string;
+  wash: string;
+  photo: string;
+  photoAlt: string;
+  photoPosition?: string;
+  countKey?: CountKey;
+  metricLabel: string;
+  roleToPrepare?: 'DOCTOR';
+};
+
+const MODULES: Module[] = [
   {
-    stat: '10,000+', label: 'Patients Served', sub: 'Across India',
-    desc: 'From Delhi to Kochi, patients across India use HealthConnect to organise their health records, track medications, book verified doctors, and connect with health communities. Free to get started.',
-    cta: 'Create Your Profile', href: '/?home=1#signup', color: '#1A6BB5',
-    photo: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=700&q=80',
-    countKey: 'patients' as const,
+    id: 'patient',
+    icon: '♥',
+    label: 'Patient Dashboard',
+    eyebrow: 'MY HEALTH',
+    headline: 'Your health story, ready when you need it.',
+    body: 'Keep records, medicines, vitals and appointments connected in one private patient workspace.',
+    points: ['Medical history', 'Health Score', 'Appointments'],
+    cta: 'Open My Health',
+    href: '/?auth=login&home=1',
+    accent: '#2563EB',
+    wash: '#EDF5FF',
+    photo: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1400&q=86',
+    photoAlt: 'Healthcare professional using a mobile device',
+    photoPosition: 'center',
+    countKey: 'patients',
+    metricLabel: 'patient profiles',
   },
   {
-    stat: '37+', label: 'Verified Doctors', sub: 'NMC/MCI with HCD ID',
-    desc: 'Every doctor carries a tamper-proof HCD identity verified by NMC/MCI. See real-time availability. Book in under 2 minutes. Read genuine patient reviews. In-person, video, or home visit.',
-    cta: 'Find a Doctor', href: '/doctors', color: '#7C3AED',
-    photo: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?w=700&q=80',
-    countKey: 'doctors' as const,
+    id: 'doctor-directory',
+    icon: '🩺',
+    label: 'Doctor Directory',
+    eyebrow: 'FIND CARE',
+    headline: 'Find the right doctor without the phone calls.',
+    body: 'Search by specialty and location, review profiles and availability, then move into the booking journey.',
+    points: ['Specialty search', 'Doctor profiles', 'Availability'],
+    cta: 'Find Doctors',
+    href: '/doctors',
+    accent: '#7C3AED',
+    wash: '#F4F0FF',
+    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=1400&q=86',
+    photoAlt: 'Doctor in a clinical setting',
+    photoPosition: 'center 28%',
+    countKey: 'doctors',
+    metricLabel: 'doctor profiles',
   },
   {
-    stat: '18+', label: 'Health Communities', sub: 'Specialist-Moderated',
-    desc: 'Anonymous condition-specific groups for diabetes, cardiac care, mental health, PCOD and more. Browse freely. Post with a free account. Verified specialists moderate every group.',
-    cta: 'Explore Communities', href: '/communities', color: '#059669',
-    photo: 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=700&q=80',
-    countKey: 'communities' as const,
+    id: 'communities',
+    icon: '🤝',
+    label: 'Health Communities',
+    eyebrow: 'BETWEEN APPOINTMENTS',
+    headline: 'Support that continues after the consultation ends.',
+    body: 'Join condition-focused spaces to ask, share and learn with moderation and anonymous participation where enabled.',
+    points: ['Peer experience', 'Q&A', 'Participation controls'],
+    cta: 'Explore Communities',
+    href: '/communities',
+    accent: '#0B9B78',
+    wash: '#EAF8F3',
+    photo: 'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=1400&q=86',
+    photoAlt: 'People joining hands in a supportive community',
+    photoPosition: 'center',
+    countKey: 'communities',
+    metricLabel: 'health communities',
   },
   {
-    stat: '340+', label: 'Partner Hospitals', sub: 'AB-PMJAY Integrated',
-    desc: 'Find hospitals with live bed availability across India. Integrated with Ayushman Bharat PM-JAY for cashless treatment. Emergency SOS with live locator built in.',
-    cta: 'Find Hospitals', href: '/hospitals', color: '#D97706',
-    photo: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=700&q=80',
-    countKey: 'hospitals' as const,
+    id: 'doctor-workspace',
+    icon: '◫',
+    label: 'Doctor Dashboard',
+    eyebrow: 'DIGITAL PRACTICE',
+    headline: 'One workspace for patients, schedules and practice.',
+    body: 'Manage availability and appointments, work with patient-shared context and keep your professional presence connected.',
+    points: ['Patients', 'Schedules', 'Practice workflow'],
+    cta: 'Join as a Doctor',
+    href: '/?home=1&auth=register',
+    accent: '#0891B2',
+    wash: '#EAF8FB',
+    // Reuses the stronger doctor visual from the earlier Knowledge Hub reference, as requested.
+    photo: 'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=1400&q=86',
+    photoAlt: 'Doctor working with digital practice tools',
+    photoPosition: 'center 42%',
+    metricLabel: 'doctor workspace',
+    roleToPrepare: 'DOCTOR',
+  },
+  {
+    id: 'hospitals',
+    icon: '🏥',
+    label: 'Hospital Directory',
+    eyebrow: 'KNOW BEFORE YOU GO',
+    headline: 'See more of the hospital before you arrive.',
+    body: 'Compare departments, facilities, affiliated doctors and hospital-specific OPD before deciding where to visit.',
+    points: ['Departments', 'Facilities', 'Hospital OPD'],
+    cta: 'Find Hospitals',
+    href: '/hospitals',
+    accent: '#D97706',
+    wash: '#FFF6E8',
+    photo: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1400&q=86',
+    photoAlt: 'Modern hospital interior',
+    photoPosition: 'center',
+    countKey: 'hospitals',
+    metricLabel: 'hospital profiles',
+  },
+  {
+    id: 'knowledge',
+    icon: '📚',
+    label: 'Knowledge Hub',
+    eyebrow: 'LEARN & PREPARE',
+    headline: 'Medical knowledge that is easier to use.',
+    body: 'Explore clear health explainers and India-focused guides that help you prepare better questions for your next health conversation.',
+    points: ['Health explainers', 'Condition guides', 'Everyday learning'],
+    cta: 'Open Knowledge Hub',
+    href: '/learn',
+    accent: '#3B82F6',
+    wash: '#F2F8FF',
+    // Light medical-knowledge visual: books + stethoscope, replacing the generic doctor portrait.
+    photo: 'https://images.unsplash.com/photo-1676313496812-f8fc7c4304cf?auto=format&fit=crop&w=1600&q=86',
+    photoAlt: 'Medical books with a stethoscope',
+    photoPosition: 'center',
+    metricLabel: 'public health learning',
   },
 ];
 
-export default function PlatformNumbers() {
-  const [active, setActive] = useState(1);
-  const [counts, setCounts] = useState({ doctors:'—', communities:'—', hospitals:'—', patients:'—' });
+const formatCount = (value:number|null|undefined) => value == null || !Number.isFinite(value)
+  ? null
+  : new Intl.NumberFormat('en-IN').format(value);
+
+export default function PlatformNumbers({ stats }: { stats: PlatformStats }) {
+  const [activeId,setActiveId] = useState(MODULES[0].id);
+  const activeIndex = MODULES.findIndex(item => item.id === activeId);
+  const active = useMemo(() => MODULES[Math.max(0,activeIndex)], [activeIndex]);
 
   useEffect(() => {
-    fetch('https://api.healthconnect.sbs/api/v1/public/stats')
-      .then(r => r.json())
-      .then(d => {
-        if (!d?.success || !d?.data) return;
-        const { patients, doctors, communities, hospitals } = d.data;
-        setCounts({
-          patients:    patients    > 0 ? `${patients}+`    : '—',
-          doctors:     doctors     > 0 ? `${doctors}+`     : '—',
-          communities: communities > 0 ? `${communities}+` : '—',
-          hospitals:   hospitals   > 0 ? `${hospitals}+`   : '—',
-        });
-      }).catch(() => {});
-  }, []);
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setTimeout(() => {
+      const currentIndex = Math.max(0, MODULES.findIndex(item => item.id === activeId));
+      setActiveId(MODULES[(currentIndex + 1) % MODULES.length].id);
+    }, 6200);
+    return () => window.clearTimeout(timer);
+  }, [activeId]);
 
-  const cards = BASE_CARDS.map(c => ({
-    ...c,
-    stat: c.countKey === 'doctors' ? counts.doctors
-        : c.countKey === 'communities' ? counts.communities
-        : c.countKey === 'hospitals' ? counts.hospitals
-        : counts.patients,
-  }));
+  const metricValue = active.countKey ? formatCount(stats[active.countKey]) : null;
 
-  return (
-    <section style={{ background:'#fff', padding:'72px 0 0' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
+  const prepareRole = () => {
+    if (!active.roleToPrepare) return;
+    try { sessionStorage.setItem('hc_signup_role', active.roleToPrepare); } catch {}
+  };
 
-        .pn-card {
-          position:relative;overflow:hidden;cursor:pointer;
-          transition:flex 0.5s cubic-bezier(0.4,0,0.2,1);
-          border-right:1px solid rgba(255,255,255,0.06);
-        }
-        .pn-card:first-child { border-radius: 16px 0 0 16px; }
-        .pn-card:last-child  { border-radius: 0 16px 16px 0; border-right:none; }
-        .pn-card.col { flex:1; }
-        .pn-card.exp { flex:2.4; }
+  return <section className="ps-section" id="platform-tour">
+    <style>{`
+      .ps-section{background:#F8FBFB;padding:48px 28px 58px;font-family:'DM Sans',Arial,sans-serif}
+      .ps-head{max-width:1280px;margin:0 auto 27px;display:flex;align-items:end;justify-content:space-between;gap:40px}
+      .ps-kicker{font-size:10px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0B8F7C;margin-bottom:10px}
+      .ps-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.7rem,4.2vw,4.8rem);line-height:.98;letter-spacing:-.055em;color:#0B1930;margin:0;max-width:760px}
+      .ps-head p{max-width:340px;margin:0 0 4px;color:#60768A;font-size:14px;line-height:1.6}
+      .ps-modules{max-width:1280px;margin:0 auto 18px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+      .ps-module{position:relative;border:1px solid #D8E5E6;background:rgba(255,255,255,.72);border-radius:14px;min-height:90px;padding:13px 10px 11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:#527087;cursor:pointer;transition:.18s;overflow:hidden}
+      .ps-module:hover{transform:translateY(-2px);background:#fff;box-shadow:0 8px 18px rgba(15,43,58,.07)}
+      .ps-module.active{background:#fff;color:#0B1930;box-shadow:0 10px 24px rgba(15,43,58,.09)}
+      .ps-module.active:after{content:'';position:absolute;left:0;bottom:0;height:3px;background:currentColor;animation:psProgress 6.2s linear forwards}
+      @keyframes psProgress{from{width:0}to{width:100%}}
+      .ps-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;font-weight:900}
+      .ps-module strong{font-size:10.5px;line-height:1.25;text-align:center}
+      .ps-stage{max-width:1280px;min-height:410px;margin:0 auto;border:1px solid #D7E4E5;border-radius:22px;overflow:hidden;display:grid;grid-template-columns:minmax(390px,.9fr) minmax(0,1.1fr);box-shadow:0 16px 38px rgba(15,43,58,.09);position:relative}
+      .ps-copy{padding:42px 46px 38px;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:2}
+      .ps-eyebrow{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;margin-bottom:10px}
+      .ps-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.15rem,3vw,3.45rem);line-height:1.02;letter-spacing:-.045em;color:#0B1930;margin:0 0 15px;max-width:610px}
+      .ps-copy>p{font-size:15px;line-height:1.6;color:#536C80;max-width:590px;margin:0 0 18px}
+      .ps-points{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}.ps-point{padding:7px 10px;background:rgba(255,255,255,.72);border:1px solid rgba(130,160,172,.22);border-radius:999px;color:#29485E;font-size:10.5px;font-weight:800}
+      .ps-bottom{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.ps-cta{display:inline-flex;align-items:center;border-radius:10px;padding:11px 16px;color:#fff;text-decoration:none;font-size:11.5px;font-weight:900;box-shadow:0 7px 18px rgba(15,43,58,.12);transition:.16s}.ps-cta:hover{transform:translateY(-1px)}
+      .ps-metric{font-size:10px;color:#61788A;font-weight:750}.ps-metric strong{display:block;font-family:'Sora',sans-serif;font-size:17px;color:#0B1930;line-height:1.1;margin-bottom:1px}
+      .ps-photo{position:relative;min-height:410px;overflow:hidden;background:#EAF2F2}.ps-photo img{width:100%;height:100%;position:absolute;inset:0;display:block;object-fit:cover;transition:opacity .25s ease,transform .5s ease;animation:psPhotoIn .38s ease both}.ps-stage:hover .ps-photo img{transform:scale(1.015)}
+      @keyframes psPhotoIn{from{opacity:.45;transform:scale(1.025)}to{opacity:1;transform:scale(1)}}
+      .ps-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(248,251,251,.28),transparent 26%),linear-gradient(0deg,rgba(7,28,42,.08),transparent 42%);pointer-events:none}
+      .ps-photo-note{position:absolute;right:18px;bottom:18px;z-index:2;background:rgba(255,255,255,.92);border:1px solid rgba(210,226,226,.94);backdrop-filter:blur(10px);border-radius:12px;padding:9px 12px;color:#15384B;font-size:10px;font-weight:850;box-shadow:0 8px 22px rgba(15,43,58,.09)}
+      .ps-dots{max-width:1280px;margin:12px auto 0;display:flex;justify-content:center;gap:6px}.ps-dot{width:6px;height:6px;border-radius:999px;border:0;background:#C6D5D9;padding:0;cursor:pointer;transition:.18s}.ps-dot.active{width:23px}
+      @media(max-width:1000px){.ps-head{align-items:start;flex-direction:column;gap:12px}.ps-modules{grid-template-columns:repeat(3,1fr)}.ps-stage{grid-template-columns:1fr}.ps-photo{min-height:300px}.ps-copy{padding:36px 34px}}
+      @media(max-width:620px){.ps-section{padding:38px 14px 46px}.ps-head h2{font-size:2.75rem}.ps-modules{display:flex;overflow-x:auto;padding-bottom:5px;scrollbar-width:none}.ps-module{min-width:132px}.ps-stage{border-radius:17px}.ps-copy{padding:30px 24px}.ps-copy h3{font-size:2.35rem}.ps-copy>p{font-size:14px}.ps-photo{min-height:250px}}
+    `}</style>
 
-        .pn-photo{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity 0.45s ease;}
-        .pn-overlay{position:absolute;inset:0;transition:background 0.4s ease;}
+    <div className="ps-head">
+      <div><div className="ps-kicker">Explore HealthConnect</div><h2>Everything you need.<br/>Nothing you don&apos;t.</h2></div>
+      <p>Six connected parts, each with one clear job. Choose a module or let the story move automatically.</p>
+    </div>
 
-        .pn-col-txt{position:absolute;bottom:0;left:0;right:0;padding:20px 18px;}
-        .pn-exp-txt{position:absolute;bottom:0;left:0;right:0;padding:28px 34px;}
+    <div className="ps-modules" role="tablist" aria-label="HealthConnect modules">
+      {MODULES.map(item => {
+        const selected = item.id === active.id;
+        return <button key={item.id} type="button" role="tab" aria-selected={selected} className={`ps-module ${selected?'active':''}`} style={{color:selected?item.accent:undefined,borderColor:selected?`${item.accent}80`:undefined}} onClick={()=>setActiveId(item.id)}>
+          <span className="ps-icon" style={{background:`${item.accent}13`,color:item.accent}}>{item.icon}</span>
+          <strong>{item.label}</strong>
+        </button>;
+      })}
+    </div>
 
-        @keyframes pnIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        .pn-in{animation:pnIn 0.38s ease 0.08s both;}
-
-        .pn-cta{display:inline-flex;align-items:center;gap:6px;background:#fff;padding:9px 18px;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;text-decoration:none;text-transform:uppercase;letter-spacing:0.06em;transition:gap 0.2s;}
-        .pn-cta:hover{gap:10px;}
-
-        /* Heading — synced with Hero */
-        .pn-heading{font-family:'Sora',sans-serif;font-size:clamp(2.1rem,3.4vw,3.8rem);font-weight:900;color:#0A1628;letter-spacing:-0.03em;line-height:1.1;margin:0;}
-
-        @media(max-width:768px){
-          .pn-cards{flex-direction:column!important;height:auto!important;}
-          .pn-card{flex:1!important;min-height:280px;border-right:none!important;border-bottom:1px solid rgba(255,255,255,0.06);}
-          .pn-card:first-child{border-radius:16px 16px 0 0!important;}
-          .pn-card:last-child{border-radius:0 0 16px 16px!important;}
-        }
-      `}</style>
-
-      {/* Header */}
-      <div style={{ maxWidth:1280, margin:'0 auto', padding:'0 64px 40px' }}>
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
-          <div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
-              <div style={{ width:28, height:1, background:'#1A6BB5' }}/>
-              <span style={{ fontSize:11, fontWeight:700, color:'#1A6BB5', letterSpacing:'0.18em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif" }}>Platform at a Glance</span>
-            </div>
-            <h2 className="pn-heading">HealthConnect<br/>by the Numbers</h2>
-          </div>
-          <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, color:'#4A6B8A', maxWidth:320, lineHeight:1.6, margin:0 }}>
-            Click any card to see how each part of the platform works.
-          </p>
+    <div className="ps-stage" key={active.id} style={{background:`linear-gradient(135deg,${active.wash} 0%,#FFFFFF 76%)`}}>
+      <div className="ps-copy">
+        <div className="ps-eyebrow" style={{color:active.accent}}>{active.eyebrow}</div>
+        <h3>{active.headline}</h3>
+        <p>{active.body}</p>
+        <div className="ps-points">{active.points.map(point=><span className="ps-point" key={point}>{point}</span>)}</div>
+        <div className="ps-bottom">
+          <Link className="ps-cta" href={active.href} style={{background:active.accent}} onClick={prepareRole}>{active.cta} →</Link>
+          <div className="ps-metric">{metricValue?<><strong>{metricValue}</strong>{active.metricLabel}</>:<><strong>{active.label}</strong>{active.metricLabel}</>}</div>
         </div>
       </div>
-
-      {/* Cards */}
-      <div style={{ padding:'0 48px' }}>
-        <div className="pn-cards" style={{ display:'flex', height:350, borderRadius:16, overflow:'hidden', boxShadow:'0 8px 40px rgba(15,30,60,0.12)' }}>
-          {cards.map((c,i) => {
-            const isExp = active===i;
-            return (
-              <div key={i} className={`pn-card ${isExp?'exp':'col'}`} onClick={()=>setActive(i)}>
-                <div className="pn-photo" style={{ backgroundImage:`url(${c.photo})`, opacity:isExp?1:0.36 }}/>
-                <div className="pn-overlay" style={{ background:isExp
-                  ? `linear-gradient(to top,${c.color}EE 0%,${c.color}88 45%,transparent 72%)`
-                  : 'linear-gradient(to top,#0A1628F2 0%,#0A162878 65%,transparent 100%)'
-                }}/>
-                {!isExp && (
-                  <div className="pn-col-txt">
-                    <div style={{ fontSize:36, fontWeight:900, color:'#fff', letterSpacing:'-0.03em', lineHeight:1, fontFamily:"'Sora',sans-serif", marginBottom:4 }}>{c.stat}</div>
-                    <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.88)', fontFamily:"'DM Sans',sans-serif" }}>{c.label}</div>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', marginTop:2, fontFamily:"'DM Sans',sans-serif" }}>{c.sub}</div>
-                  </div>
-                )}
-                {isExp && (
-                  <div className="pn-exp-txt pn-in">
-                    <div style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.6)', letterSpacing:'0.12em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif", marginBottom:5 }}>{c.sub}</div>
-                    <div style={{ fontSize:50, fontWeight:900, color:'#fff', letterSpacing:'-0.04em', lineHeight:1, fontFamily:"'Sora',sans-serif", marginBottom:5 }}>{c.stat}</div>
-                    <div style={{ fontSize:19, fontWeight:800, color:'#fff', fontFamily:"'Sora',sans-serif", marginBottom:10, letterSpacing:'-0.01em' }}>{c.label}</div>
-                    <p style={{ fontSize:13, color:'rgba(255,255,255,0.78)', lineHeight:1.65, maxWidth:340, margin:'0 0 18px', fontFamily:"'DM Sans',sans-serif" }}>{c.desc}</p>
-                    <Link href={c.href} className="pn-cta" style={{ color:c.color }}>{c.cta} →</Link>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      <div className="ps-photo">
+        <img src={active.photo} alt={active.photoAlt} style={{objectPosition:active.photoPosition || 'center'}}/>
+        <div className="ps-photo-note" style={{borderColor:`${active.accent}35`}}>{active.icon} {active.label}</div>
       </div>
-    </section>
-  );
+    </div>
+
+    <div className="ps-dots" aria-label="Module carousel controls">{MODULES.map(item=><button key={item.id} type="button" aria-label={`Show ${item.label}`} className={`ps-dot ${item.id===active.id?'active':''}`} style={{background:item.id===active.id?active.accent:undefined}} onClick={()=>setActiveId(item.id)}/>)}</div>
+  </section>;
 }

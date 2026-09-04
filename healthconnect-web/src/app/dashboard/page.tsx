@@ -1,5 +1,5 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import dynamic from 'next/dynamic';
@@ -19,50 +19,41 @@ const ConsentsPage         = dynamic(() => import('@/components/dashboard/pages/
 const SubscriptionPage     = dynamic(() => import('@/components/dashboard/pages/SubscriptionPage'),         { ssr: false });
 const ComingSoon           = dynamic(() => import('@/components/dashboard/pages/ComingSoon'),               { ssr: false });
 
+type MembershipReason = 'onboarding'|'required'|'expired'|'';
+
 export default function DashboardPage() {
   const { activePage, setActivePage, resetToHome } = useUIStore() as any;
   const user = useAuthStore(s => (s as any).user);
   const currentPage = activePage ?? 'home';
+  const [membershipReason,setMembershipReason] = useState<MembershipReason>('');
 
-  // Fresh-login guard — reset to Home on first dashboard mount after login.
-  // Uses a sessionStorage flag so it only fires once per login session,
-  // not on every route change or browser-back navigation.
   useEffect(() => {
     if (!user) return;
     const loginKey = `hc_landed_${user.id ?? user.email}`;
     if (!sessionStorage.getItem(loginKey)) {
-      // First time landing after this login — go to Home
       sessionStorage.setItem(loginKey, '1');
       resetToHome();
     }
   }, [user?.id]);
 
-  // Read ?tab= from URL on mount — only for genuine external deep-links.
-  // FIXED: Previously this ran on every mount including after login, causing
-  // the dashboard to always land on whatever ?tab= was last in the URL (e.g.
-  // my-health). Now we:
-  //   1. Only honour ?tab= if the URL actually contains it right now.
-  //   2. Always strip ?tab= immediately so it cannot persist across refreshes.
-  //   3. On a fresh login (no ?tab= in URL), activePage stays at 'home'.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    // Always clean the URL — prevents stale ?tab= surviving a refresh
+    const reason = (params.get('membership') || sessionStorage.getItem('hc_membership_notice') || '') as MembershipReason;
+    if (reason) {
+      setMembershipReason(reason);
+      sessionStorage.removeItem('hc_membership_notice');
+    }
     if (window.location.search) {
       window.history.replaceState({}, '', '/dashboard');
     }
     const validPages = ['home','my-health','vitals','symptoms','medications',
       'therapies','appointments','find-doctors','communities',
       'profile','settings','consents','subscription'];
-    // Only apply the tab if it was explicitly in the URL this load
-    // AND we are not coming from a fresh login (fresh login sets activePage
-    // to 'home' via uiStore.resetToHome() before redirecting to /dashboard)
     if (tab && validPages.includes(tab)) {
       setActivePage(tab);
     }
-    // If no ?tab= → activePage stays at its current value ('home' for fresh login,
-    // or whatever the user was on if they manually refreshed mid-session)
   }, []);
 
   const pages: Record<string, React.ReactNode> = {
@@ -81,5 +72,16 @@ export default function DashboardPage() {
     'subscription': <SubscriptionPage />,
   };
 
-  return <>{pages[currentPage] ?? <ComingSoon title="Coming Soon" />}</>;
+  const notice = membershipReason === 'onboarding'
+    ? 'Your Patient account is ready. Activate the membership you selected to continue into My Health.'
+    : membershipReason === 'expired'
+      ? 'Your HealthConnect Patient membership is no longer active. Renew a membership to continue using the private Patient workspace.'
+      : membershipReason === 'required'
+        ? 'You are signed in, but there is no active Patient membership on this account. Choose a membership to continue.'
+        : '';
+
+  return <>
+    {notice && currentPage === 'subscription' && <div style={{maxWidth:1060,margin:'0 auto 16px',padding:'12px 15px',borderRadius:12,background:'#FFF7ED',border:'1px solid #FED7AA',color:'#9A3412',fontSize:12.5,lineHeight:1.5,fontWeight:650}}>{notice}</div>}
+    {pages[currentPage] ?? <ComingSoon title="Coming Soon" />}
+  </>;
 }

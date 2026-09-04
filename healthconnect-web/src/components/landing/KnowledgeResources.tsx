@@ -1,140 +1,24 @@
 'use client';
+
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 
-const ARTICLES = [
-  {
-    photo:'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=500&q=80',
-    cat:'Diabetes', catColor:'#1A6BB5',
-    title:'HbA1c — What Your Diabetes Numbers Really Mean for Indians',
-    // FIX: was '/learn' — now links to the specific article slug
-    href:'/learn/hba1c-what-your-diabetes-numbers-really-mean',
-  },
-  {
-    photo:'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=500&q=80',
-    cat:'Cardiology', catColor:'#E11D48',
-    title:'Why Heart Attacks in Young Indians Are Rising: What You Need to Know',
-    href:'/learn/heart-attacks-young-indians',
-  },
-  {
-    photo:'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&q=80',
-    cat:'Women Health', catColor:'#7C3AED',
-    title:'PCOD & PCOS: The Complete Guide for Indian Women',
-    href:'/learn/pcos-complete-guide-indian-women',
-  },
-  {
-    photo:'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&q=80',
-    cat:'Mental Health', catColor:'#059669',
-    title:'Managing Anxiety and Depression: Breaking the Stigma in India',
-    href:'/learn/mental-health-india-breaking-stigma',
-  },
-];
+const ARTICLES=[
+  {cat:'Diabetes',title:'HbA1c — What Your Diabetes Numbers Really Mean for Indians',summary:'Understand what the number represents and how to prepare better questions for your next consultation.',href:'/learn/hba1c-what-your-diabetes-numbers-really-mean',photo:'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1200&q=86',color:'#2563EB',tint:'#EDF4FF',border:'#C9DCF7'},
+  {cat:'Cardiology',title:'Why Heart Attacks in Young Indians Are Rising',summary:'A clear explainer on risk factors, warning signs and what to discuss with a healthcare professional.',href:'/learn/heart-attacks-young-indians',photo:'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=1200&q=86',color:'#E11D48',tint:'#FFF1F4',border:'#F4CCD6'},
+  {cat:'Women Health',title:'PCOD & PCOS: A Guide for Indian Women',summary:'Learn the common patterns, questions and care conversations that can help make the condition easier to understand.',href:'/learn/pcos-complete-guide-indian-women',photo:'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=86',color:'#7C3AED',tint:'#F3EEFF',border:'#DDD0FA'},
+  {cat:'Mental Health',title:'Managing Anxiety and Depression: Breaking the Stigma in India',summary:'Recognise common signs, understand when to seek help and prepare for a more informed conversation.',href:'/learn/mental-health-india-breaking-stigma',photo:'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=86',color:'#059669',tint:'#ECF8F2',border:'#C8E8D8'},
+] as const;
 
-const STORIES = [
-  {
-    q:'"I uploaded 3 years of reports in one go. My cardiologist saw everything before I sat down. First time I didn\'t have to repeat my entire history."',
-    name:'Priya Sharma', role:'Patient · New Delhi',
-    col:'#1A6BB5', initials:'PS',
-    photo:'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=120&q=80',
-  },
-  {
-    q:'"12 appointment requests in my first week. Patient timelines save me 10 minutes per consultation. I see more patients and give better care."',
-    name:'Dr. Arvind Mehta', role:'Cardiologist · Mumbai',
-    col:'#7C3AED', initials:'AM',
-    photo:'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=120&q=80',
-  },
-  {
-    q:'"Anonymous posting meant I could ask the embarrassing questions. A verified endocrinologist answered within hours. This community changed everything."',
-    name:'Sunita Rao', role:'Community Member · Bengaluru',
-    col:'#059669', initials:'SR',
-    photo:'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=120&q=80',
-  },
-];
+export default function KnowledgeResources(){
+  const [start,setStart]=useState(0);
+  const visible=useMemo(()=>[0,1,2].map(offset=>ARTICLES[(start+offset)%ARTICLES.length]),[start]);
+  const previous=()=>setStart(current=>(current-1+ARTICLES.length)%ARTICLES.length);
+  const next=()=>setStart(current=>(current+1)%ARTICLES.length);
 
-function Avatar({ initials, color, photo }: { initials: string; color: string; photo: string }) {
-  return (
-    <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:`2px solid ${color}30`, background:`${color}20`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <img src={photo} alt={initials} style={{ width:'100%', height:'100%', objectFit:'cover' }}
-        onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
-      />
-    </div>
-  );
-}
-
-export default function KnowledgeResources() {
-  return (
-    // No CTA section — removed "Take control / Your health deserves" entirely
-    <section style={{ background:'#fff', padding:'72px 0 72px', borderTop:'1px solid #E8F0F8' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-        .kr-card{background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E8F0F8;transition:all 0.22s ease;display:flex;flex-direction:column;cursor:pointer;text-decoration:none;}
-        .kr-card:hover{transform:translateY(-4px);box-shadow:0 14px 44px rgba(15,30,60,0.1);}
-        .kr-story{background:#fff;border-radius:12px;padding:24px;border:1px solid #E8F0F8;transition:all 0.2s;}
-        .kr-story:hover{box-shadow:0 6px 28px rgba(15,30,60,0.07);transform:translateY(-2px);}
-        .kr-h2{font-family:'Sora',sans-serif;font-size:clamp(2.1rem,3.4vw,3.8rem)!important;font-weight:900;color:#0A1628;letter-spacing:-0.03em;line-height:1.1;margin:0;}
-        @media(max-width:1024px){.kr-4col{grid-template-columns:1fr 1fr!important;}}
-        @media(max-width:768px){
-          .kr-4col{grid-template-columns:1fr!important;}
-          .kr-3col{grid-template-columns:1fr!important;}
-          .kr-pad{padding:0 24px!important;}
-        }
-      `}</style>
-
-      <div className="kr-pad" style={{ maxWidth:1280, margin:'0 auto', padding:'0 48px' }}>
-
-        {/* Header */}
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:16, marginBottom:36 }}>
-          <div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
-              <div style={{ width:28, height:1, background:'#1A6BB5' }}/>
-              <span style={{ fontSize:11, fontWeight:700, color:'#1A6BB5', letterSpacing:'0.18em', textTransform:'uppercase', fontFamily:"'DM Sans',sans-serif" }}>Knowledge Hub</span>
-            </div>
-            <h2 className="kr-h2">Health knowledge<br/>you can trust.</h2>
-          </div>
-          <Link href="/learn" style={{ fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:700, color:'#1A6BB5', textDecoration:'none', textTransform:'uppercase', letterSpacing:'0.08em', display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap', padding:'12px 24px', border:'1.5px solid #1A6BB5', transition:'all 0.2s' }}>
-            Visit Learn Hub →
-          </Link>
-        </div>
-
-        {/* 4 article cards */}
-        <div className="kr-4col" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:20, marginBottom:52 }}>
-          {ARTICLES.map((a,i) => (
-            <Link key={i} href={a.href} className="kr-card">
-              <div style={{ height:160, backgroundImage:`url(${a.photo})`, backgroundSize:'cover', backgroundPosition:'center' }}/>
-              <div style={{ padding:'16px', flex:1, display:'flex', flexDirection:'column' }}>
-                <div style={{ display:'inline-flex', alignItems:'center', background:`${a.catColor}12`, padding:'3px 9px', borderRadius:999, marginBottom:10, width:'fit-content' }}>
-                  <span style={{ fontSize:10, fontWeight:700, color:a.catColor, textTransform:'uppercase', letterSpacing:'0.08em', fontFamily:"'DM Sans',sans-serif" }}>{a.cat}</span>
-                </div>
-                <h4 style={{ fontFamily:"'Sora',sans-serif", fontSize:14, fontWeight:800, color:'#0A1628', lineHeight:1.4, margin:'0 0 10px', flex:1 }}>{a.title}</h4>
-                <span style={{ fontSize:12, fontWeight:700, color:'#1A6BB5', fontFamily:"'DM Sans',sans-serif", display:'flex', alignItems:'center', gap:4 }}>Read more →</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Stories */}
-        <h3 style={{ fontFamily:"'Sora',sans-serif", fontSize:'clamp(1.6rem,2.4vw,2.4rem)', fontWeight:900, color:'#0A1628', letterSpacing:'-0.025em', margin:'0 0 22px' }}>
-          Real people. Real stories.
-        </h3>
-        <div className="kr-3col" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:18 }}>
-          {STORIES.map((st,i)=>(
-            <div key={i} className="kr-story">
-              <div style={{ fontSize:28, color:`${st.col}20`, lineHeight:1, fontFamily:'Georgia,serif', marginBottom:-2 }}>"</div>
-              <p style={{ fontFamily:"'DM Sans',sans-serif", fontSize:14, lineHeight:1.72, color:'#2C4A6A', fontStyle:'italic', margin:'0 0 18px', fontWeight:500 }}>{st.q}</p>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <Avatar initials={st.initials} color={st.col} photo={st.photo}/>
-                <div>
-                  <div style={{ fontFamily:"'Sora',sans-serif", fontSize:13, fontWeight:800, color:'#0A1628' }}>{st.name}</div>
-                  <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, color:'#6B87A8' }}>{st.role}</div>
-                </div>
-                <div style={{ marginLeft:'auto', display:'flex', gap:1 }}>
-                  {[1,2,3,4,5].map(n=><span key={n} style={{ color:'#F59E0B', fontSize:11 }}>★</span>)}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-      </div>
-    </section>
-  );
+  return <section className="knowledge-section" id="knowledge-hub"><style>{`
+    .knowledge-section{background:linear-gradient(180deg,#F7FAFB 0%,#F3F8FA 100%);padding:70px 28px 74px;font-family:'DM Sans',Arial,sans-serif;border-top:1px solid #E2EBF0;color:#10243C}.knowledge-inner{max-width:1340px;margin:0 auto}.knowledge-head{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(320px,.72fr);gap:56px;align-items:end;margin-bottom:28px}.knowledge-kicker{font-size:13px;font-weight:900;letter-spacing:.17em;color:#2563EB;margin-bottom:8px}.knowledge-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.2rem,3vw,3.2rem);line-height:1.05;letter-spacing:-.045em;color:#0F172A;margin:0;max-width:720px}.knowledge-head-right{max-width:470px}.knowledge-head-right p{font-size:15.5px;line-height:1.62;color:#465F75;margin:0 0 14px}.knowledge-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.knowledge-all{display:inline-flex;border:1px solid #AFCBFA;background:#EDF5FF;border-radius:10px;padding:11px 15px;color:#1D4ED8;text-decoration:none;font-size:13px;font-weight:900}.knowledge-arrow{width:39px;height:39px;border-radius:50%;border:1px solid #C4D5E4;background:#fff;color:#17384A;font-size:19px;cursor:pointer}.knowledge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.knowledge-card{text-decoration:none;color:inherit;border:1px solid var(--card-border);border-radius:20px;overflow:hidden;background:#fff;transition:.18s;box-shadow:0 10px 26px rgba(15,23,42,.055);position:relative}.knowledge-card:before{content:'';position:absolute;left:0;right:0;top:0;height:4px;background:var(--card-accent);z-index:3}.knowledge-card:hover{transform:translateY(-3px);box-shadow:0 16px 34px rgba(15,23,42,.10)}.knowledge-photo{aspect-ratio:16/9;background-size:cover;background-position:center;position:relative}.knowledge-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(15,23,42,.15),transparent 56%)}.knowledge-body{padding:18px 19px 20px;background:linear-gradient(180deg,var(--card-tint),#fff 90%);min-height:205px;display:flex;flex-direction:column}.knowledge-cat{display:inline-flex;align-self:flex-start;font-size:12px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;padding:5px 8px;border-radius:999px;margin-bottom:10px}.knowledge-card h3{font-family:'Sora',sans-serif;font-size:18px;line-height:1.35;color:#0F172A;margin:0 0 9px}.knowledge-summary{font-size:13.5px;line-height:1.52;color:#53697B;margin:0 0 17px}.knowledge-read{font-size:13.5px;font-weight:900;color:var(--card-accent);margin-top:auto}.knowledge-disclaimer{margin-top:20px;padding:13px 15px;background:#E9EFF4;border:1px solid #D3DEE7;border-radius:12px;color:#3F566B;font-size:13px;line-height:1.5}.knowledge-disclaimer strong{color:#263D52}
+    @media(max-width:980px){.knowledge-head{grid-template-columns:1fr;gap:13px}.knowledge-grid{grid-template-columns:1fr 1fr}.knowledge-card:last-child{display:none}}@media(max-width:650px){.knowledge-section{padding:54px 14px 58px}.knowledge-grid{grid-template-columns:1fr}.knowledge-card:nth-child(n+2){display:none}.knowledge-head-right p{font-size:15px}.knowledge-card h3{font-size:17px}.knowledge-body{min-height:0}}
+  `}</style><div className="knowledge-inner"><div className="knowledge-head"><div><div className="knowledge-kicker">KNOWLEDGE HUB</div><h2 className="knowledge-title">Health information for better everyday decisions.</h2></div><div className="knowledge-head-right"><p>India-focused explainers help people understand common health topics and prepare better questions for a healthcare professional.</p><div className="knowledge-head-actions"><Link href="/learn" className="knowledge-all">Visit Knowledge Hub →</Link><button className="knowledge-arrow" type="button" aria-label="Previous knowledge articles" onClick={previous}>‹</button><button className="knowledge-arrow" type="button" aria-label="Next knowledge articles" onClick={next}>›</button></div></div></div><div className="knowledge-grid">{visible.map(article=><Link href={article.href} className="knowledge-card" key={`${start}-${article.href}`} style={{'--card-tint':article.tint,'--card-border':article.border,'--card-accent':article.color} as CSSProperties}><div className="knowledge-photo" style={{backgroundImage:`url(${article.photo})`}}/><div className="knowledge-body"><span className="knowledge-cat" style={{color:article.color,background:`${article.color}12`}}>{article.cat}</span><h3>{article.title}</h3><p className="knowledge-summary">{article.summary}</p><span className="knowledge-read">Read article →</span></div></Link>)}</div><div className="knowledge-disclaimer"><strong>Educational content supports informed conversations; it is not a diagnosis or personal treatment advice.</strong></div></div></section>;
 }
