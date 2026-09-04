@@ -30,12 +30,7 @@ const CARE_STEPS=[
 const PHOTOS={
   patient:'/images/my-health/patient-main.png',
   consultation:'/images/my-health/consultation.png',
-  community:[
-    '/images/my-health/community-1.png',
-    '/images/my-health/community-2.png',
-    '/images/my-health/community-3.png',
-    '/images/my-health/community-4.png',
-  ],
+  community:'/images/my-health/community-main.png',
 } as const;
 
 function Icon({kind,size=24}:{kind:string;size?:number}){
@@ -115,15 +110,16 @@ export default function AudienceJourneys(){
       .mh-consult{position:absolute;z-index:5;left:42.4%;top:56.2%;width:30.5%;height:21.5%;display:grid;grid-template-columns:58% 42%;overflow:hidden;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
       .mh-consult-photo{width:100%;height:100%;object-fit:cover;object-position:center}
       .mh-consult-copy{padding:18px 16px;display:flex;flex-direction:column;min-width:0}
-      .mh-consult-copy h3,.mh-community-card h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.75rem,1vw,1.08rem);color:#0B665C;margin:0 0 8px}
-      .mh-consult-copy p,.mh-community-card p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.5;color:#37566A;margin:0}
+      .mh-consult-copy h3,.mh-community-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.75rem,1vw,1.08rem);color:#0B665C;margin:0 0 8px}
+      .mh-consult-copy p,.mh-community-copy p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.5;color:#37566A;margin:0}
       .mh-action{margin-top:auto;align-self:flex-start;border:0;border-radius:10px;background:#0B948B;color:#fff;padding:9px 14px;font-size:clamp(.6rem,.72vw,.78rem);font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(11,148,139,.18)}
       .mh-action:hover{background:#087D75}
 
-      .mh-community-card{position:absolute;z-index:5;right:2.3%;top:56.2%;width:24.4%;height:21.5%;padding:18px 16px;display:grid;grid-template-columns:1fr 44%;gap:12px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
-      .mh-community-copy{display:flex;flex-direction:column;min-width:0}
-      .mh-avatars{display:grid;grid-template-columns:1fr 1fr;gap:5px;align-content:center}
-      .mh-avatar{width:100%;aspect-ratio:1;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 4px 12px rgba(42,72,82,.12)}
+      .mh-community-card{position:absolute;z-index:5;right:2.3%;top:56.2%;width:24.4%;height:21.5%;overflow:hidden;border-radius:18px;background:#EEF7F7;border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1)}
+      .mh-community-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center}
+      .mh-community-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.96) 34%,rgba(255,255,255,.82) 50%,rgba(255,255,255,.24) 69%,rgba(255,255,255,0) 100%)}
+      .mh-community-copy{position:relative;z-index:2;width:52%;height:100%;padding:18px 16px;display:flex;flex-direction:column;min-width:0}
+      .mh-community-note{display:block;margin-top:8px;font-size:clamp(.52rem,.65vw,.72rem);line-height:1.4;color:#627784}
 
       .mh-bottom{position:absolute;z-index:6;left:1.2%;right:1.2%;bottom:1.4%;height:14.5%;border-radius:18px;background:rgba(255,255,255,.92);border:1px solid rgba(203,222,225,.78);display:grid;grid-template-columns:1.05fr 1fr 1.05fr 1.35fr;align-items:center;box-shadow:0 10px 25px rgba(42,72,82,.07);backdrop-filter:blur(8px)}
       .mh-bottom-item{min-width:0;padding:0 22px;display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center}
@@ -144,16 +140,17 @@ export default function AudienceJourneys(){
         .mh-left,.mh-score,.mh-steps,.mh-consult,.mh-community-card,.mh-bottom{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:auto;height:auto;min-width:0}
         .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
         .mh-score{margin:18px 0}.mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
-        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:240px}
+        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-community-copy{width:48%;padding:24px 20px}.mh-community-photo{object-position:center center}
         .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
       }
       @media(max-width:650px){
         .journey-nav-wrap{padding:24px 14px 0}.journey-nav{grid-template-columns:1fr 1fr}.journey-pill{min-height:84px}
         .mh-section{padding:46px 10px 62px}.mh-head{padding:0 4px}.mh-head h2{font-size:2.55rem}.mh-head p{font-size:16px}
         .mh-canvas{padding:14px}.mh-main-photo{height:290px}.mh-title{font-size:2.25rem}.mh-feature-grid{grid-template-columns:1fr 1fr}.mh-feature h3{font-size:.88rem}.mh-feature p{font-size:.73rem}
-        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{grid-template-columns:1fr;min-height:0}.mh-avatars{grid-template-columns:repeat(4,1fr);margin-top:12px}.mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E4E6}
+        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{min-height:300px}.mh-community-copy{width:64%;padding:22px 18px}.mh-community-shade{background:linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 45%,rgba(255,255,255,.66) 67%,rgba(255,255,255,.08) 100%)}.mh-community-photo{object-position:58% center}
+        .mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E4E6}
       }
-      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}}
+      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}.mh-community-copy{width:72%}.mh-community-photo{object-position:62% center}}
     `}</style>
 
     <div className="journey-nav-wrap">
@@ -205,8 +202,9 @@ export default function AudienceJourneys(){
           </article>
 
           <article className="mh-community-card">
-            <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experience.<br/>Support between visits.</p><button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button></div>
-            <div className="mh-avatars">{PHOTOS.community.map((src,index)=><img className="mh-avatar" key={src} src={src} alt={`Health Community member ${index+1}`}/>)}</div>
+            <img className="mh-community-photo" src={PHOTOS.community} alt="HealthConnect community members supporting one another online"/>
+            <div className="mh-community-shade" aria-hidden="true"/>
+            <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experiences.<br/>Support between visits.</p><span className="mh-community-note">Find condition-focused spaces where people can learn, share and feel less alone.</span><button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button></div>
           </article>
 
           <div className="mh-bottom">
