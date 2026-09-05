@@ -81,7 +81,7 @@ export default function AudienceJourneys(){
 
       .mh-canvas{position:relative;aspect-ratio:1664/936;overflow:hidden;border-radius:28px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 42%,#DCEFF1 100%);box-shadow:0 20px 48px rgba(24,69,82,.08)}
       .mh-canvas:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 39% 37%,rgba(255,255,255,.94) 0 20%,rgba(255,255,255,.48) 34%,transparent 56%);pointer-events:none;z-index:1}
-      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%;transform:scale(.82);transform-origin:right top;transition:opacity .25s ease,transform .25s ease}
+      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%;transform:scale(.70);transform-origin:right top;transition:opacity .25s ease,transform .25s ease}
       .mh-photo-fallback{position:absolute;right:0;top:0;width:62%;height:78%;background:linear-gradient(135deg,#DDECEE,#BDDDE0);z-index:0}
       .mh-left{position:absolute;z-index:3;left:2.8%;top:5.6%;width:38.2%}
       .mh-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.9rem,3vw,3.7rem);line-height:1.02;letter-spacing:-.045em;color:#0B2B45;margin:0}
