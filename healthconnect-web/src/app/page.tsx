@@ -6,6 +6,7 @@ import PublicNavbar from '@/components/PublicNavbar';
 import LandingHero from '@/components/landing/LandingHero';
 import PlatformNumbersLegacy, { type PlatformStats } from '@/components/landing/PlatformNumbersLegacy';
 import AudienceJourneys from '@/components/landing/AudienceJourneys';
+import HealthCommunitiesShowcase from '@/components/landing/HealthCommunitiesShowcase';
 import CommunityBenefits from '@/components/landing/CommunityBenefits';
 import CareDiscoveryStrip from '@/components/landing/CareDiscoveryStrip';
 import KnowledgeResources from '@/components/landing/KnowledgeResources';
@@ -96,12 +97,14 @@ export default function LandingPage(){
     <PublicNavbar/>
     <style>{`
       .workspace-topbar span{font-size:12.5px!important;color:#506875!important}.workspace-nav span{font-size:12px!important;color:#405A68!important}.workspace-kpi{font-size:12px!important;color:#526B78!important}.workspace-kpi strong{font-size:22px!important}.workspace-timeline b{font-size:12.5px!important}.workspace-row{font-size:12px!important;color:#455F6D!important}.workspace-row em{color:#748A95!important}.workspace-rail-card b{font-size:12px!important}.workspace-rail-card span{font-size:12px!important;color:#4C6673!important}.continuity-node b{font-size:12px!important}.continuity-callout b{font-size:12.5px!important}.continuity-callout span{font-size:12px!important;color:#405B69!important}.community-phone-top span,.community-post-head span,.community-member span{font-size:11.5px!important;color:#655474!important}.community-post p,.community-member p,.community-moderation{font-size:12px!important;color:#44384E!important}.community-replies{font-size:11.5px!important}.doctor-desk-top span,.doctor-desk-kpi,.doctor-step b,.doctor-patient-row span,.doctor-patient-row strong{font-size:11.8px!important}.doctor-desk-kpi{color:#536D7F!important}
+      .legacy-community-benefits .product-story:first-of-type{display:none!important}
       .landing-membership .hc-plans{background:linear-gradient(135deg,#EAF7F4 0%,#EEF5FB 54%,#F7F5FC 100%)!important;padding:40px 28px 44px!important;border-top:1px solid #D6E8E4;border-bottom:1px solid #DCE5EC}.landing-membership .hc-plans-wrap{max-width:1160px!important}.landing-membership .hc-plans-head{grid-template-columns:minmax(0,1fr) minmax(300px,.62fr)!important;gap:34px!important;margin-bottom:19px!important}.landing-membership .hc-plans-kicker{margin-bottom:7px!important;font-size:13px!important}.landing-membership .hc-plans h2{font-size:clamp(1.9rem,2.6vw,2.65rem)!important;max-width:620px!important}.landing-membership .hc-plans-head p{font-size:14.5px!important;line-height:1.55!important}.landing-membership .hc-plan-grid{gap:14px!important}.landing-membership .hc-plan-card{border-radius:16px!important;padding:20px 22px!important;box-shadow:0 8px 22px rgba(18,55,68,.06)!important}.landing-membership .hc-plan-role{font-size:12.5px!important;margin-bottom:6px!important}.landing-membership .hc-plan-title{font-size:20px!important}.landing-membership .hc-plan-price{margin:8px 0 3px!important}.landing-membership .hc-plan-price strong{font-size:31px!important}.landing-membership .hc-plan-price span{font-size:13.5px!important}.landing-membership .hc-plan-sub{font-size:13.5px!important;margin-bottom:10px!important;line-height:1.45!important}.landing-membership .hc-plan-list{margin-bottom:13px!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:0 12px!important}.landing-membership .hc-plan-list li{padding:5px 0!important;font-size:13.5px!important;border-bottom:0!important;line-height:1.4!important}.landing-membership .hc-plan-list li:before{width:19px!important;height:19px!important;flex-basis:19px!important;font-size:11px!important}.landing-membership .hc-plan-btn{padding:10px 14px!important;font-size:13.5px!important;border-radius:9px!important}.landing-membership .hc-plan-note{margin-top:12px!important;padding:11px 13px!important;border-radius:11px!important;font-size:13.5px!important;line-height:1.5!important}@media(max-width:850px){.landing-membership .hc-plans-head{grid-template-columns:1fr!important;gap:8px!important}.landing-membership .hc-plan-list{grid-template-columns:1fr!important}}
     `}</style>
     <main>
       <LandingHero/>
       <AudienceJourneys/>
-      <CommunityBenefits/>
+      <HealthCommunitiesShowcase/>
+      <div className="legacy-community-benefits"><CommunityBenefits/></div>
       <CareDiscoveryStrip/>
       <KnowledgeResources/>
       <PlatformNumbersLegacy stats={stats}/>
