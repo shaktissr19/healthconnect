@@ -129,13 +129,26 @@ export default function LandingPage(){
       .care-head h2{font-size:clamp(2rem,2.85vw,3.05rem)!important}
       .knowledge-title{font-size:clamp(1.95rem,2.7vw,2.85rem)!important}
 
-      .hc-community-popover{width:220px!important;right:0!important;left:auto!important}
+      .hc-community-popover{width:182px!important;right:-2px!important;left:auto!important;top:31px!important;padding:10px 11px!important;border-radius:11px!important;font-size:10.6px!important;line-height:1.4!important}
+      .hc-community-popover b{font-size:11.3px!important;margin-bottom:3px!important}
 
       @media(min-width:981px){
         .hc-community-photo-wrap{width:60%!important}
         .hc-community-photo{position:absolute!important;right:0!important;top:50%!important;width:auto!important;height:84%!important;max-width:none!important;object-fit:contain!important;object-position:right center!important;transform:translateY(-50%)!important}
         .hc-community-photo-shade{background:linear-gradient(90deg,rgba(244,251,250,.98) 0%,rgba(244,251,250,.72) 15%,rgba(244,251,250,.22) 30%,rgba(244,251,250,0) 50%)!important}
-        .hc-community-stats{left:43.5%!important}
+
+        .hc-community-stats{left:47.5%!important;top:31px!important;width:192px!important;padding:14px 14px 12px!important;border-radius:17px!important}
+        .hc-community-stats-head{font-size:11.8px!important}
+        .hc-community-info{width:23px!important;height:23px!important}
+        .hc-community-count{font-size:37px!important;margin:14px 0 1px!important}
+        .hc-community-count-label{font-size:10.8px!important;margin-bottom:9px!important}
+        .hc-community-stat-row{grid-template-columns:22px 1fr auto!important;gap:6px!important;padding:7px 0!important}
+        .hc-community-stat-icon{width:22px!important;height:22px!important}
+        .hc-community-stat-row b{font-size:11.4px!important}
+        .hc-community-stat-row small{font-size:9.3px!important;margin-top:1px!important}
+        .hc-community-live{font-size:8.8px!important;padding:3px 6px!important}
+        .hc-community-explore{font-size:10.7px!important;margin-top:8px!important}
+
         .hc-community-badge{min-width:150px!important;max-width:190px!important;padding:8px 10px!important;gap:7px!important}
         .hc-community-badge-emoji{width:34px!important;height:34px!important;font-size:17px!important}
         .hc-community-badge:nth-of-type(1){right:24%!important;top:11%!important}
