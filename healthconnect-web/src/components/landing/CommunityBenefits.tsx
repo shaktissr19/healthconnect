@@ -1,64 +1,138 @@
 'use client';
 
-import { useEffect, useRef, useState, type TouchEvent } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
 
-function useAutoCarousel(delay:number){
-  const [index,setIndex]=useState(0);
-  const [paused,setPaused]=useState(false);
-  const touchStart=useRef<number|null>(null);
-  useEffect(()=>{
-    if(paused||typeof window==='undefined'||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-    const timer=window.setInterval(()=>setIndex(current=>(current+1)%2),delay);
-    return()=>window.clearInterval(timer);
-  },[delay,paused]);
-  const onTouchStart=(event:TouchEvent<HTMLElement>)=>{touchStart.current=event.touches[0]?.clientX??null};
-  const onTouchEnd=(event:TouchEvent<HTMLElement>)=>{if(touchStart.current==null)return;const end=event.changedTouches[0]?.clientX??touchStart.current;if(Math.abs(end-touchStart.current)>48)setIndex(end>touchStart.current?0:1);touchStart.current=null;};
-  return{index,setIndex,setPaused,onTouchStart,onTouchEnd};
-}
-
-function Dots({index,setIndex,accent,label}:{index:number;setIndex:(value:number)=>void;accent:string;label:string}){
-  return <div className="story-dots" aria-label={`${label} stories`}><button type="button" aria-label={`Show ${label} story 1`} className={`story-dot ${index===0?'active':''}`} style={index===0?{background:accent}:undefined} onClick={()=>setIndex(0)}/><button type="button" aria-label={`Show ${label} story 2`} className={`story-dot ${index===1?'active':''}`} style={index===1?{background:accent}:undefined} onClick={()=>setIndex(1)}/></div>;
-}
-
-const COMMUNITY_MEMBERS=[
-  {name:'Anjali',condition:'Living with diabetes',quote:'Small changes feel easier when I can learn what helped someone else.',image:'https://images.unsplash.com/photo-1769164912985-bf66b9e777f2?auto=format&fit=crop&w=900&q=82'},
-  {name:'Meera',condition:'Thyroid support',quote:'It helps to hear how others manage the everyday part of the journey.',image:'https://images.unsplash.com/photo-1672343567026-d1b5abb6f7f9?auto=format&fit=crop&w=900&q=82'},
-  {name:'Ramesh',condition:'Heart health',quote:'I can prepare better questions before my next follow-up.',image:'https://images.unsplash.com/photo-1766716946030-5869da2a0ead?auto=format&fit=crop&w=900&q=82'},
-  {name:'Vikram',condition:'Caregiver support',quote:'Knowing other families face similar challenges makes a difference.',image:'https://images.unsplash.com/photo-1767883169409-c4dc3f88de28?auto=format&fit=crop&w=900&q=82'},
+const DOCTOR_FEATURES=[
+  {title:'My Patients',copy:'Keep patient relationships, shared context and returning-care history easier to reach.',icon:'patients',wash:'#E8F2FF',accent:'#2563EB'},
+  {title:'Schedule & Availability',copy:'Manage availability and booked appointments around the same daily practice flow.',icon:'calendar',wash:'#E9F8F4',accent:'#0B8F7C'},
+  {title:'Consultation Context',copy:'Review supported patient-shared health information before the conversation begins.',icon:'context',wash:'#F2EAFE',accent:'#7C3AED'},
+  {title:'Follow-up Continuity',copy:'Keep the next care step visible after the consultation instead of losing continuity.',icon:'followup',wash:'#FFF1E8',accent:'#EA580C'},
+  {title:'Professional Presence',copy:'Keep doctor profile, consultation modes and practice information connected to discovery.',icon:'profile',wash:'#EAF4FF',accent:'#1D4ED8'},
+  {title:'Better Patient Journey',copy:'Patients move from discovery to consultation and follow-up with less disconnected context.',icon:'heart',wash:'#EAF8EE',accent:'#15803D'},
 ] as const;
+
+function DoctorIcon({kind,size=22}:{kind:string;size?:number}){
+  const common={width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.9,strokeLinecap:'round' as const,strokeLinejoin:'round' as const,'aria-hidden':true};
+  if(kind==='patients') return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>;
+  if(kind==='calendar') return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h3M13 14h3"/></svg>;
+  if(kind==='context') return <svg {...common}><path d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>;
+  if(kind==='followup') return <svg {...common}><path d="M20 7v5h-5"/><path d="M18.5 15a7 7 0 1 1 .5-7.7L20 12"/></svg>;
+  if(kind==='profile') return <svg {...common}><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M18 4h3M19.5 2.5v3"/></svg>;
+  if(kind==='heart') return <svg {...common}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/><path d="M7 12h2l1.3-3 2.2 6 1.4-3H17"/></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="9"/></svg>;
+}
 
 export default function CommunityBenefits(){
   const router=useRouter();
   const {isAuthenticated,user}=useAuthStore();
   const {openAuthModal}=useUIStore();
-  const community=useAutoCarousel(7400);
-  const doctor=useAutoCarousel(7600);
 
   const openDoctor=()=>{
-    if(isAuthenticated&&user){const role=String(user.role||'').toUpperCase();router.push(role==='DOCTOR'?'/doctor-dashboard':role==='PATIENT'?'/dashboard':role==='HOSPITAL'?'/hospital-dashboard':'/admin-dashboard');return;}
+    if(isAuthenticated&&user){
+      const role=String(user.role||'').toUpperCase();
+      router.push(role==='DOCTOR'?'/doctor-dashboard':role==='PATIENT'?'/dashboard':role==='HOSPITAL'?'/hospital-dashboard':'/admin-dashboard');
+      return;
+    }
     try{sessionStorage.setItem('hc_signup_role','DOCTOR')}catch{}
     openAuthModal('register');
   };
 
-  return <section className="product-stories">
+  return <section className="doctor-platform-section" id="doctor-platform-story" aria-labelledby="doctor-platform-title">
     <style>{`
-      .product-stories{font-family:'DM Sans',Arial,sans-serif;color:#10243C;background:#fff}.product-story{padding:0 28px 88px}.product-shell{max-width:1380px;margin:0 auto}.product-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(350px,.58fr);gap:48px;align-items:end;margin-bottom:26px}.product-label{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;margin-bottom:9px}.product-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.45rem,3.25vw,3.6rem);line-height:1.04;letter-spacing:-.05em;color:#0B2B45;margin:0}.product-head p{font-size:17px;line-height:1.62;color:#35566A;margin:0 0 4px}
-      .story-carousel{position:relative;overflow:hidden;border-radius:30px;box-shadow:0 22px 54px rgba(25,61,80,.09)}.story-slide{position:relative;aspect-ratio:16/9;min-height:590px;overflow:hidden}.story-copy{position:absolute;z-index:5;left:52px;top:44px;max-width:700px}.story-copy .eyebrow{font-size:12.5px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;margin-bottom:9px}.story-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.2rem,2.8vw,3.15rem);line-height:1.04;letter-spacing:-.045em;color:#0B2B45;margin:0}.story-copy p{font-size:15.5px;line-height:1.58;color:#354E61;margin:12px 0 0;max-width:650px}.story-dots{position:absolute;z-index:9;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:8px}.story-dot{width:10px;height:10px;border:0;border-radius:999px;background:#C4CDD3;padding:0;cursor:pointer}.story-dot.active{width:30px}.fade-in{animation:storyFade .35s ease both}@keyframes storyFade{from{opacity:.2;transform:translateY(3px)}to{opacity:1;transform:none}}
-      .community-carousel{border:1px solid #DCCEF2;background:#F5F0FF}.community-slide{background:linear-gradient(125deg,#F2EAFF 0%,#FBF9FF 48%,#EEE3FF 100%)}.community-slide .eyebrow{color:#7C3AED}.community-slide:before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;right:-180px;top:-290px;background:radial-gradient(circle,rgba(139,92,246,.24),rgba(139,92,246,0) 68%)}
-      .member-stage{position:absolute;left:4.5%;right:4.5%;bottom:8%;height:58%;border-radius:24px;background:linear-gradient(135deg,#2E1745 0%,#55307A 45%,#8A5BE0 100%);box-shadow:0 20px 42px rgba(79,45,118,.2);overflow:hidden}.member-stage:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 52%,rgba(255,255,255,.2),transparent 37%)}.community-hub{position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);width:150px;height:150px;border-radius:50%;display:grid;place-items:center;text-align:center;background:#fff;color:#6D28D9;box-shadow:0 16px 34px rgba(22,8,41,.28);font:900 14px 'Sora',sans-serif;line-height:1.15}.community-hub span{display:block;margin-top:6px;font:700 10px 'DM Sans',sans-serif;color:#6C5D77}.member-card{position:absolute;z-index:4;width:245px;height:118px;border-radius:17px;overflow:hidden;background:#fff;box-shadow:0 13px 28px rgba(29,11,52,.2);display:grid;grid-template-columns:94px 1fr}.member-card.one{left:3%;top:8%}.member-card.two{right:3%;top:8%}.member-card.three{left:3%;bottom:8%}.member-card.four{right:3%;bottom:8%}.member-photo{background-size:cover;background-position:center}.member-info{padding:11px 10px}.member-info b{font-size:12px;color:#2A1838}.member-info strong{display:block;font-size:10.8px;color:#7C3AED;margin-top:2px}.member-info p{font-size:10.6px;line-height:1.35;color:#4D3F57;margin:6px 0 0}.member-line{position:absolute;z-index:2;background:rgba(255,255,255,.43);height:1px;transform-origin:left center}.member-line.a{left:23%;top:28%;width:27%;transform:rotate(12deg)}.member-line.b{left:50%;top:28%;width:27%;transform:rotate(-12deg)}.member-line.c{left:23%;top:72%;width:27%;transform:rotate(-12deg)}.member-line.d{left:50%;top:72%;width:27%;transform:rotate(12deg)}
-      .community-journey{position:absolute;left:4.5%;right:4.5%;bottom:8%;height:58%;border-radius:24px;background:linear-gradient(135deg,#4C2670,#6D3CA0 48%,#9A73D0);box-shadow:0 20px 42px rgba(79,45,118,.18);overflow:hidden}.community-journey:before{content:'';position:absolute;left:8%;right:8%;top:53%;height:2px;background:rgba(255,255,255,.42)}.community-step-row{position:absolute;left:6%;right:6%;top:39%;display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.community-step{text-align:center;color:#fff}.community-step i{width:62px;height:62px;border-radius:18px;background:#fff;display:grid;place-items:center;margin:0 auto 9px;color:#7C3AED;font-style:normal;font-size:23px;box-shadow:0 9px 20px rgba(0,0,0,.14)}.community-step b{display:block;font-size:12px}.community-step span{display:block;margin-top:4px;font-size:10.8px;line-height:1.32;color:#E8DCF6}.community-message{position:absolute;left:5%;top:8%;max-width:330px;padding:13px 15px;border-radius:14px;background:rgba(255,255,255,.95);color:#3F2B4E}.community-message b{display:block;font-size:12.5px;color:#6D28D9}.community-message span{display:block;margin-top:4px;font-size:11.3px;line-height:1.42}.community-safety{position:absolute;right:5%;top:8%;max-width:350px;padding:13px 15px;border-radius:14px;background:rgba(255,255,255,.94);color:#3F2B4E}.community-safety b{display:block;font-size:12.5px;color:#6D28D9}.community-safety span{display:block;margin-top:4px;font-size:11.3px;line-height:1.42}.community-cta{display:inline-flex;margin-top:18px;border-radius:10px;background:#7C3AED;color:#fff;padding:12px 18px;font-size:13.5px;font-weight:900;text-decoration:none}
-      .doctor-carousel{border:1px solid #CBDDED;background:#EEF6FD}.doctor-slide{background:linear-gradient(120deg,#EDF6FF 0%,#F9FBFE 50%,#E8F3FA 100%)}.doctor-slide .eyebrow{color:#2563EB}.doctor-slide.photo{background:#ECF4FB url('/images/doctors-intro.png') 88% center/52% auto no-repeat}.doctor-slide.photo:after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,#EDF6FF 0%,#EDF6FF 35%,rgba(237,246,255,.83) 44%,rgba(237,246,255,.18) 59%,rgba(237,246,255,0) 74%)}.doctor-slide.photo .story-copy{max-width:590px}.doctor-benefits{position:absolute;z-index:6;left:52px;bottom:78px;width:45%;display:grid;grid-template-columns:1fr 1fr;gap:10px}.doctor-benefit{padding:14px;border-radius:14px;background:rgba(255,255,255,.9);border:1px solid #C8D9EA;box-shadow:0 8px 18px rgba(40,77,112,.06)}.doctor-benefit b{display:block;font-size:13px;color:#16354A}.doctor-benefit span{display:block;font-size:11.8px;line-height:1.4;color:#526B7B;margin-top:4px}.doctor-cta{position:absolute;z-index:7;right:48px;bottom:72px;border:0;border-radius:10px;background:#2563EB;color:#fff;padding:12px 17px;font:900 13.5px 'DM Sans',Arial,sans-serif;cursor:pointer}
-      .doctor-journey{position:absolute;left:4.5%;right:4.5%;bottom:8%;height:58%;border-radius:24px;background:linear-gradient(135deg,#163A64,#21518C 50%,#4A7FC1);box-shadow:0 20px 42px rgba(30,77,126,.18);overflow:hidden}.doctor-stage-row{position:absolute;left:5%;right:5%;top:21%;bottom:13%;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.doctor-stage{border-radius:20px;background:rgba(255,255,255,.95);padding:20px;box-shadow:0 12px 28px rgba(12,45,82,.18);display:flex;flex-direction:column}.doctor-stage i{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:#E4EDFF;color:#2563EB;font-style:normal;font-size:22px;margin-bottom:15px}.doctor-stage b{font-family:'Sora','DM Sans',sans-serif;font-size:17px;color:#15364D}.doctor-stage p{font-size:12.5px;line-height:1.45;color:#506A7A;margin:8px 0 12px}.doctor-stage ul{padding:0;margin:auto 0 0;list-style:none}.doctor-stage li{font-size:11.5px;line-height:1.4;color:#314F61;padding:5px 0;border-top:1px solid #E6EDF3}.doctor-stage li:before{content:'✓';color:#0B8F7C;font-weight:900;margin-right:7px}.doctor-stage:nth-child(2){transform:translateY(-14px)}
-      @media(max-width:1080px){.product-head{grid-template-columns:1fr;gap:12px}.story-slide{aspect-ratio:auto;min-height:760px}.member-stage,.community-journey,.doctor-journey{top:220px;bottom:60px;height:auto}.doctor-slide.photo{background-size:auto 50%;background-position:center bottom}.doctor-slide.photo:after{background:linear-gradient(180deg,#EDF6FF 0%,#EDF6FF 44%,rgba(237,246,255,.35) 69%,transparent 100%)}.doctor-benefits{left:52px;top:205px;bottom:auto;width:calc(100% - 104px)}.doctor-cta{right:auto;left:52px;bottom:62px}}
-      @media(max-width:720px){.product-story{padding:0 14px 70px}.product-head h2{font-size:2.5rem}.story-slide{min-height:920px}.story-copy{left:22px;right:22px;top:28px}.story-copy h3{font-size:2.25rem}.member-stage,.community-journey,.doctor-journey{left:18px;right:18px;top:245px;bottom:58px}.community-hub{width:110px;height:110px;font-size:11px}.member-card{width:44%;height:130px;grid-template-columns:70px 1fr}.member-card.one,.member-card.three{left:3%}.member-card.two,.member-card.four{right:3%}.member-photo{background-position:center}.member-info{padding:8px}.member-info p{font-size:10px}.community-step-row{top:190px;bottom:20px;grid-template-columns:1fr}.community-journey:before{display:none}.community-step{display:flex;align-items:center;text-align:left;gap:12px;padding-left:14%}.community-step i{width:46px;height:46px;margin:0}.community-message,.community-safety{left:18px;right:18px;max-width:none}.community-safety{top:96px}.doctor-slide.photo{background-size:auto 42%}.doctor-benefits{left:22px;width:calc(100% - 44px);top:205px;grid-template-columns:1fr}.doctor-cta{left:22px;bottom:62px}.doctor-stage-row{top:24px;bottom:24px;grid-template-columns:1fr}.doctor-stage{padding:15px}.doctor-stage:nth-child(2){transform:none}}
+      .doctor-platform-section{font-family:'DM Sans',Arial,sans-serif;color:#10243C;background:#fff;padding:0 28px 88px;scroll-margin-top:92px}
+      .doctor-platform-shell{max-width:1664px;margin:0 auto}
+      .doctor-platform-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(390px,.72fr);gap:58px;align-items:end;margin-bottom:28px}
+      .doctor-platform-label{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#2563EB;margin-bottom:10px}
+      .doctor-platform-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.65rem,3.65vw,4.15rem);line-height:1.02;letter-spacing:-.052em;color:#0B2B45;margin:0}
+      .doctor-platform-head p{font-size:18px;line-height:1.58;color:#35566A;margin:0 0 4px}
+
+      .doctor-platform-canvas{position:relative;min-height:650px;overflow:hidden;border-radius:30px;border:1px solid #C9DDEC;background:linear-gradient(120deg,#EEF6FF 0%,#F7FBFF 42%,#E7F2FA 100%);box-shadow:0 20px 48px rgba(31,75,112,.09)}
+      .doctor-platform-photo{position:absolute;right:0;top:0;width:55%;height:100%;object-fit:cover;object-position:center center;display:block}
+      .doctor-platform-photo-shade{position:absolute;z-index:1;inset:0;background:linear-gradient(90deg,#EEF6FF 0%,#EEF6FF 40%,rgba(238,246,255,.91) 47%,rgba(238,246,255,.34) 58%,rgba(238,246,255,.05) 70%,rgba(238,246,255,0) 83%);pointer-events:none}
+      .doctor-platform-copy{position:relative;z-index:3;width:48%;padding:48px 0 42px 52px;box-sizing:border-box}
+      .doctor-platform-eyebrow{font-size:13px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#2563EB;margin-bottom:10px}
+      .doctor-platform-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,2.65vw,3.15rem);line-height:1.05;letter-spacing:-.045em;color:#0B2B45;margin:0;max-width:660px}
+      .doctor-platform-intro{font-size:15.5px;line-height:1.58;color:#35566A;margin:14px 0 19px;max-width:650px}
+      .doctor-platform-rule{width:48px;height:4px;border-radius:999px;background:#2563EB;margin-bottom:18px}
+
+      .doctor-feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:690px}
+      .doctor-feature{min-height:130px;padding:15px 15px 14px;border-radius:17px;border:1px solid rgba(192,213,229,.88);box-shadow:0 8px 21px rgba(40,77,112,.055);background:#fff}
+      .doctor-feature-top{display:flex;align-items:center;gap:10px}
+      .doctor-feature-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
+      .doctor-feature b{font-family:'Sora','DM Sans',sans-serif;font-size:13.3px;line-height:1.25;color:#16354A}
+      .doctor-feature p{font-size:11.8px;line-height:1.45;color:#526B7B;margin:8px 0 0}
+
+      .doctor-value-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;max-width:690px}
+      .doctor-value{border-radius:15px;padding:12px 14px;background:rgba(255,255,255,.92);border:1px solid #CDDEEA}
+      .doctor-value strong{display:block;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#2563EB;margin-bottom:4px}
+      .doctor-value span{display:block;font-size:11.5px;line-height:1.42;color:#486275}
+      .doctor-platform-cta{margin-top:15px;border:0;border-radius:10px;background:#2563EB;color:#fff;padding:12px 18px;font:900 13.5px 'DM Sans',Arial,sans-serif;cursor:pointer;box-shadow:0 8px 18px rgba(37,99,235,.18)}
+      .doctor-platform-cta:hover{background:#1D4ED8;transform:translateY(-1px)}
+
+      .doctor-flow-card{position:absolute;z-index:4;right:2.8%;bottom:4.8%;width:43%;border-radius:19px;padding:15px 16px;background:rgba(255,255,255,.94);border:1px solid rgba(205,222,234,.9);box-shadow:0 13px 30px rgba(25,61,80,.12);backdrop-filter:blur(7px)}
+      .doctor-flow-card>strong{display:block;font-family:'Sora','DM Sans',sans-serif;font-size:13px;color:#15364D;margin-bottom:10px}
+      .doctor-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:8px}
+      .doctor-flow-step{min-width:0}
+      .doctor-flow-step b{display:block;font-size:11.5px;color:#2563EB}
+      .doctor-flow-step span{display:block;margin-top:3px;font-size:10.3px;line-height:1.35;color:#5A7180}
+      .doctor-flow-arrow{color:#7A9AB0;font-weight:900;font-size:17px}
+
+      @media(max-width:1180px){
+        .doctor-platform-head{grid-template-columns:1fr;gap:12px}.doctor-platform-head p{max-width:820px}
+        .doctor-platform-canvas{min-height:780px}.doctor-platform-photo{width:100%;height:48%;top:auto;bottom:0;object-position:center 42%}
+        .doctor-platform-photo-shade{background:linear-gradient(180deg,#EEF6FF 0%,#EEF6FF 49%,rgba(238,246,255,.6) 58%,rgba(238,246,255,.08) 72%,transparent 100%)}
+        .doctor-platform-copy{width:100%;padding:42px 48px 0}.doctor-feature-grid,.doctor-value-row{max-width:780px}
+        .doctor-flow-card{right:4%;bottom:3.5%;width:55%}
+      }
+      @media(max-width:760px){
+        .doctor-platform-section{padding:0 14px 70px}.doctor-platform-head h2{font-size:2.55rem}.doctor-platform-head p{font-size:16px}
+        .doctor-platform-canvas{min-height:1080px;border-radius:24px}.doctor-platform-copy{padding:30px 22px 0}.doctor-platform-copy h3{font-size:2.2rem}.doctor-platform-intro{font-size:14px}
+        .doctor-feature-grid,.doctor-value-row{grid-template-columns:1fr}.doctor-feature{min-height:0}.doctor-platform-photo{height:34%;object-position:center}
+        .doctor-platform-photo-shade{background:linear-gradient(180deg,#EEF6FF 0%,#EEF6FF 62%,rgba(238,246,255,.52) 72%,transparent 100%)}
+        .doctor-flow-card{left:18px;right:18px;width:auto;bottom:18px}.doctor-flow{grid-template-columns:1fr}.doctor-flow-arrow{display:none}.doctor-flow-step{padding:5px 0;border-top:1px solid #E2EAF0}.doctor-flow-step:first-of-type{border-top:0}
+      }
+      @media(max-width:460px){.doctor-platform-head h2{font-size:2.2rem}.doctor-platform-canvas{min-height:1190px}.doctor-platform-copy h3{font-size:1.95rem}.doctor-platform-photo{height:31%}}
     `}</style>
 
-    <section className="product-story" id="health-communities-story"><div className="product-shell"><div className="product-head"><div><div className="product-label" style={{color:'#7C3AED'}}>Health Communities</div><h2>You are not alone between appointments.</h2></div><p>Condition-focused communities add real human support around the care journey — shared experience, practical questions and safer participation alongside professional care.</p></div><div className="story-carousel community-carousel" onMouseEnter={()=>community.setPaused(true)} onMouseLeave={()=>community.setPaused(false)} onFocusCapture={()=>community.setPaused(true)} onBlurCapture={()=>community.setPaused(false)} onTouchStart={community.onTouchStart} onTouchEnd={community.onTouchEnd}>{community.index===0?<div className="story-slide community-slide fade-in"><div className="story-copy"><div className="eyebrow">People who understand</div><h3>Talk to people living through something similar.</h3><p>Health Communities are designed for support between visits — not diagnosis. See the people, conditions and everyday experiences behind the conversation.</p></div><div className="member-stage"><span className="member-line a"/><span className="member-line b"/><span className="member-line c"/><span className="member-line d"/><div className="community-hub"><div>HEALTH<br/>COMMUNITIES<span>Peer support between visits</span></div></div>{COMMUNITY_MEMBERS.map((member,index)=><article key={member.name} className={`member-card ${['one','two','three','four'][index]}`}><div className="member-photo" style={{backgroundImage:`url('${member.image}')`}}/><div className="member-info"><b>{member.name}</b><strong>{member.condition}</strong><p>{member.quote}</p></div></article>)}</div></div>:<div className="story-slide community-slide fade-in"><div className="story-copy"><div className="eyebrow">How a Health Community helps</div><h3>Ask, learn, connect — then take better questions back to care.</h3><p>The community journey is simple: find a relevant space, ask practical questions, learn from lived experience and stay supported while professional care remains central.</p></div><div className="community-journey"><div className="community-message"><b>Start with your health journey</b><span>Choose a condition-focused space that is relevant to you rather than a generic social feed.</span></div><div className="community-safety"><b>Safer participation</b><span>Reporting, moderation and privacy-aware controls support constructive conversation.</span></div><div className="community-step-row"><div className="community-step"><i>⌕</i><div><b>Find your space</b><span>Diabetes, heart health, thyroid, caregiving and more</span></div></div><div className="community-step"><i>?</i><div><b>Ask</b><span>Practical everyday questions</span></div></div><div className="community-step"><i>◎</i><div><b>Share</b><span>Lived experience, not diagnosis</span></div></div><div className="community-step"><i>♥</i><div><b>Stay supported</b><span>Connection between appointments</span></div></div><div className="community-step"><i>↗</i><div><b>Return to care</b><span>Bring better questions to your next visit</span></div></div></div></div></div>}<Dots index={community.index} setIndex={community.setIndex} accent="#7C3AED" label="Health Community"/></div><Link href="/communities" className="community-cta">Explore Health Communities →</Link></div></section>
+    <div className="doctor-platform-shell">
+      <div className="doctor-platform-head">
+        <div><div className="doctor-platform-label">Doctor Platform</div><h2 id="doctor-platform-title">A clearer practice journey for doctors.</h2></div>
+        <p>HealthConnect helps doctors manage patients, availability, appointments, consultation context and follow-up without turning each task into a separate tool.</p>
+      </div>
 
-    <section className="product-story" id="doctor-platform-story"><div className="product-shell"><div className="product-head"><div><div className="product-label" style={{color:'#2563EB'}}>Doctor Platform</div><h2>A clearer practice journey for doctors.</h2></div><p>HealthConnect helps doctors manage patients, availability, appointments, consultation context and follow-up without turning each task into a separate tool.</p></div><div className="story-carousel doctor-carousel" onMouseEnter={()=>doctor.setPaused(true)} onMouseLeave={()=>doctor.setPaused(false)} onFocusCapture={()=>doctor.setPaused(true)} onBlurCapture={()=>doctor.setPaused(false)} onTouchStart={doctor.onTouchStart} onTouchEnd={doctor.onTouchEnd}>{doctor.index===0?<div className="story-slide doctor-slide photo fade-in"><div className="story-copy"><div className="eyebrow">Practice & patients</div><h3>Manage the day around patients, not disconnected screens.</h3><p>Keep patient relationships, availability, appointments and professional presence connected to the same practice journey.</p></div><div className="doctor-benefits"><div className="doctor-benefit"><b>Know who you are seeing</b><span>My Patients keeps patient relationships and shared context easier to reach.</span></div><div className="doctor-benefit"><b>Keep the schedule visible</b><span>Availability, booked appointments and follow-up stay connected.</span></div><div className="doctor-benefit"><b>Prepare before consultation</b><span>Review supported patient-shared information before the conversation begins.</span></div><div className="doctor-benefit"><b>Continue after the visit</b><span>Follow-up remains part of the same workflow instead of disappearing afterwards.</span></div></div><button type="button" className="doctor-cta" onClick={openDoctor}>Explore Doctor Platform →</button></div>:<div className="story-slide doctor-slide fade-in"><div className="story-copy"><div className="eyebrow">From booking to continuity</div><h3>One workflow before, during and after consultation.</h3><p>The Doctor Platform is built around the care journey: prepare with context, manage the consultation and keep the next step visible afterwards.</p></div><div className="doctor-journey"><div className="doctor-stage-row"><article className="doctor-stage"><i>◷</i><b>Before consultation</b><p>Know what is coming and prepare with the right context.</p><ul><li>Appointments & availability</li><li>My Patients</li><li>Patient-shared health context</li></ul></article><article className="doctor-stage"><i>✚</i><b>During care</b><p>Keep the consultation focused without switching across disconnected tools.</p><ul><li>Consultation workflow</li><li>Patient context visible</li><li>Professional profile & fee context</li></ul></article><article className="doctor-stage"><i>↻</i><b>After consultation</b><p>Make continuity visible instead of treating the appointment as the end.</p><ul><li>Follow-up actions</li><li>Returning patient continuity</li><li>Next care step remains visible</li></ul></article></div></div></div>}<Dots index={doctor.index} setIndex={doctor.setIndex} accent="#2563EB" label="Doctor Platform"/></div></div></section>
+      <div className="doctor-platform-canvas">
+        <img className="doctor-platform-photo" src="/images/doctors-intro.png" alt="Indian doctor in a modern clinic with a patient consultation in progress"/>
+        <div className="doctor-platform-photo-shade" aria-hidden="true"/>
+
+        <div className="doctor-platform-copy">
+          <div className="doctor-platform-eyebrow">Practice & Patients</div>
+          <h3>One connected workspace from appointment to follow-up.</h3>
+          <p className="doctor-platform-intro">The Doctor Platform keeps the information and actions surrounding a consultation together, helping doctors spend less time moving between disconnected screens while patients experience a clearer care journey.</p>
+          <div className="doctor-platform-rule"/>
+
+          <div className="doctor-feature-grid">
+            {DOCTOR_FEATURES.map(feature=><article className="doctor-feature" key={feature.title} style={{background:feature.wash}}><div className="doctor-feature-top"><span className="doctor-feature-icon" style={{background:'#fff',color:feature.accent}}><DoctorIcon kind={feature.icon}/></span><b>{feature.title}</b></div><p>{feature.copy}</p></article>)}
+          </div>
+
+          <div className="doctor-value-row">
+            <div className="doctor-value"><strong>How it helps doctors</strong><span>Less fragmentation across patient context, schedule, consultation preparation and follow-up.</span></div>
+            <div className="doctor-value"><strong>How it helps patients</strong><span>A more continuous experience from finding care through the appointment and into the next step.</span></div>
+          </div>
+
+          <button type="button" className="doctor-platform-cta" onClick={openDoctor}>Explore Doctor Platform →</button>
+        </div>
+
+        <aside className="doctor-flow-card" aria-label="Doctor Platform care flow">
+          <strong>Built around the real care flow</strong>
+          <div className="doctor-flow">
+            <div className="doctor-flow-step"><b>Before consultation</b><span>Schedule, patient relationship and shared context.</span></div><span className="doctor-flow-arrow">→</span>
+            <div className="doctor-flow-step"><b>During care</b><span>Keep the consultation focused with context nearby.</span></div><span className="doctor-flow-arrow">→</span>
+            <div className="doctor-flow-step"><b>After consultation</b><span>Follow-up and the next care step stay visible.</span></div>
+          </div>
+        </aside>
+      </div>
+    </div>
   </section>;
 }
