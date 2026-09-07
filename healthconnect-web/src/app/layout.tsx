@@ -35,9 +35,6 @@ export const metadata: Metadata = {
     'telemedicine',
     'patient health platform',
   ],
-  alternates: {
-    canonical: '/',
-  },
   openGraph: {
     type: 'website',
     locale: 'en_IN',
