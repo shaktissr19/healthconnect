@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type SyntheticEvent } from 'react';
+import type { SyntheticEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import InfoPopover from '@/components/landing/InfoPopover';
 
 const NAV_ITEMS=[
   {label:'My Health',sub:'Track, organise and prepare',target:'my-health-story',accent:'#0B8F7C',wash:'#DDF5EE',icon:'heart'},
@@ -54,9 +55,6 @@ function Icon({kind,size=24}:{kind:string;size?:number}){
 
 export default function AudienceJourneys(){
   const router=useRouter();
-  const [scoreInfoPinned,setScoreInfoPinned]=useState(false);
-  const [scoreInfoHover,setScoreInfoHover]=useState(false);
-  const showScoreInfo=scoreInfoPinned||scoreInfoHover;
   const goto=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
   const hideBrokenImage=(event:SyntheticEvent<HTMLImageElement>)=>{event.currentTarget.style.display='none';};
 
@@ -76,7 +74,7 @@ export default function AudienceJourneys(){
       .mh-shell{width:min(100%,1664px);margin:0 auto}
       .mh-head{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(350px,.7fr);gap:56px;align-items:end;margin-bottom:28px;padding:0 10px}
       .mh-kicker{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0B8F7C;margin-bottom:10px}
-      .mh-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.7rem,4vw,4.6rem);line-height:1.02;letter-spacing:-.055em;color:#0B2B45;margin:0}
+      .mh-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.4rem,3.55vw,4.05rem);line-height:1.02;letter-spacing:-.055em;color:#0B2B45;margin:0}
       .mh-head p{font-size:18px;line-height:1.56;color:#23475E;margin:0 0 5px}
 
       .mh-canvas{position:relative;aspect-ratio:1664/936;overflow:hidden;border-radius:28px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 42%,#DCEFF1 100%);box-shadow:0 20px 48px rgba(24,69,82,.08)}
@@ -98,12 +96,6 @@ export default function AudienceJourneys(){
       .mh-score{position:absolute;z-index:8;left:44.3%;top:3.4%;width:14.6%;min-width:190px;padding:15px 16px 14px;border-radius:18px;background:rgba(255,255,255,.95);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.12);backdrop-filter:blur(8px);transition:transform .18s ease,box-shadow .18s ease}
       .mh-score:hover{transform:translateY(-3px);box-shadow:0 20px 42px rgba(42,72,82,.16)}
       .mh-score-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:900;color:#15364D}
-      .mh-info-wrap{position:relative;display:inline-flex}
-      .mh-info{width:22px;height:22px;border:1.5px solid #466378;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900;background:#fff;color:#23475E;cursor:pointer;padding:0;transition:background .16s ease,color .16s ease,border-color .16s ease}
-      .mh-info:hover,.mh-info:focus-visible,.mh-info[aria-expanded='true']{background:#0B948B;color:#fff;border-color:#0B948B;outline:none}
-      .mh-score-popover{position:absolute;right:-8px;top:30px;width:286px;padding:14px 15px;border-radius:14px;background:#0B2B45;color:#fff;box-shadow:0 18px 42px rgba(11,43,69,.24);font-size:12px;font-weight:500;line-height:1.48;z-index:30}
-      .mh-score-popover:before{content:'';position:absolute;right:12px;top:-6px;width:12px;height:12px;background:#0B2B45;transform:rotate(45deg)}
-      .mh-score-popover b{display:block;margin-bottom:5px;font-size:12.5px;color:#D9FFFA}
       .mh-gauge{position:relative;height:96px;margin:6px 0 2px;display:grid;place-items:center}
       .mh-gauge svg{position:absolute;width:118px;height:74px;top:13px}
       .mh-score-num{position:relative;margin-top:10px;text-align:center;font-family:'Sora','DM Sans',sans-serif;font-size:36px;font-weight:800;color:#0B2B45;line-height:1}
@@ -153,8 +145,7 @@ export default function AudienceJourneys(){
         .mh-main-photo{position:relative;width:100%;height:360px;border-radius:20px;object-position:center 35%;transform:none}
         .mh-left,.mh-score,.mh-steps,.mh-consult,.mh-community-card,.mh-bottom{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:auto;height:auto;min-width:0}
         .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
-        .mh-score{margin:18px 0}.mh-score-popover{right:0;left:auto;width:min(286px,80vw)}
-        .mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
+        .mh-score{margin:18px 0}.mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
         .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-consult-copy,.mh-community-copy{padding:24px 20px 62px}.mh-community-copy{width:48%}.mh-community-photo{object-position:center center;transform:scale(.92);transform-origin:right center}
         .mh-consult>.mh-action{left:calc(58% + 20px);bottom:20px}.mh-community-card>.mh-action{left:20px;bottom:20px}
         .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
@@ -198,7 +189,7 @@ export default function AudienceJourneys(){
           </div>
 
           <aside className="mh-score" aria-label="Illustrative Health Score preview">
-            <div className="mh-score-head"><span>Your Health Score</span><span className="mh-info-wrap" onMouseEnter={()=>setScoreInfoHover(true)} onMouseLeave={()=>setScoreInfoHover(false)}><button type="button" className="mh-info" aria-label="About Health Score" aria-expanded={showScoreInfo} aria-controls="mh-score-info" onClick={()=>setScoreInfoPinned(value=>!value)} onFocus={()=>setScoreInfoHover(true)} onBlur={()=>setScoreInfoHover(false)} onKeyDown={event=>{if(event.key==='Escape'){setScoreInfoPinned(false);setScoreInfoHover(false);}}}>i</button>{showScoreInfo&&<span className="mh-score-popover" id="mh-score-info" role="tooltip"><b>How Health Score works</b>The 84 shown here is an illustrative landing-page example. In My Health, your score uses the health information available in your profile across measurable areas such as physical health, wellbeing and lifestyle. It is not a diagnosis, and assessment completion is shown separately from the score.</span>}</span></div>
+            <div className="mh-score-head"><span>Your Health Score</span><InfoPopover ariaLabel="About Health Score" title="How Health Score works" width={230}>The 84 shown here is an illustrative landing-page example. In My Health, your score uses health information available in your profile across measurable areas such as physical health, wellbeing and lifestyle. It is not a diagnosis, and assessment completion is shown separately from the score.</InfoPopover></div>
             <div className="mh-gauge">
               <svg viewBox="0 0 120 70" aria-hidden="true"><path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#D7E3E5" strokeWidth="10" strokeLinecap="round"/><path d="M12 60 A48 48 0 0 1 96 28" fill="none" stroke="#14B8A6" strokeWidth="10" strokeLinecap="round"/></svg>
               <div className="mh-score-num">84<small>Good</small></div>
