@@ -11,6 +11,35 @@ permissions:
   contents: read
 
 jobs:
+  api-lock-refresh:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: healthconnect-api/package-lock.json
+      - name: Refresh API lockfile from package policy
+        working-directory: healthconnect-api
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit refreshed lockfile when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- healthconnect-api/package-lock.json; then
+            echo "API lockfile is already consistent."
+            exit 0
+          fi
+          git config user.name "healthconnect-ci"
+          git config user.email "healthconnect-ci@users.noreply.github.com"
+          git add healthconnect-api/package-lock.json
+          git commit -m "Refresh API lockfile for patched qs"
+          git push origin HEAD:main
+
   api-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
