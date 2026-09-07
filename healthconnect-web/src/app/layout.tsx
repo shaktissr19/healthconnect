@@ -7,18 +7,68 @@ import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import AuthTransportBootstrap from '@/components/AuthTransportBootstrap';
 import GlobalRoleBridge from '@/components/GlobalRoleBridge';
 
+const SITE_URL = 'https://healthconnect.sbs';
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: '#ffffff',
+  themeColor: '#075B57',
 };
 
 export const metadata: Metadata = {
-  title: 'HealthConnect India — Unified Healthcare Platform',
-  description: "India's unified healthcare platform for patients, doctors, and hospitals.",
-  keywords: 'healthcare, doctors, hospitals, telemedicine, India, health records',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'HealthConnect India — Unified Healthcare Platform',
+    template: '%s | HealthConnect India',
+  },
+  description: "India's connected healthcare platform for patients, doctors, hospitals, health communities and everyday health information.",
+  applicationName: 'HealthConnect India',
+  keywords: [
+    'healthcare India',
+    'find doctors',
+    'find hospitals',
+    'health records',
+    'health communities',
+    'appointments',
+    'telemedicine',
+    'patient health platform',
+  ],
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_IN',
+    url: SITE_URL,
+    siteName: 'HealthConnect India',
+    title: 'HealthConnect India — Unified Healthcare Platform',
+    description: 'Find care, organise your health journey, connect with health communities and stay informed — all in one HealthConnect experience.',
+    images: [
+      {
+        url: '/images/hero-photo.png',
+        alt: 'HealthConnect India healthcare platform',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'HealthConnect India — Unified Healthcare Platform',
+    description: 'Connected healthcare for patients, doctors, hospitals and health communities in India.',
+    images: ['/images/hero-photo.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -33,19 +83,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en-IN">
       <body>
-        {/* Configures credential cookies + automatic access-token refresh. */}
         <AuthTransportBootstrap />
-
-        {/* Publishes the hydrated application role for shared role-aware UX. */}
         <GlobalRoleBridge />
-
-        {/* Session timeout — 10min warning, 15min auto-logout, all pages */}
         <SessionTimeoutManager />
-
         {children}
-
         <Toaster
           position="top-right"
           toastOptions={{
