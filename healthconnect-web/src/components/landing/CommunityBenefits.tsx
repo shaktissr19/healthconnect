@@ -45,7 +45,7 @@ export default function CommunityBenefits(){
       .doctor-platform-shell{max-width:1664px;margin:0 auto}
       .doctor-platform-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(390px,.72fr);gap:58px;align-items:end;margin-bottom:28px}
       .doctor-platform-label{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#2563EB;margin-bottom:10px}
-      .doctor-platform-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.65rem,3.65vw,4.15rem);line-height:1.02;letter-spacing:-.052em;color:#0B2B45;margin:0}
+      .doctor-platform-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.35rem,3.2vw,3.7rem);line-height:1.02;letter-spacing:-.052em;color:#0B2B45;margin:0}
       .doctor-platform-head p{font-size:18px;line-height:1.58;color:#35566A;margin:0 0 4px}
 
       .doctor-platform-canvas{position:relative;min-height:650px;overflow:hidden;border-radius:30px;border:1px solid #C9DDEC;background:linear-gradient(120deg,#EEF6FF 0%,#F7FBFF 42%,#E7F2FA 100%);box-shadow:0 20px 48px rgba(31,75,112,.09)}
@@ -58,7 +58,7 @@ export default function CommunityBenefits(){
       .doctor-platform-rule{width:48px;height:4px;border-radius:999px;background:#2563EB;margin-bottom:18px}
 
       .doctor-feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:690px}
-      .doctor-feature{min-height:130px;padding:15px 15px 14px;border-radius:17px;border:1px solid rgba(192,213,229,.88);box-shadow:0 8px 21px rgba(40,77,112,.055);background:#fff}
+      .doctor-feature{min-height:130px;padding:15px 15px 14px;border-radius:17px;border:1px solid rgba(192,213,229,.88);box-shadow:0 8px 21px rgba(40,77,112,.055);background:#fff;transition:transform .18s ease,box-shadow .18s ease}.doctor-feature:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(40,77,112,.09)}
       .doctor-feature-top{display:flex;align-items:center;gap:10px}
       .doctor-feature-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
       .doctor-feature b{font-family:'Sora','DM Sans',sans-serif;font-size:13.3px;line-height:1.25;color:#16354A}
@@ -69,7 +69,7 @@ export default function CommunityBenefits(){
       .doctor-value strong{display:block;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#2563EB;margin-bottom:4px}
       .doctor-value span{display:block;font-size:11.5px;line-height:1.42;color:#486275}
       .doctor-platform-cta{margin-top:15px;border:0;border-radius:10px;background:#2563EB;color:#fff;padding:12px 18px;font:900 13.5px 'DM Sans',Arial,sans-serif;cursor:pointer;box-shadow:0 8px 18px rgba(37,99,235,.18)}
-      .doctor-platform-cta:hover{background:#1D4ED8;transform:translateY(-1px)}
+      .doctor-platform-cta:hover{background:#1D4ED8;transform:translateY(-1px)}.doctor-platform-cta:focus-visible{outline:3px solid rgba(37,99,235,.25);outline-offset:3px}
 
       .doctor-flow-card{position:absolute;z-index:4;right:2.8%;bottom:4.8%;width:43%;border-radius:19px;padding:15px 16px;background:rgba(255,255,255,.94);border:1px solid rgba(205,222,234,.9);box-shadow:0 13px 30px rgba(25,61,80,.12);backdrop-filter:blur(7px)}
       .doctor-flow-card>strong{display:block;font-family:'Sora','DM Sans',sans-serif;font-size:13px;color:#15364D;margin-bottom:10px}
@@ -87,13 +87,13 @@ export default function CommunityBenefits(){
         .doctor-flow-card{right:4%;bottom:3.5%;width:55%}
       }
       @media(max-width:760px){
-        .doctor-platform-section{padding:0 14px 70px}.doctor-platform-head h2{font-size:2.55rem}.doctor-platform-head p{font-size:16px}
+        .doctor-platform-section{padding:0 14px 70px}.doctor-platform-head h2{font-size:2.45rem}.doctor-platform-head p{font-size:16px}
         .doctor-platform-canvas{min-height:1080px;border-radius:24px}.doctor-platform-copy{padding:30px 22px 0}.doctor-platform-copy h3{font-size:2.2rem}.doctor-platform-intro{font-size:14px}
         .doctor-feature-grid,.doctor-value-row{grid-template-columns:1fr}.doctor-feature{min-height:0}.doctor-platform-photo{height:34%;object-position:center}
         .doctor-platform-photo-shade{background:linear-gradient(180deg,#EEF6FF 0%,#EEF6FF 62%,rgba(238,246,255,.52) 72%,transparent 100%)}
         .doctor-flow-card{left:18px;right:18px;width:auto;bottom:18px}.doctor-flow{grid-template-columns:1fr}.doctor-flow-arrow{display:none}.doctor-flow-step{padding:5px 0;border-top:1px solid #E2EAF0}.doctor-flow-step:first-of-type{border-top:0}
       }
-      @media(max-width:460px){.doctor-platform-head h2{font-size:2.2rem}.doctor-platform-canvas{min-height:1190px}.doctor-platform-copy h3{font-size:1.95rem}.doctor-platform-photo{height:31%}}
+      @media(max-width:460px){.doctor-platform-head h2{font-size:2.1rem}.doctor-platform-canvas{min-height:1190px}.doctor-platform-copy h3{font-size:1.95rem}.doctor-platform-photo{height:31%}}
     `}</style>
 
     <div className="doctor-platform-shell">
@@ -103,7 +103,7 @@ export default function CommunityBenefits(){
       </div>
 
       <div className="doctor-platform-canvas">
-        <img className="doctor-platform-photo" src="/images/doctors-intro.png" alt="Indian doctor in a modern clinic with a patient consultation in progress"/>
+        <img className="doctor-platform-photo" src="/images/doctors-intro.png" alt="Indian doctor in a modern clinic with a patient consultation in progress" loading="lazy" decoding="async"/>
         <div className="doctor-platform-photo-shade" aria-hidden="true"/>
 
         <div className="doctor-platform-copy">
