@@ -1,5 +1,7 @@
 'use client';
 
+import type { CSSProperties } from 'react';
+
 const ITEMS = [
   {title:'Private health workspace',copy:'Personal health information stays behind authenticated access and role-aware permissions.',accent:'#2563EB',wash:'#EAF1FF',icon:'lock',tag:'PRIVATE ACCESS'},
   {title:'Sharing stays your choice',copy:'Supported sharing follows patient choice and the care workflow rather than public discovery.',accent:'#0B8F7C',wash:'#E5F7F1',icon:'share',tag:'YOUR CONTROL'},
@@ -12,7 +14,6 @@ function Icon({kind,size=30}:{kind:string;size?:number}){
   if(kind==='lock')return <svg {...base}><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>;
   if(kind==='share')return <svg {...base}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>;
   if(kind==='check')return <svg {...base}><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>;
-  if(kind==='user')return <svg {...base}><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>;
   if(kind==='eye')return <svg {...base}><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>;
   return <svg {...base}><path d="M12 3 19 6v5c0 4.8-2.9 8.4-7 10-4.1-1.6-7-5.2-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg>;
 }
@@ -45,7 +46,7 @@ export default function TrustSection(){
         </article>
 
         <div className="trust-grid">
-          {ITEMS.map(item=><article key={item.title} className="trust-card" style={{'--accent':item.accent,'--wash':item.wash} as React.CSSProperties}><div className="trust-card-top"><div className="trust-icon"><Icon kind={item.icon}/></div><div className="trust-tag">{item.tag}</div></div><h3>{item.title}</h3><p>{item.copy}</p><div className="trust-proof">Designed into the HealthConnect workflow</div></article>)}
+          {ITEMS.map(item=><article key={item.title} className="trust-card" style={{'--accent':item.accent,'--wash':item.wash} as CSSProperties}><div className="trust-card-top"><div className="trust-icon"><Icon kind={item.icon}/></div><div className="trust-tag">{item.tag}</div></div><h3>{item.title}</h3><p>{item.copy}</p><div className="trust-proof">Designed into the HealthConnect workflow</div></article>)}
         </div>
       </div>
 
