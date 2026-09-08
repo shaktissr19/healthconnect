@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes         from './auth.routes';
 import patientRoutes      from './patient.routes';
+import reportFileRoutes   from './reportFile.routes';
 import hospitalRoutes     from './hospital.routes';
 import appointmentRoutes  from './appointment.routes';
 import paymentRoutes      from './payment.routes';
@@ -25,6 +26,7 @@ import { communitySearchSchema } from '../validators/community.validator';
 const router = Router();
 
 router.use('/auth',         authRoutes);
+router.use('/',             reportFileRoutes);
 router.use('/',             patientRoutes);
 router.use('/hospitals',    hospitalRoutes);
 router.use('/appointments', appointmentRoutes);
