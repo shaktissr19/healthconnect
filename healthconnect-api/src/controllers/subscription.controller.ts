@@ -2,6 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { ApiResponse } from '../utils/apiResponse';
 import { BillingError } from '../services/razorpayBilling.service';
 import {
+  sendSubscriptionCancellationEmail,
+  sendSubscriptionVerifiedEmail,
+} from '../services/customerLifecycleEmail.service';
+import {
   cancelUserSubscription,
   changeUserPlan,
   getCurrentSubscriptionForUser,
@@ -73,6 +77,7 @@ export const verifyCheckout = async (req: Request, res: Response, next: NextFunc
       subscriptionId: String(req.body?.razorpay_subscription_id || req.body?.subscriptionId || ''),
       signature: String(req.body?.razorpay_signature || req.body?.signature || ''),
     });
+    sendSubscriptionVerifiedEmail(req.user!.userId, result).catch(() => undefined);
     return ApiResponse.success(res, result, 'Subscription payment verified');
   } catch (error) {
     return handleBillingError(error, res, next);
@@ -99,6 +104,7 @@ export const cancelSubscription = async (req: Request, res: Response, next: Next
       userId: req.user!.userId,
       atCycleEnd: req.body?.atCycleEnd !== false,
     });
+    sendSubscriptionCancellationEmail(req.user!.userId, result).catch(() => undefined);
     return ApiResponse.success(res, result, result.message);
   } catch (error) {
     return handleBillingError(error, res, next);
