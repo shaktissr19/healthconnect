@@ -21,6 +21,10 @@ export const assertProductionRuntimeReadiness = () => {
     if (!present(config.sms.templateId)) missing.push('MSG91_TEMPLATE_ID');
   }
 
+  if (!present(config.storage.reportEncryptionKey)) {
+    missing.push('REPORT_ENCRYPTION_KEY');
+  }
+
   // Payments are part of the customer launch contract. Production should not
   // start in a state where checkout can be displayed but the gateway is absent.
   if (!present(config.razorpay.keyId)) missing.push('RAZORPAY_KEY_ID');
