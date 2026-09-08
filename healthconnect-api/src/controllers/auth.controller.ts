@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as AuthService from '../services/auth.service';
+import * as PhoneOtpService from '../services/phoneOtp.service';
 import { ApiResponse } from '../utils/apiResponse';
 import { ApiError } from '../utils/apiError';
 import { verifyRefreshToken } from '../utils/jwt';
@@ -88,5 +89,33 @@ export const getCurrentUser = async (req: Request, res: Response, next: NextFunc
   try {
     const user = await AuthService.getCurrentUser(req.user!.userId);
     return ApiResponse.success(res, user);
+  } catch (e) { next(e); }
+};
+
+export const getPhoneVerificationStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const status = await PhoneOtpService.getPhoneVerificationStatus(req.user!.userId);
+    return ApiResponse.success(res, status);
+  } catch (e) { next(e); }
+};
+
+export const sendPhoneOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await PhoneOtpService.sendPhoneOtp(req.user!.userId);
+    return ApiResponse.success(res, result, 'OTP sent successfully');
+  } catch (e) { next(e); }
+};
+
+export const resendPhoneOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await PhoneOtpService.resendPhoneOtp(req.user!.userId);
+    return ApiResponse.success(res, result, 'OTP resent successfully');
+  } catch (e) { next(e); }
+};
+
+export const verifyPhoneOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await PhoneOtpService.verifyPhoneOtp(req.user!.userId, req.body.otp);
+    return ApiResponse.success(res, result, 'Phone number verified successfully');
   } catch (e) { next(e); }
 };
