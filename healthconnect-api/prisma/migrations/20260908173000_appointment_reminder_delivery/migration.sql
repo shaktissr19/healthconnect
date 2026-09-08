@@ -1,7 +1,9 @@
 -- HealthConnect India — idempotent appointment reminder delivery ledger
+-- Existing Prisma String identifiers are stored as PostgreSQL TEXT. Keep the
+-- appointment foreign-key column TEXT so it matches appointments.id exactly.
 CREATE TABLE IF NOT EXISTS "appointment_reminder_deliveries" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "appointmentId" UUID NOT NULL REFERENCES "appointments"("id") ON DELETE CASCADE,
+  "appointmentId" TEXT NOT NULL REFERENCES "appointments"("id") ON DELETE CASCADE,
   "reminderKey" VARCHAR(32) NOT NULL,
   "channel" VARCHAR(20) NOT NULL,
   "status" VARCHAR(20) NOT NULL DEFAULT 'PENDING',
