@@ -9,6 +9,7 @@ import DoctorProfileV2 from '@/components/doctor/DoctorProfileV2';
 import DoctorAvailabilityV2 from '@/components/doctor/DoctorAvailabilityV2';
 import DoctorAppointmentsV2 from '@/components/doctor/DoctorAppointmentsV2';
 import DoctorHospitalAffiliations from '@/components/doctor/DoctorHospitalAffiliations';
+import EmailVerificationBanner from '@/components/dashboard/EmailVerificationBanner';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
 const SIDEBAR_W      = 268;
@@ -99,6 +100,7 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
       <DoctorTopbar />
       <DoctorSidebar />
       <div style={{ marginLeft:sidebarW, paddingTop:TOPBAR_H, minHeight:'100vh', background:'#F5F4F0', overflowX:'hidden', transition:'margin-left 0.25s cubic-bezier(.4,0,.2,1)' }}>
+        <EmailVerificationBanner />
         <main style={{ padding:24 }}>
           {!isMembershipRoute && (activePage === 'home' || activePage === 'earnings') && (
             <div style={{ maxWidth:1180, margin:'0 auto 12px', display:'flex', justifyContent:'flex-end' }}>
