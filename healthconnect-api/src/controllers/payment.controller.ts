@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ApiResponse } from '../utils/apiResponse';
 import { BillingError } from '../services/razorpayBilling.service';
+import { sendAppointmentPaymentReceiptEmail } from '../services/customerLifecycleEmail.service';
 import {
   createAppointmentCheckout,
   getAppointmentReceipt,
@@ -45,6 +46,9 @@ export const verifyAppointmentPayment = async (req: Request, res: Response, next
       paymentId: String(req.body?.razorpay_payment_id || req.body?.paymentId || ''),
       signature: String(req.body?.razorpay_signature || req.body?.signature || ''),
     });
+    // Payment status is already server-verified before this point. Email is a
+    // secondary notification and never grants financial state by itself.
+    sendAppointmentPaymentReceiptEmail(req.user!.userId, result).catch(() => undefined);
     return ApiResponse.success(res, result, 'Appointment payment verified');
   } catch (error) {
     return handleBillingError(error, res, next);
