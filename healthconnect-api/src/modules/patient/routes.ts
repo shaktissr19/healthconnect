@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import multer from 'multer';
 import * as PatientController from './controller';
+import * as ReportFileController from './reportFile.controller';
 import * as TherapyController from './therapy.controller';
 import * as HealthScoreController from '../health-score/controller';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roleGuard';
+import { requireVerifiedAccount } from '../../middleware/verifiedAccount';
 import { validate } from '../../middleware/validate';
 import {
   allergySchema,
@@ -41,6 +43,7 @@ import {
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const patient = [authenticate, requireRole('PATIENT')];
+const verifiedContact = requireVerifiedAccount({ email: true, phone: true });
 
 router.get('/patient/dashboard', ...patient, PatientController.getDashboardOverview);
 
@@ -96,9 +99,10 @@ router.put('/patient/therapies/:therapyId', ...patient, validate(therapyUpdateSc
 router.delete('/patient/therapies/:therapyId', ...patient, PatientController.deleteTherapy);
 
 router.get('/patient/reports', ...patient, PatientController.getReports);
-router.post('/patient/reports', ...patient, upload.single('file'), validate(reportUploadSchema), PatientController.uploadReport);
+router.get('/patient/reports/:reportId/file', ...patient, ReportFileController.downloadOwnReport);
+router.post('/patient/reports', ...patient, verifiedContact, upload.single('file'), validate(reportUploadSchema), PatientController.uploadReport);
 router.delete('/patient/reports/:reportId', ...patient, PatientController.deleteReport);
-router.post('/patient/reports/:reportId/share', ...patient, validate(reportShareSchema), PatientController.shareReport);
+router.post('/patient/reports/:reportId/share', ...patient, verifiedContact, validate(reportShareSchema), PatientController.shareReport);
 router.delete('/patient/reports/:reportId/share/:doctorId', ...patient, PatientController.revokeReportShare);
 
 router.get('/patient/health-score', ...patient, HealthScoreController.current);
@@ -108,7 +112,7 @@ router.get('/patient/health-score/lifestyle', ...patient, HealthScoreController.
 router.put('/patient/health-score/lifestyle', ...patient, HealthScoreController.updateLifestyle);
 
 router.get('/patient/consents', ...patient, PatientController.getConsents);
-router.post('/patient/consents', ...patient, validate(consentGrantSchema), PatientController.grantConsent);
+router.post('/patient/consents', ...patient, verifiedContact, validate(consentGrantSchema), PatientController.grantConsent);
 router.delete('/patient/consents/:consentId', ...patient, PatientController.revokeConsent);
 
 router.get('/patient/settings', ...patient, PatientController.getSettings);
