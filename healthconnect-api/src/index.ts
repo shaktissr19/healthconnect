@@ -1,12 +1,17 @@
 import app from './app';
 import { config } from './config';
 import { logger } from './utils/logger';
+import { assertProductionReadiness } from './utils/productionReadiness';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 const startServer = async () => {
   try {
+    // Do not allow a production process to silently accept customers while core
+    // providers (email, OTP, payment, encrypted report storage) are unconfigured.
+    assertProductionReadiness();
+
     // Test database connection
     await prisma.$connect();
     logger.info('Database connected successfully');
