@@ -46,7 +46,7 @@ const getState = async (userId: string): Promise<PhoneVerificationState | null> 
       "sendCount",
       "lastVerifyAt"
     FROM "phone_verification_states"
-    WHERE "userId" = ${userId}::uuid
+    WHERE "userId" = ${userId}
     LIMIT 1
   `;
   return rows[0] || null;
@@ -136,7 +136,7 @@ const persistSend = async (userId: string, phone: string, previous: PhoneVerific
       "userId", "pendingPhone", "isVerified", "lastSendAt",
       "sendWindowStartedAt", "sendCount", "updatedAt"
     ) VALUES (
-      ${userId}::uuid, ${phone}, FALSE, ${now}, ${windowStartedAt}, ${sendCount}, CURRENT_TIMESTAMP
+      ${userId}, ${phone}, FALSE, ${now}, ${windowStartedAt}, ${sendCount}, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("userId") DO UPDATE SET
       "pendingPhone" = EXCLUDED."pendingPhone",
@@ -229,7 +229,7 @@ export const verifyPhoneOtp = async (userId: string, otp: string) => {
           "verifiedAt" = ${now},
           "lastVerifyAt" = ${now},
           "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "userId" = ${userId}::uuid
+      WHERE "userId" = ${userId}
     `;
 
     const user = await tx.user.findUnique({ where: { id: userId }, select: { role: true } });
