@@ -1,13 +1,13 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
 const messageFrom = (error: any, fallback: string) =>
   error?.response?.data?.message || error?.message || fallback;
 
-export default function VerifyPhonePage() {
+function VerifyPhoneContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [phone, setPhone] = useState('');
@@ -223,5 +223,21 @@ export default function VerifyPhonePage() {
         @media(max-width:560px){.verify-phone-card{padding:26px 20px;border-radius:22px}.verify-phone-actions{align-items:flex-start;flex-direction:column;gap:0}}
       `}</style>
     </main>
+  );
+}
+
+function VerifyPhoneFallback() {
+  return (
+    <main style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#f6fbfb',fontFamily:'Inter,system-ui,sans-serif',color:'#31566a'}}>
+      <div role="status">Loading secure verification…</div>
+    </main>
+  );
+}
+
+export default function VerifyPhonePage() {
+  return (
+    <Suspense fallback={<VerifyPhoneFallback />}>
+      <VerifyPhoneContent />
+    </Suspense>
   );
 }
