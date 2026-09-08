@@ -13,8 +13,15 @@ const parsePositiveInt = (value: string | undefined, fallback: number): number =
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const parseBoolean = (value: string | undefined, fallback: boolean): boolean => {
+  if (value === undefined || value === '') return fallback;
+  return value.trim().toLowerCase() === 'true';
+};
+
+const env = process.env.NODE_ENV || 'development';
+
 export const config = {
-  env: process.env.NODE_ENV || 'development',
+  env,
   port: parseInt(process.env.PORT || '5000', 10),
   apiVersion: process.env.API_VERSION || 'v1',
 
@@ -42,6 +49,12 @@ export const config = {
     // A refresh token may be valid for 7 days, but one continuous authenticated
     // session must re-authenticate after this absolute period. Default: 8 hours.
     absoluteSessionHours: parsePositiveInt(process.env.AUTH_ABSOLUTE_SESSION_HOURS, 8),
+    // Sensitive-action verification is on automatically in production. It can
+    // also be enabled in staging with REQUIRE_VERIFIED_SENSITIVE_ACTIONS=true.
+    requireVerifiedSensitiveActions: parseBoolean(
+      process.env.REQUIRE_VERIFIED_SENSITIVE_ACTIONS,
+      env === 'production',
+    ),
   },
 
   redis: {
@@ -61,6 +74,7 @@ export const config = {
     sendgridApiKey: process.env.SENDGRID_API_KEY,
     fromEmail: process.env.FROM_EMAIL || 'noreply@healthconnect.in',
     fromName: process.env.FROM_NAME || 'HealthConnect India',
+    strictMode: parseBoolean(process.env.EMAIL_STRICT_MODE, env === 'production'),
   },
 
   sms: {
