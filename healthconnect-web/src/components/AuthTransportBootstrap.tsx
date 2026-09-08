@@ -33,10 +33,18 @@ const redirectToLoginIfNeeded = () => {
     path.startsWith('/dashboard') ||
     path.startsWith('/doctor-dashboard') ||
     path.startsWith('/hospital-dashboard') ||
-    path.startsWith('/admin-dashboard')
+    path.startsWith('/admin-dashboard') ||
+    path.startsWith('/verify-phone')
   ) {
     window.location.href = '/';
   }
+};
+
+const redirectToPhoneVerification = () => {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname.startsWith('/verify-phone')) return;
+  const returnTo = `${window.location.pathname}${window.location.search || ''}`;
+  window.location.href = `/verify-phone?returnTo=${encodeURIComponent(returnTo)}`;
 };
 
 const configureAxiosTransport = () => {
@@ -55,7 +63,16 @@ const configureAxiosTransport = () => {
     async (error) => {
       const original = error.config as (typeof error.config & { _hcRetry?: boolean }) | undefined;
       const status = error.response?.status;
+      const errorCode = String(error.response?.data?.error_code || '');
       const url = String(original?.url || '');
+
+      // Sensitive production actions return a stable error code when phone
+      // verification is required. Send the customer to one shared verification
+      // screen and preserve the page they were trying to use.
+      if (status === 403 && errorCode === 'PHONE_VERIFICATION_REQUIRED') {
+        redirectToPhoneVerification();
+        return Promise.reject(error);
+      }
 
       const isAuthEndpoint =
         url.includes('/auth/login') ||
@@ -64,6 +81,7 @@ const configureAxiosTransport = () => {
         url.includes('/auth/forgot-password') ||
         url.includes('/auth/reset-password') ||
         url.includes('/auth/verify-email') ||
+        url.includes('/auth/phone/') ||
         url.includes('/auth/change-password');
 
       if (status !== 401 || !original || original._hcRetry || isAuthEndpoint) {
