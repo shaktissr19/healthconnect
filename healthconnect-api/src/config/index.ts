@@ -32,25 +32,17 @@ export const config = {
   jwt: {
     secret: process.env.JWT_SECRET!,
     refreshSecret: process.env.JWT_REFRESH_SECRET!,
-    // Canonical names are JWT_EXPIRES_IN / JWT_REFRESH_EXPIRES_IN.
-    // Legacy aliases are kept temporarily so existing server env files do not break.
     expiresIn: process.env.JWT_EXPIRES_IN || process.env.JWT_EXPIRY || '15m',
     refreshExpiresIn:
       process.env.JWT_REFRESH_EXPIRES_IN || process.env.REFRESH_TOKEN_EXPIRY || '7d',
   },
 
   auth: {
-    // Production: COOKIE_DOMAIN=.healthconnect.sbs allows the frontend and API
-    // subdomains to participate in the same secure browser session.
     cookieDomain: process.env.COOKIE_DOMAIN || undefined,
     accessCookieName: process.env.ACCESS_COOKIE_NAME || 'hc_access',
     refreshCookieName: process.env.REFRESH_COOKIE_NAME || 'hc_refresh',
     sessionCookieName: process.env.SESSION_COOKIE_NAME || 'hc_session',
-    // A refresh token may be valid for 7 days, but one continuous authenticated
-    // session must re-authenticate after this absolute period. Default: 8 hours.
     absoluteSessionHours: parsePositiveInt(process.env.AUTH_ABSOLUTE_SESSION_HOURS, 8),
-    // Sensitive-action verification is on automatically in production. It can
-    // also be enabled in staging with REQUIRE_VERIFIED_SENSITIVE_ACTIONS=true.
     requireVerifiedSensitiveActions: parseBoolean(
       process.env.REQUIRE_VERIFIED_SENSITIVE_ACTIONS,
       env === 'production',
@@ -68,6 +60,8 @@ export const config = {
     secretKey: process.env.STORAGE_SECRET_KEY!,
     bucket: process.env.STORAGE_BUCKET || 'healthconnect-files',
     useSSL: process.env.STORAGE_USE_SSL === 'true',
+    uploadDir: process.env.UPLOAD_DIR || '/var/www/healthconnect/uploads',
+    reportEncryptionKey: process.env.REPORT_ENCRYPTION_KEY,
   },
 
   email: {
