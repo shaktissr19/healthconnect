@@ -4,6 +4,7 @@ import * as appointmentController from '../controllers/appointment.controller';
 import { authenticate } from '../middleware/auth';
 import { requireDoctor } from '../middleware/roleGuard';
 import { requireVerifiedAccount } from '../middleware/verifiedAccount';
+import { enforceProductionTeleconsultSafety } from '../middleware/teleconsultSafety';
 import { validate } from '../middleware/validate';
 import { enforceDoctorAvailability } from '../middleware/appointmentAvailabilityGuard';
 import {
@@ -28,6 +29,7 @@ router.post(
   '/',
   requireVerifiedAccount(),
   validate(bookAppointmentSchema),
+  enforceProductionTeleconsultSafety,
   enforceDoctorAvailability,
   enforceActiveAppointmentConflict,
   notifyLinkedHospitalAfterSuccess,
