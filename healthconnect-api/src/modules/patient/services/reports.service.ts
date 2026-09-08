@@ -28,6 +28,7 @@ const hasExpectedSignature = (file: Express.Multer.File) => {
 const privateStorageBaseDir = () => path.resolve(process.env.PRIVATE_UPLOAD_DIR || '/var/www/healthconnect/private-uploads');
 const legacyStorageBaseDir = () => path.resolve(process.env.UPLOAD_DIR || '/var/www/healthconnect/uploads');
 const legacyPublicFileBase = () => (process.env.FILE_PUBLIC_URL || 'https://api.healthconnect.sbs/files').replace(/\/$/, '');
+const apiPublicBase = () => (process.env.API_PUBLIC_URL || 'https://api.healthconnect.sbs/api/v1').replace(/\/$/, '');
 
 const resolveUnder = (baseDir: string, relative: string) => {
   const resolvedBase = path.resolve(baseDir);
@@ -196,8 +197,8 @@ export const getReports = async (
   return {
     reports: reports.map(report => ({
       ...report,
-      // Never expose the private storage locator to the browser.
-      fileUrl: null,
+      // Expose only an authenticated API endpoint, never the private storage locator.
+      fileUrl: `${apiPublicBase()}/patient/reports/${report.id}/file`,
       downloadPath: `/patient/reports/${report.id}/file`,
     })),
     total,
