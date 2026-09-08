@@ -10,6 +10,11 @@ const ALLOWED_REPORT_TYPES: Record<string, string> = {
   'image/png': '.png',
 };
 
+const PRIVATE_SCHEME = 'hc-private://';
+const ENCRYPTION_MAGIC = Buffer.from('HCENC1', 'ascii');
+const GCM_IV_BYTES = 12;
+const GCM_TAG_BYTES = 16;
+
 const hasExpectedSignature = (file: Express.Multer.File) => {
   const b = file.buffer;
   if (file.mimetype === 'application/pdf') return b.length >= 5 && b.subarray(0, 5).toString() === '%PDF-';
@@ -20,48 +25,139 @@ const hasExpectedSignature = (file: Express.Multer.File) => {
   return false;
 };
 
-const storageBaseDir = () => path.resolve(process.env.UPLOAD_DIR || '/var/www/healthconnect/uploads');
-const publicFileBase = () => (process.env.FILE_PUBLIC_URL || 'https://api.healthconnect.sbs/files').replace(/\/$/, '');
+const privateStorageBaseDir = () => path.resolve(process.env.PRIVATE_UPLOAD_DIR || '/var/www/healthconnect/private-uploads');
+const legacyStorageBaseDir = () => path.resolve(process.env.UPLOAD_DIR || '/var/www/healthconnect/uploads');
+const legacyPublicFileBase = () => (process.env.FILE_PUBLIC_URL || 'https://api.healthconnect.sbs/files').replace(/\/$/, '');
 
-const uploadToStorage = async (file: Express.Multer.File, folder: string) => {
+const resolveUnder = (baseDir: string, relative: string) => {
+  const resolvedBase = path.resolve(baseDir);
+  const resolved = path.resolve(resolvedBase, relative);
+  if (resolved !== resolvedBase && !resolved.startsWith(`${resolvedBase}${path.sep}`)) {
+    throw ApiError.badRequest('INVALID_REPORT_PATH', 'Invalid report storage path');
+  }
+  return resolved;
+};
+
+const getEncryptionKey = (): Buffer => {
+  const raw = process.env.REPORT_ENCRYPTION_KEY?.trim();
+  if (!raw) {
+    throw new ApiError(
+      503,
+      'REPORT_ENCRYPTION_NOT_CONFIGURED',
+      'Secure medical-report storage is temporarily unavailable.',
+    );
+  }
+
+  let key: Buffer;
+  if (/^[a-f0-9]{64}$/i.test(raw)) key = Buffer.from(raw, 'hex');
+  else {
+    try { key = Buffer.from(raw, 'base64'); } catch { key = Buffer.alloc(0); }
+  }
+  if (key.length !== 32) {
+    throw new ApiError(
+      503,
+      'REPORT_ENCRYPTION_KEY_INVALID',
+      'Secure medical-report storage is not configured correctly.',
+    );
+  }
+  return key;
+};
+
+const encryptBuffer = (plain: Buffer): Buffer => {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(GCM_IV_BYTES);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([cipher.update(plain), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([ENCRYPTION_MAGIC, iv, tag, ciphertext]);
+};
+
+const decryptBuffer = (encrypted: Buffer): Buffer => {
+  const minimumLength = ENCRYPTION_MAGIC.length + GCM_IV_BYTES + GCM_TAG_BYTES + 1;
+  if (encrypted.length < minimumLength || !encrypted.subarray(0, ENCRYPTION_MAGIC.length).equals(ENCRYPTION_MAGIC)) {
+    throw new ApiError(500, 'REPORT_DECRYPTION_FAILED', 'Stored report has an invalid encrypted format.');
+  }
+  const key = getEncryptionKey();
+  const ivStart = ENCRYPTION_MAGIC.length;
+  const tagStart = ivStart + GCM_IV_BYTES;
+  const dataStart = tagStart + GCM_TAG_BYTES;
+  const iv = encrypted.subarray(ivStart, tagStart);
+  const tag = encrypted.subarray(tagStart, dataStart);
+  const ciphertext = encrypted.subarray(dataStart);
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  } catch {
+    throw new ApiError(500, 'REPORT_DECRYPTION_FAILED', 'Stored report could not be decrypted.');
+  }
+};
+
+const saveEncryptedFile = (file: Express.Multer.File, patientId: string, reportId: string) => {
   const extension = ALLOWED_REPORT_TYPES[file.mimetype];
   if (!extension || !hasExpectedSignature(file)) {
     throw ApiError.badRequest('INVALID_REPORT_FILE', 'Only valid PDF, JPG and PNG medical reports are allowed');
   }
 
-  const fileId = crypto.randomUUID();
-  const baseDir = storageBaseDir();
-  const dir = path.resolve(baseDir, folder);
-  if (!dir.startsWith(`${baseDir}${path.sep}`) && dir !== baseDir) {
-    throw ApiError.badRequest('INVALID_REPORT_PATH', 'Invalid report storage path');
-  }
+  const relativeDir = path.join('reports', patientId);
+  const relativeFile = path.join(relativeDir, `${reportId}.hcenc`);
+  const baseDir = privateStorageBaseDir();
+  const dir = resolveUnder(baseDir, relativeDir);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  const filePath = path.join(dir, `${fileId}${extension}`);
-  fs.writeFileSync(filePath, file.buffer, { flag: 'wx' });
+  const filePath = resolveUnder(baseDir, relativeFile);
+  const encrypted = encryptBuffer(file.buffer);
+  fs.writeFileSync(filePath, encrypted, { flag: 'wx', mode: 0o600 });
 
   return {
-    url: `${publicFileBase()}/${folder}/${fileId}${extension}`,
+    locator: `${PRIVATE_SCHEME}${relativeFile.split(path.sep).join('/')}`,
     localPath: filePath,
     size: file.size,
     mimeType: file.mimetype,
   };
 };
 
+const privatePathFromLocator = (locator: string) => {
+  if (!locator.startsWith(PRIVATE_SCHEME)) return null;
+  const relative = decodeURIComponent(locator.slice(PRIVATE_SCHEME.length));
+  return resolveUnder(privateStorageBaseDir(), relative);
+};
+
+const legacyPathFromUrl = (fileUrl: string) => {
+  const publicBase = legacyPublicFileBase();
+  if (!fileUrl.startsWith(`${publicBase}/`)) return null;
+  const relative = decodeURIComponent(fileUrl.slice(publicBase.length + 1));
+  return resolveUnder(legacyStorageBaseDir(), relative);
+};
+
 const deleteStoredFile = (fileUrl?: string | null) => {
   if (!fileUrl) return;
-  const publicBase = publicFileBase();
-  if (!fileUrl.startsWith(`${publicBase}/`)) return;
+  const privatePath = privatePathFromLocator(fileUrl);
+  const legacyPath = privatePath ? null : legacyPathFromUrl(fileUrl);
+  const localPath = privatePath || legacyPath;
+  if (localPath && fs.existsSync(localPath)) fs.unlinkSync(localPath);
+};
 
-  const relative = decodeURIComponent(fileUrl.slice(publicBase.length + 1));
-  const baseDir = storageBaseDir();
-  const localPath = path.resolve(baseDir, relative);
-  if (!localPath.startsWith(`${baseDir}${path.sep}`)) {
-    throw ApiError.badRequest('INVALID_REPORT_PATH', 'Invalid stored report path');
+const readStoredFile = (fileUrl: string) => {
+  const privatePath = privatePathFromLocator(fileUrl);
+  if (privatePath) {
+    if (!fs.existsSync(privatePath)) throw ApiError.notFound('Stored report file not found');
+    return decryptBuffer(fs.readFileSync(privatePath));
   }
 
-  if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+  // Backward-compatible authenticated read for reports uploaded before encrypted
+  // private storage was introduced. Production Nginx should no longer expose
+  // the legacy /files directory publicly after migration is complete.
+  const legacyPath = legacyPathFromUrl(fileUrl);
+  if (!legacyPath || !fs.existsSync(legacyPath)) throw ApiError.notFound('Stored report file not found');
+  return fs.readFileSync(legacyPath);
+};
+
+const sanitizeDownloadName = (name: string, mimeType?: string | null) => {
+  const base = (name || 'medical-report').replace(/[\r\n"\\/]/g, '_').slice(0, 140) || 'medical-report';
+  const extension = mimeType ? ALLOWED_REPORT_TYPES[mimeType] : undefined;
+  if (!extension || base.toLowerCase().endsWith(extension)) return base;
+  return `${base}${extension}`;
 };
 
 export const getReports = async (
@@ -98,7 +194,12 @@ export const getReports = async (
   });
 
   return {
-    reports,
+    reports: reports.map(report => ({
+      ...report,
+      // Never expose the private storage locator to the browser.
+      fileUrl: null,
+      downloadPath: `/patient/reports/${report.id}/file`,
+    })),
     total,
     page,
     totalPages: Math.ceil(total / limit),
@@ -112,15 +213,17 @@ export const uploadReport = async (
   data: { name: string; type?: string; description?: string; reportDate?: string },
 ) => {
   const patient = await getPatient(userId);
-  const uploaded = await uploadToStorage(file, `reports/${patient.id}`);
+  const reportId = crypto.randomUUID();
+  const uploaded = saveEncryptedFile(file, patient.id, reportId);
 
   try {
     return await prisma.medicalReport.create({
       data: {
+        id: reportId,
         patientId: patient.id,
         name: data.name,
         type: (data.type as any) || 'OTHER',
-        fileUrl: uploaded.url,
+        fileUrl: uploaded.locator,
         fileSize: uploaded.size,
         mimeType: uploaded.mimeType,
         uploadedBy: userId,
@@ -133,6 +236,23 @@ export const uploadReport = async (
     if (fs.existsSync(uploaded.localPath)) fs.unlinkSync(uploaded.localPath);
     throw error;
   }
+};
+
+export const getPatientReportFile = async (userId: string, reportId: string) => {
+  const patient = await getPatient(userId);
+  const report = await prisma.medicalReport.findFirst({
+    where: { id: reportId, patientId: patient.id },
+    select: { id: true, name: true, fileUrl: true, mimeType: true, fileSize: true },
+  });
+  if (!report) throw ApiError.notFound('Report not found');
+
+  const buffer = readStoredFile(report.fileUrl);
+  return {
+    buffer,
+    mimeType: report.mimeType || 'application/octet-stream',
+    fileName: sanitizeDownloadName(report.name, report.mimeType),
+    fileSize: buffer.length,
+  };
 };
 
 export const deleteReport = async (userId: string, reportId: string) => {
