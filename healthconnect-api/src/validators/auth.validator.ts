@@ -54,6 +54,23 @@ export const changePasswordSchema = z
     message: 'New password must be different from the current password',
   });
 
+export const sendPhoneOtpSchema = z
+  .object({
+    phone: z
+      .string()
+      .trim()
+      .min(10, 'Phone number is required')
+      .max(16, 'Phone number is too long')
+      .regex(/^(?:\+?91[\s-]?)?[6-9]\d{9}$/, 'Enter a valid Indian mobile number'),
+  })
+  .strict();
+
+export const verifyPhoneOtpSchema = z
+  .object({
+    otp: z.string().trim().regex(/^\d{4,8}$/, 'Enter a valid OTP'),
+  })
+  .strict();
+
 // Refresh is now cookie-first. The body field remains optional temporarily for
 // backward compatibility with non-browser clients during the migration.
 export const refreshTokenSchema = z
