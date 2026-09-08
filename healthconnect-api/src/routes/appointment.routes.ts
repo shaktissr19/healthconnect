@@ -3,6 +3,7 @@ import { Router } from 'express';
 import * as appointmentController from '../controllers/appointment.controller';
 import { authenticate } from '../middleware/auth';
 import { requireDoctor } from '../middleware/roleGuard';
+import { requireVerifiedAccount } from '../middleware/verifiedAccount';
 import { validate } from '../middleware/validate';
 import { enforceDoctorAvailability } from '../middleware/appointmentAvailabilityGuard';
 import {
@@ -25,6 +26,7 @@ router.get('/', appointmentController.listAppointments);
 
 router.post(
   '/',
+  requireVerifiedAccount(),
   validate(bookAppointmentSchema),
   enforceDoctorAvailability,
   enforceActiveAppointmentConflict,
@@ -36,6 +38,7 @@ router.get('/:id', appointmentController.getAppointment);
 
 router.put(
   '/:id/reschedule',
+  requireVerifiedAccount(),
   validate(rescheduleAppointmentSchema),
   enforceDoctorAvailability,
   enforceActiveAppointmentConflict,
@@ -52,6 +55,7 @@ router.put(
 router.put(
   '/:id/status',
   requireDoctor,
+  requireVerifiedAccount(),
   validate(updateAppointmentStatusSchema),
   notifyLinkedHospitalOnMutationAfterSuccess,
   promptHospitalReviewAfterSuccess,
@@ -66,6 +70,7 @@ router.patch(
 );
 router.patch(
   '/:id/reschedule',
+  requireVerifiedAccount(),
   validate(rescheduleAppointmentSchema),
   enforceDoctorAvailability,
   enforceActiveAppointmentConflict,
