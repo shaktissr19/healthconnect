@@ -23,7 +23,7 @@ const claim = async (appointmentId: string, reminderKey: string, channel: string
     INSERT INTO "appointment_reminder_deliveries" (
       "appointmentId", "reminderKey", "channel", "status", "attempts", "updatedAt"
     ) VALUES (
-      ${appointmentId}::uuid, ${reminderKey}, ${channel}, 'PENDING', 1, CURRENT_TIMESTAMP
+      ${appointmentId}, ${reminderKey}, ${channel}, 'PENDING', 1, CURRENT_TIMESTAMP
     )
     ON CONFLICT ("appointmentId", "reminderKey", "channel") DO NOTHING
     RETURNING id
