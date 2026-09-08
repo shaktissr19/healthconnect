@@ -1,10 +1,13 @@
 -- HealthConnect India — customer production readiness: phone verification foundation
 -- Provider owns the OTP secret/code lifecycle; this table stores only verification state,
 -- throttling metadata and the verified phone value. No plaintext OTP is persisted.
+-- NOTE: Prisma String IDs in the existing HealthConnect schema are PostgreSQL TEXT,
+-- even though their values are UUID-formatted strings. Keep the FK column TEXT so it
+-- exactly matches users.id and the database can enforce referential integrity.
 
 CREATE TABLE IF NOT EXISTS "phone_verification_states" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "userId" UUID NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
+  "userId" TEXT NOT NULL UNIQUE REFERENCES "users"("id") ON DELETE CASCADE,
   "pendingPhone" VARCHAR(20),
   "verifiedPhone" VARCHAR(20),
   "isVerified" BOOLEAN NOT NULL DEFAULT FALSE,
