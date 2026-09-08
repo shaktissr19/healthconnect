@@ -8,7 +8,10 @@ import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 import { rateLimiter } from './middleware/rateLimiter';
 import * as subscriptionController from './controllers/subscription.controller';
+import { assertProductionRuntimeReadiness } from './services/productionReadiness.service';
 import routes from './routes';
+
+assertProductionRuntimeReadiness();
 
 const app: Application = express();
 
