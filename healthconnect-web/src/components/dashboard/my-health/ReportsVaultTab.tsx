@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { doctorAPI, patientAPI } from '@/lib/api';
+import { api, doctorAPI, patientAPI } from '@/lib/api';
 
 const TYPES = ['LAB','SCAN','PRESCRIPTION','DISCHARGE','VACCINATION','INSURANCE','OTHER'] as const;
 const ICONS:Record<string,string> = { LAB:'🧪',SCAN:'🩻',PRESCRIPTION:'💊',DISCHARGE:'🏥',VACCINATION:'💉',INSURANCE:'🛡️',OTHER:'📄' };
@@ -50,6 +50,24 @@ export default function ReportsVaultTab() {
     try{await patientAPI.uploadReport(data);setMessage('✓ Report uploaded');await load(1,filter);}catch(e:any){setMessage(e?.response?.data?.message??'Unable to upload report.');}finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}
   };
 
+  const openReport = async (report:any) => {
+    if(!report?.fileUrl)return;
+    setMessage('');
+    try{
+      const response=await api.get(report.fileUrl,{responseType:'blob'});
+      const blob=new Blob([response.data],{type:response.headers?.['content-type']||report.mimeType||'application/octet-stream'});
+      const objectUrl=URL.createObjectURL(blob);
+      const opened=window.open(objectUrl,'_blank','noopener,noreferrer');
+      if(!opened){
+        const link=document.createElement('a');
+        link.href=objectUrl;
+        link.download=report.name||'medical-report';
+        document.body.appendChild(link);link.click();link.remove();
+      }
+      window.setTimeout(()=>URL.revokeObjectURL(objectUrl),60_000);
+    }catch(e:any){setMessage(e?.response?.data?.message??'Unable to open this report.');}
+  };
+
   const remove = async (report:any) => {
     if(!confirm(`Delete ${report.name ?? 'this report'}?`))return;
     try{await patientAPI.deleteReport(report.id);setMessage('✓ Report deleted');await load(1,filter);}catch(e:any){setMessage(e?.response?.data?.message??'Unable to delete report.');}
@@ -66,7 +84,7 @@ export default function ReportsVaultTab() {
 
     {view==='vault'?<>
       <div onClick={()=>fileRef.current?.click()} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);const file=e.dataTransfer.files?.[0];if(file)upload(file);}} style={{border:`2px dashed ${dragging?'#0D9488':'#B2DDD8'}`,background:dragging?'#F0FDF9':'#FAFFFE',borderRadius:14,padding:26,textAlign:'center',cursor:'pointer',marginBottom:20}}><input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{display:'none'}} onChange={e=>{const file=e.target.files?.[0];if(file)upload(file);}}/><div style={{fontSize:30}}>{uploading?'⏳':'📤'}</div><div style={{fontWeight:700,color:'#0F2D2A',fontSize:13,marginTop:5}}>{uploading?'Uploading…':'Drop a report here or click to upload'}</div><div style={{fontSize:11,color:'#64748B',marginTop:3}}>PDF, JPG or PNG · Max 20 MB</div></div>
-      {loading?<div style={{padding:40,textAlign:'center',color:'#64748B'}}>Loading reports…</div>:reports.length===0?<div className="rv-card" style={{textAlign:'center',padding:45,color:'#64748B'}}>📂<div style={{marginTop:8}}>No reports found.</div></div>:<><div className="rv-grid">{reports.map(report=><div key={report.id} className="rv-card"><div style={{display:'flex',gap:12,alignItems:'flex-start'}}><div style={{width:44,height:44,borderRadius:11,background:'#F0FDF9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>{ICONS[report.type]??'📄'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,color:'#0F2D2A',fontSize:14,overflow:'hidden',textOverflow:'ellipsis'}}>{report.name??'Report'}</div><div style={{fontSize:11,color:'#64748B',marginTop:3}}>{LABELS[report.type]??report.type} · {fmtSize(report.fileSize)} · {fmtDate(report.reportDate??report.createdAt)}</div></div></div>{report.description&&<div style={{fontSize:12,color:'#4B6E6A',marginTop:10}}>{report.description}</div>}{Array.isArray(report.shares)&&report.shares.length>0&&<div style={{fontSize:11,color:'#7C3AED',marginTop:9}}>Shared with {report.shares.length} doctor{report.shares.length===1?'':'s'}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7,marginTop:14}}><button className="rv-btn" onClick={()=>report.fileUrl&&window.open(report.fileUrl,'_blank','noopener,noreferrer')} style={{border:'1px solid #A7F3D0',color:'#047857'}}>Open</button><button className="rv-btn" onClick={()=>setSharing(report)} style={{border:'1px solid #DDD6FE',color:'#7C3AED'}}>Share</button><button className="rv-btn" onClick={()=>remove(report)} style={{border:'1px solid #FECDD3',color:'#BE123C'}}>Delete</button></div></div>)}</div>{reports.length<total&&<div style={{textAlign:'center',marginTop:16}}><button onClick={()=>{const next=page+1;setPage(next);load(next,filter);}} className="rv-btn" style={{border:'1px solid #E2EEF0',color:'#4B6E6A'}}>Load more ({total-reports.length} remaining)</button></div>}</>}
+      {loading?<div style={{padding:40,textAlign:'center',color:'#64748B'}}>Loading reports…</div>:reports.length===0?<div className="rv-card" style={{textAlign:'center',padding:45,color:'#64748B'}}>📂<div style={{marginTop:8}}>No reports found.</div></div>:<><div className="rv-grid">{reports.map(report=><div key={report.id} className="rv-card"><div style={{display:'flex',gap:12,alignItems:'flex-start'}}><div style={{width:44,height:44,borderRadius:11,background:'#F0FDF9',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>{ICONS[report.type]??'📄'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,color:'#0F2D2A',fontSize:14,overflow:'hidden',textOverflow:'ellipsis'}}>{report.name??'Report'}</div><div style={{fontSize:11,color:'#64748B',marginTop:3}}>{LABELS[report.type]??report.type} · {fmtSize(report.fileSize)} · {fmtDate(report.reportDate??report.createdAt)}</div></div></div>{report.description&&<div style={{fontSize:12,color:'#4B6E6A',marginTop:10}}>{report.description}</div>}{Array.isArray(report.shares)&&report.shares.length>0&&<div style={{fontSize:11,color:'#7C3AED',marginTop:9}}>Shared with {report.shares.length} doctor{report.shares.length===1?'':'s'}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7,marginTop:14}}><button className="rv-btn" onClick={()=>void openReport(report)} style={{border:'1px solid #A7F3D0',color:'#047857'}}>Open</button><button className="rv-btn" onClick={()=>setSharing(report)} style={{border:'1px solid #DDD6FE',color:'#7C3AED'}}>Share</button><button className="rv-btn" onClick={()=>remove(report)} style={{border:'1px solid #FECDD3',color:'#BE123C'}}>Delete</button></div></div>)}</div>{reports.length<total&&<div style={{textAlign:'center',marginTop:16}}><button onClick={()=>{const next=page+1;setPage(next);load(next,filter);}} className="rv-btn" style={{border:'1px solid #E2EEF0',color:'#4B6E6A'}}>Load more ({total-reports.length} remaining)</button></div>}</>}
     </>:<div className="rv-card" style={{padding:0,overflow:'hidden'}}><div style={{padding:'14px 18px',borderBottom:'1px solid #E2EEF0',fontWeight:700,color:'#0F2D2A'}}>Shared report access</div>{accessRows.length===0?<div style={{padding:40,textAlign:'center',color:'#64748B'}}>No report sharing activity in the loaded reports.</div>:accessRows.map(({report,share}:any)=><div key={share.id??`${report.id}-${share.doctorId}`} style={{padding:'13px 18px',borderBottom:'1px solid #F1F5F9',display:'flex',alignItems:'center',gap:12}}><span>🔒</span><div style={{flex:1}}><div style={{fontSize:13,color:'#0F2D2A'}}><strong>{share.doctor?.firstName?`Dr. ${share.doctor.firstName} ${share.doctor.lastName??''}`:'Doctor'}</strong> can access <strong>{report.name}</strong></div><div style={{fontSize:11,color:'#64748B',marginTop:2}}>Shared {fmtDate(share.createdAt)} · Expires {fmtDate(share.expiresAt)}</div></div><button onClick={async()=>{if(!confirm('Revoke this doctor’s access to the report?'))return;try{await patientAPI.revokeReportShare(report.id,share.doctorId);setMessage('✓ Report access revoked');await load(1,filter);}catch(e:any){setMessage(e?.response?.data?.message??'Unable to revoke access.');}}} className="rv-btn" style={{border:'1px solid #FECDD3',color:'#BE123C'}}>Revoke</button></div>)}</div>}
 
     {sharing&&<ShareReportModal report={sharing} onClose={()=>setSharing(null)} onShared={async()=>{setSharing(null);setMessage('✓ Report shared');await load(1,filter);}}/>}
