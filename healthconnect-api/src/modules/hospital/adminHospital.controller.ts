@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { HospitalVerificationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ApiResponse } from '../../utils/apiResponse';
+import { sendHospitalVerificationEmail } from '../../services/customerLifecycleEmail.service';
 
 export const getPendingHospitals = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -115,6 +116,12 @@ export const verifyHospital = async (req: Request, res: Response, next: NextFunc
           entityId: hospital.id,
           metadata: { reason },
         },
+      }).catch(() => undefined),
+      sendHospitalVerificationEmail({
+        email: hospital.user.email,
+        hospitalName: hospital.name,
+        action: action as 'review' | 'approve' | 'reject' | 'suspend' | 'restore',
+        reason,
       }).catch(() => undefined),
     ]);
 
