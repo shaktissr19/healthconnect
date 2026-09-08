@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as subscriptionController from '../controllers/subscription.controller';
 import { authenticate, optionalAuth } from '../middleware/auth';
+import { requireVerifiedAccount } from '../middleware/verifiedAccount';
 
 const router = Router();
 
@@ -13,10 +14,10 @@ router.use(authenticate);
 
 router.get('/current', subscriptionController.getCurrentSubscription);
 router.get('/billing-history', subscriptionController.getBillingHistory);
-router.post('/checkout', subscriptionController.createCheckout);
-router.post('/verify', subscriptionController.verifyCheckout);
-router.post('/cancel', subscriptionController.cancelSubscription);
-router.post('/change', subscriptionController.changePlan);
+router.post('/checkout', requireVerifiedAccount(), subscriptionController.createCheckout);
+router.post('/verify', requireVerifiedAccount(), subscriptionController.verifyCheckout);
+router.post('/cancel', requireVerifiedAccount({ email: true, phone: false }), subscriptionController.cancelSubscription);
+router.post('/change', requireVerifiedAccount(), subscriptionController.changePlan);
 
 // Razorpay webhook is intentionally mounted in app.ts before express.json()
 // so signature verification receives the exact raw request body.
