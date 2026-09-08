@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import { config } from './config';
+import { prisma } from './lib/prisma';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 import { rateLimiter } from './middleware/rateLimiter';
@@ -52,9 +53,18 @@ app.use(requestLogger);
 // Rate limiting
 app.use(rateLimiter());
 
-// Health check
-app.get('/health', (req, res) => {
+// Liveness: process is up. Readiness: process can also reach the database.
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/ready', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ status: 'ready', database: 'ok', timestamp: new Date().toISOString() });
+  } catch {
+    return res.status(503).json({ status: 'not_ready', database: 'unavailable', timestamp: new Date().toISOString() });
+  }
 });
 
 // API routes
