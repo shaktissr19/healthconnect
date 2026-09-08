@@ -12,8 +12,16 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
   refreshTokenSchema,
+  sendPhoneOtpSchema,
+  verifyPhoneOtpSchema,
 } from '../validators/auth.validator';
 import * as AuthService from '../services/auth.service';
+import {
+  getPhoneVerificationStatus,
+  resendPhoneOtp,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+} from '../services/phoneVerification.service';
 import { ApiResponse } from '../utils/apiResponse';
 
 const router = Router();
@@ -63,6 +71,62 @@ router.post(
     } catch (e) {
       next(e);
     }
+  },
+);
+
+// Phone verification uses MSG91's OTP lifecycle. No plaintext OTP is stored by
+// HealthConnect. App-side cooldowns and hourly send limits add abuse protection
+// on top of the provider's own retry limits.
+router.get('/phone/status', authenticate, async (req, res, next) => {
+  try {
+    return ApiResponse.success(res, await getPhoneVerificationStatus(req.user!.userId));
+  } catch (e) { next(e); }
+});
+
+router.post(
+  '/phone/send-otp',
+  authRateLimiter,
+  authenticate,
+  validate(sendPhoneOtpSchema),
+  async (req, res, next) => {
+    try {
+      return ApiResponse.success(
+        res,
+        await sendPhoneOtp(req.user!.userId, req.body.phone),
+        'OTP sent successfully',
+      );
+    } catch (e) { next(e); }
+  },
+);
+
+router.post(
+  '/phone/resend-otp',
+  authRateLimiter,
+  authenticate,
+  async (req, res, next) => {
+    try {
+      return ApiResponse.success(
+        res,
+        await resendPhoneOtp(req.user!.userId),
+        'OTP resent successfully',
+      );
+    } catch (e) { next(e); }
+  },
+);
+
+router.post(
+  '/phone/verify-otp',
+  authRateLimiter,
+  authenticate,
+  validate(verifyPhoneOtpSchema),
+  async (req, res, next) => {
+    try {
+      return ApiResponse.success(
+        res,
+        await verifyPhoneOtp(req.user!.userId, req.body.otp),
+        'Phone verified successfully',
+      );
+    } catch (e) { next(e); }
   },
 );
 
