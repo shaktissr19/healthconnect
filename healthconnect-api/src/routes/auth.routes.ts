@@ -12,6 +12,7 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
   refreshTokenSchema,
+  verifyPhoneOtpSchema,
 } from '../validators/auth.validator';
 import * as AuthService from '../services/auth.service';
 import { ApiResponse } from '../utils/apiResponse';
@@ -37,6 +38,19 @@ router.post(
   authController.changePassword,
 );
 router.get('/me', authenticate, authController.getCurrentUser);
+
+// Phone verification — account phone is taken from the authenticated role profile.
+// Provider/API abuse controls are enforced both here and inside phoneOtp.service.
+router.get('/phone/status', authenticate, authController.getPhoneVerificationStatus);
+router.post('/phone/otp/send', authRateLimiter, authenticate, authController.sendPhoneOtp);
+router.post('/phone/otp/resend', authRateLimiter, authenticate, authController.resendPhoneOtp);
+router.post(
+  '/phone/otp/verify',
+  authRateLimiter,
+  authenticate,
+  validate(verifyPhoneOtpSchema),
+  authController.verifyPhoneOtp,
+);
 
 router.post(
   '/verify-email',
