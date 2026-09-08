@@ -84,6 +84,13 @@ export const config = {
     launch99OfferId: process.env.RAZORPAY_LAUNCH99_OFFER_ID,
   },
 
+  video: {
+    // The old public Jitsi room behavior remains available only outside
+    // production for demos. Production teleconsult stays disabled until a
+    // secure provider integration replaces it.
+    teleconsultEnabled: parseBoolean(process.env.TELECONSULTATION_ENABLED, false),
+  },
+
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 
   rateLimit: {
