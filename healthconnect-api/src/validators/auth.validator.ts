@@ -54,6 +54,15 @@ export const changePasswordSchema = z
     message: 'New password must be different from the current password',
   });
 
+export const verifyPhoneOtpSchema = z
+  .object({
+    otp: z
+      .string()
+      .trim()
+      .regex(/^\d{4,9}$/, 'OTP must contain 4 to 9 digits'),
+  })
+  .strict();
+
 // Refresh is now cookie-first. The body field remains optional temporarily for
 // backward compatibility with non-browser clients during the migration.
 export const refreshTokenSchema = z
