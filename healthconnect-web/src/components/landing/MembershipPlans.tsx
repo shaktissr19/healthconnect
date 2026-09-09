@@ -99,7 +99,7 @@ export default function MembershipPlans(){
           {intro?.available&&<div className="hc-plan-offer"><strong>{intro.code||'LAUNCH99'}:</strong> {intro.description||`${money(Number(intro.amountPaise||9900))}/month for the first ${intro.cycles||3} months, then ${money(patientPaise)}/month.`}</div>}
           <div className="hc-plan-sub">Your health information and care journey, organised in one account.</div>
           <ul className="hc-plan-list">{patientFeatures.map((f,i)=><li key={`${f}-${i}`}>{f}</li>)}</ul>
-          <button type="button" className="hc-plan-btn" onClick={()=>choose('PATIENT')}>{isAuthenticated&&String(user?.role).toUpperCase()==='PATIENT'?'Manage Patient Membership →':'Start Patient Membership →'}</button>
+          <button type="button" className="hc-plan-btn" onClick={()=>choose('PATIENT')}>{isAuthenticated&&String(user?.role).toUpperCase()==='PATIENT'?'Manage Patient Membership':'Start Patient Membership'}</button>
         </article>
 
         <article className="hc-plan-card doctor">
@@ -108,11 +108,11 @@ export default function MembershipPlans(){
           <div className="hc-plan-price"><strong>{money(doctorPaise)}</strong><span>/ month</span></div>
           <div className="hc-plan-sub">Your HealthConnect professional workspace for connected patient care.</div>
           <ul className="hc-plan-list">{doctorFeatures.map((f,i)=><li key={`${f}-${i}`}>{f}</li>)}</ul>
-          <button type="button" className="hc-plan-btn" onClick={()=>choose('DOCTOR')}>{isAuthenticated&&String(user?.role).toUpperCase()==='DOCTOR'?'Manage Doctor Membership →':'Join as a Doctor →'}</button>
+          <button type="button" className="hc-plan-btn" onClick={()=>choose('DOCTOR')}>{isAuthenticated&&String(user?.role).toUpperCase()==='DOCTOR'?'Manage Doctor Membership':'Join as a Doctor'}</button>
         </article>
       </div>
 
-      <div className="hc-plan-note"><div><strong>Consultation fees are separate.</strong> They are set by individual doctors and shown clearly during appointment booking.</div><div className="hc-plan-public">Public access → Find Doctors · Find Hospitals · Knowledge Hub</div></div>
+      <div className="hc-plan-note"><div><strong>Consultation fees are separate.</strong> They are set by individual doctors and shown clearly during appointment booking.</div><div className="hc-plan-public">Public access · Find Doctors · Find Hospitals · Knowledge Hub</div></div>
     </div>
   </section>;
 }
