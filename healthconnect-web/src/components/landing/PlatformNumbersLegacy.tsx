@@ -59,7 +59,7 @@ export default function PlatformNumbersLegacy({ stats }: { stats: PlatformStats 
             <div className="pn-photo" style={{backgroundImage:`url(${card.photo})`,opacity:expanded?1:.86}} role="img" aria-label={`${card.label} visual`}/>
             <div className="pn-overlay" style={{background:expanded?`linear-gradient(to top,${card.color}E8 0%,${card.color}A8 45%,rgba(10,22,40,.06) 82%)`:'linear-gradient(to top,rgba(11,34,48,.92) 0%,rgba(11,34,48,.55) 62%,rgba(10,22,40,.08) 100%)'}}/>
             {card.countKey==='communities'&&<div className="pn-hint">Peer support</div>}
-            {!expanded?<div className="pn-col-txt"><div className="pn-stat">{count}</div><div className="pn-label">{card.label}</div><div className="pn-sub">{card.sub}</div></div>:<div className="pn-exp-txt"><div className="pn-exp-sub">{card.sub}</div><div className="pn-exp-stat">{count}</div><div className="pn-exp-title">{card.label}</div><p className="pn-exp-desc">{card.desc}</p><Link href={card.href} className="pn-cta" style={{color:card.color}} onClick={e=>e.stopPropagation()}>{card.cta} →</Link></div>}
+            {!expanded?<div className="pn-col-txt"><div className="pn-stat">{count}</div><div className="pn-label">{card.label}</div><div className="pn-sub">{card.sub}</div></div>:<div className="pn-exp-txt"><div className="pn-exp-sub">{card.sub}</div><div className="pn-exp-stat">{count}</div><div className="pn-exp-title">{card.label}</div><p className="pn-exp-desc">{card.desc}</p><Link href={card.href} className="pn-cta" style={{color:card.color}} onClick={e=>e.stopPropagation()}>{card.cta}</Link></div>}
           </article>;
         })}
       </div>
