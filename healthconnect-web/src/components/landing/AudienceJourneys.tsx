@@ -61,110 +61,38 @@ export default function AudienceJourneys(){
   return <section className="journey-root" id="platform-tour">
     <style>{`
       .journey-root{font-family:'DM Sans',Arial,sans-serif;color:#10243C;background:#fff}
-      .journey-nav-wrap{max-width:1380px;margin:0 auto;padding:34px 28px 0}
-      .journey-nav-title{text-align:center;color:#0B7E72;font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;margin-bottom:15px}
-      .journey-nav{padding:14px;border-radius:22px;background:linear-gradient(120deg,#064E49,#0B7168);display:grid;grid-template-columns:repeat(6,1fr);gap:10px;box-shadow:0 16px 34px rgba(5,73,67,.14)}
-      .journey-pill{min-height:96px;border:0;border-radius:16px;padding:14px 13px;text-align:left;display:flex;align-items:center;gap:11px;cursor:pointer;transition:transform .17s ease,box-shadow .17s ease}
-      .journey-pill:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.12)}
-      .journey-icon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.82)}
-      .journey-pill b{display:block;font-size:14px;line-height:1.25;color:#10243C}
-      .journey-pill span:last-child{display:block;margin-top:4px;font-size:12px;line-height:1.3;color:#405D70}
+      .journey-nav-wrap{width:min(calc(100% - 40px),1380px);margin:0 auto;padding:22px 0 0}
+      .journey-nav-title{text-align:center;color:#0B7E72;font-size:12px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;margin-bottom:9px}
+      .journey-nav{padding:9px;border-radius:18px;background:linear-gradient(120deg,#064E49,#0B7168);display:grid;grid-template-columns:repeat(6,1fr);gap:7px;box-shadow:0 12px 28px rgba(5,73,67,.12)}
+      .journey-pill{min-height:72px;border:0;border-radius:13px;padding:9px 10px;text-align:left;display:flex;align-items:center;gap:8px;cursor:pointer;transition:transform .17s ease,box-shadow .17s ease}.journey-pill:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(0,0,0,.1)}
+      .journey-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.84)}.journey-pill b{display:block;font-size:12.6px;line-height:1.22;color:#10243C}.journey-pill span:last-child{display:block;margin-top:3px;font-size:10.5px;line-height:1.25;color:#405D70}
 
-      .mh-section{padding:68px 22px 84px;background:#fff;scroll-margin-top:92px}
-      .mh-shell{width:min(100%,1664px);margin:0 auto}
-      .mh-head{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(350px,.7fr);gap:56px;align-items:end;margin-bottom:28px;padding:0 10px}
-      .mh-kicker{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0B8F7C;margin-bottom:10px}
-      .mh-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.4rem,3.55vw,4.05rem);line-height:1.02;letter-spacing:-.055em;color:#0B2B45;margin:0}
-      .mh-head p{font-size:18px;line-height:1.56;color:#23475E;margin:0 0 5px}
+      .mh-section{padding:40px 22px 50px;background:#fff;scroll-margin-top:76px}.mh-shell{width:min(100%,1380px);margin:0 auto}
+      .mh-head{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(330px,.7fr);gap:42px;align-items:end;margin-bottom:16px;padding:0 4px}.mh-kicker{font-size:12px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#0B8F7C;margin-bottom:6px}.mh-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.15rem,2.85vw,3.05rem);line-height:1.01;letter-spacing:-.052em;color:#0B2B45;margin:0}.mh-head p{font-size:15.5px;line-height:1.48;color:#23475E;margin:0 0 2px;max-width:500px}
 
-      .mh-canvas{position:relative;aspect-ratio:1664/936;overflow:hidden;border-radius:28px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 42%,#DCEFF1 100%);box-shadow:0 20px 48px rgba(24,69,82,.08)}
-      .mh-canvas:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 39% 37%,rgba(255,255,255,.94) 0 20%,rgba(255,255,255,.48) 34%,transparent 56%);pointer-events:none;z-index:1}
-      .mh-main-photo{position:absolute;z-index:0;right:0;top:0;width:62%;height:78%;object-fit:cover;object-position:center 38%;transform:scale(.70);transform-origin:right top;transition:opacity .25s ease,transform .25s ease}
-      .mh-photo-fallback{position:absolute;right:0;top:0;width:62%;height:78%;background:linear-gradient(135deg,#DDECEE,#BDDDE0);z-index:0}
-      .mh-left{position:absolute;z-index:3;left:2.8%;top:5.6%;width:38.2%}
-      .mh-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.9rem,3vw,3.7rem);line-height:1.02;letter-spacing:-.045em;color:#0B2B45;margin:0}
-      .mh-title span{display:block;color:#0B948B}
-      .mh-subcopy{font-size:clamp(.8rem,1.05vw,1.12rem);line-height:1.55;color:#294A5D;margin:12px 0 18px;max-width:94%}
-      .mh-rule{width:42px;height:3px;border-radius:999px;background:#0B948B;margin-bottom:18px}
-      .mh-feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-      .mh-feature{min-width:0;padding:16px 15px 15px;border-radius:18px;background:rgba(255,255,255,.9);border:1px solid rgba(203,222,225,.82);box-shadow:0 10px 26px rgba(43,77,89,.07);backdrop-filter:blur(4px);transition:transform .18s ease,box-shadow .18s ease}
-      .mh-feature:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(43,77,89,.11)}
-      .mh-feature-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;margin-bottom:10px}
-      .mh-feature h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.7rem,.9vw,1rem);line-height:1.25;margin:0 0 6px;color:#10243C}
-      .mh-feature p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.42;color:#486275;margin:0}
+      .mh-canvas{overflow:hidden;border-radius:24px;border:1px solid #B9E2DE;background:linear-gradient(125deg,#F8FCFC 0%,#EFF8F8 48%,#DCEFF1 100%);box-shadow:0 16px 38px rgba(24,69,82,.07)}
+      .mh-primary{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(430px,.94fr);min-height:365px}
+      .mh-left{padding:27px 27px 24px 32px;min-width:0}.mh-title{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.65rem,2.2vw,2.4rem);line-height:1.03;letter-spacing:-.043em;color:#0B2B45;margin:0}.mh-title span{display:block;color:#0B948B}.mh-subcopy{font-size:13.2px;line-height:1.46;color:#294A5D;margin:9px 0 11px;max-width:610px}.mh-rule{width:40px;height:3px;border-radius:999px;background:#0B948B;margin-bottom:11px}
+      .mh-feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:8px}.mh-feature{min-width:0;padding:9px 9px 8px;border-radius:13px;background:rgba(255,255,255,.92);border:1px solid rgba(203,222,225,.86);box-shadow:0 5px 14px rgba(43,77,89,.045);transition:transform .18s ease}.mh-feature:hover{transform:translateY(-2px)}.mh-feature-icon{width:31px;height:31px;border-radius:50%;display:grid;place-items:center;margin-bottom:6px}.mh-feature h3{font-family:'Sora','DM Sans',sans-serif;font-size:10.8px;line-height:1.22;margin:0 0 4px;color:#10243C}.mh-feature p{font-size:9.45px;line-height:1.34;color:#486275;margin:0}
 
-      .mh-score{position:absolute;z-index:8;left:44.3%;top:3.4%;width:14.6%;min-width:190px;padding:15px 16px 14px;border-radius:18px;background:rgba(255,255,255,.95);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.12);backdrop-filter:blur(8px);transition:transform .18s ease,box-shadow .18s ease}
-      .mh-score:hover{transform:translateY(-3px);box-shadow:0 20px 42px rgba(42,72,82,.16)}
-      .mh-score-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:900;color:#15364D}
-      .mh-gauge{position:relative;height:96px;margin:6px 0 2px;display:grid;place-items:center}
-      .mh-gauge svg{position:absolute;width:118px;height:74px;top:13px}
-      .mh-score-num{position:relative;margin-top:10px;text-align:center;font-family:'Sora','DM Sans',sans-serif;font-size:36px;font-weight:800;color:#0B2B45;line-height:1}
-      .mh-score-num small{display:block;font-family:'DM Sans',Arial,sans-serif;font-size:12px;margin-top:3px;font-weight:800}
-      .mh-score-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-top:1px solid #E6EEF0;font-size:10.6px;color:#365468}
-      .mh-score-row b{font-size:10.2px;color:#0B8F7C}.mh-score-row.attn b{color:#E87922}
-      .mh-score-foot{display:flex;justify-content:space-between;align-items:center;padding-top:7px;border-top:1px solid #E6EEF0;font-size:9.7px;color:#647B89}
+      .mh-visual{position:relative;min-height:365px;overflow:hidden;background:linear-gradient(135deg,#DDECEE,#BDDDE0)}.mh-main-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 38%;display:block}.mh-visual-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(236,248,248,.35),transparent 30%),linear-gradient(180deg,transparent 52%,rgba(9,52,64,.18) 100%)}
+      .mh-score{position:absolute;z-index:3;left:14px;top:14px;width:158px;padding:10px 11px 9px;border-radius:14px;background:rgba(255,255,255,.95);border:1px solid rgba(203,222,225,.9);box-shadow:0 10px 24px rgba(42,72,82,.11);backdrop-filter:blur(7px)}.mh-score-head{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10.3px;font-weight:900;color:#15364D}.mh-gauge{position:relative;height:68px;margin:2px 0 0;display:grid;place-items:center}.mh-gauge svg{position:absolute;width:88px;height:56px;top:6px}.mh-score-num{position:relative;margin-top:7px;text-align:center;font-family:'Sora','DM Sans',sans-serif;font-size:27px;font-weight:800;color:#0B2B45;line-height:1}.mh-score-num small{display:block;font-family:'DM Sans',Arial,sans-serif;font-size:9px;margin-top:2px;font-weight:800}.mh-score-row{display:grid;grid-template-columns:1fr auto;gap:5px;padding:4px 0;border-top:1px solid #E6EEF0;font-size:8.2px;color:#365468}.mh-score-row b{font-size:8px;color:#0B8F7C}.mh-score-row.attn b{color:#E87922}.mh-score-foot{display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid #E6EEF0;font-size:7.7px;color:#647B89}
+      .mh-steps{position:absolute;z-index:3;left:14px;right:14px;bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;border-radius:13px;background:rgba(255,255,255,.92);border:1px solid rgba(214,231,232,.9);box-shadow:0 9px 22px rgba(25,61,80,.1);backdrop-filter:blur(8px)}.mh-step{min-width:0;display:flex;align-items:center;gap:6px;padding:4px 5px;border-radius:9px}.mh-step-icon{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:#E5F5F2;color:#0B948B}.mh-step:nth-child(4) .mh-step-icon{color:#7C3AED;background:#F0E8FF}.mh-step b{font-size:8.6px;line-height:1.18;color:#15364D}
 
-      .mh-steps{position:absolute;z-index:4;right:2.8%;top:4.7%;width:15.2%;display:grid;gap:14px}
-      .mh-step{position:relative;display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center;min-height:52px}
-      .mh-step:not(:last-child):after{content:'';position:absolute;left:22px;top:47px;height:22px;border-left:1.5px dashed rgba(255,255,255,.95)}
-      .mh-step-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.95);color:#0B948B;box-shadow:0 8px 20px rgba(42,72,82,.1)}
-      .mh-step:nth-child(4) .mh-step-icon{color:#7C3AED}
-      .mh-step b{font-size:clamp(.66rem,.82vw,.92rem);line-height:1.22;color:#0B2B45;text-shadow:0 1px 0 rgba(255,255,255,.65)}
+      .mh-care-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid #D6E7E8}.mh-care-card{min-width:0;min-height:108px;display:grid;grid-template-columns:118px 1fr auto;align-items:stretch;background:rgba(255,255,255,.92)}.mh-care-card+.mh-care-card{border-left:1px solid #D6E7E8}.mh-care-photo{width:118px;height:108px;object-fit:cover;display:block}.mh-care-copy{padding:14px 13px;align-self:center}.mh-care-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:12.5px;color:#0B665C;margin:0 0 4px}.mh-care-copy p{font-size:9.8px;line-height:1.38;color:#37566A;margin:0}.mh-community-note{display:block;margin-top:4px;font-size:8.6px;line-height:1.28;color:#627784}.mh-action{align-self:center;margin-right:13px;border:0;border-radius:8px;background:#0B948B;color:#fff;padding:8px 10px;line-height:1;font-size:9.5px;font-weight:900;cursor:pointer;white-space:nowrap;box-shadow:0 5px 12px rgba(11,148,139,.14)}.mh-action:hover{background:#087D75}
 
-      .mh-consult{position:absolute;z-index:5;left:42.4%;top:55.5%;width:30.5%;height:24%;display:grid;grid-template-columns:58% 42%;overflow:hidden;border-radius:18px;background:linear-gradient(135deg,#EDF7F7,#D8ECEE);border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1);backdrop-filter:blur(8px)}
-      .mh-consult-photo{width:100%;height:100%;object-fit:cover;object-position:center}
-      .mh-consult-copy{height:100%;box-sizing:border-box;padding:16px 15px 58px;display:flex;flex-direction:column;min-width:0;background:rgba(255,255,255,.94)}
-      .mh-consult-copy h3,.mh-community-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(.75rem,1vw,1.08rem);color:#0B665C;margin:0 0 8px}
-      .mh-consult-copy p,.mh-community-copy p{font-size:clamp(.58rem,.72vw,.8rem);line-height:1.5;color:#37566A;margin:0}
-      .mh-action{position:absolute;bottom:16px;width:104px;height:34px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;border:0;border-radius:8px;background:#0B948B;color:#fff;padding:0 10px;line-height:1;font-size:clamp(.56rem,.64vw,.7rem);font-weight:900;cursor:pointer;box-shadow:0 6px 14px rgba(11,148,139,.16);z-index:4}
-      .mh-consult>.mh-action{left:calc(58% + 15px)}
-      .mh-community-card>.mh-action{left:15px}
-      .mh-action:hover{background:#087D75}
+      .mh-bottom{margin-top:10px;min-height:72px;border-radius:15px;background:#F8FCFB;border:1px solid #D2E7E4;display:grid;grid-template-columns:1fr 1fr 1fr 1.25fr;align-items:stretch;overflow:hidden}.mh-bottom-item{min-width:0;padding:11px 13px;display:grid;grid-template-columns:32px 1fr;gap:8px;align-items:center}.mh-bottom-item+.mh-bottom-item{border-left:1px solid #D9E6E6}.mh-bottom-icon{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#E5F5F2;color:#0B8F7C}.mh-bottom-item b{display:block;font-size:9.7px;line-height:1.18;color:#0B665C}.mh-bottom-item span{display:block;margin-top:2px;font-size:8.4px;line-height:1.28;color:#486275}
 
-      .mh-community-card{position:absolute;z-index:5;right:2.3%;top:55.5%;width:24.4%;height:24%;overflow:hidden;border-radius:18px;background:#EEF7F7;border:1px solid rgba(203,222,225,.86);box-shadow:0 16px 34px rgba(42,72,82,.1)}
-      .mh-community-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;transform:scale(.9);transform-origin:right center;transition:transform .25s ease}
-      .mh-community-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.96) 34%,rgba(255,255,255,.82) 50%,rgba(255,255,255,.24) 69%,rgba(255,255,255,0) 100%)}
-      .mh-community-copy{position:relative;z-index:2;width:52%;height:100%;box-sizing:border-box;padding:16px 15px 58px;display:flex;flex-direction:column;min-width:0}
-      .mh-community-note{display:block;margin-top:7px;font-size:clamp(.5rem,.62vw,.69rem);line-height:1.35;color:#627784}
-
-      .mh-bottom{position:absolute;z-index:6;left:1.2%;right:1.2%;bottom:1.4%;height:14.5%;border-radius:18px;background:rgba(255,255,255,.92);border:1px solid rgba(203,222,225,.78);display:grid;grid-template-columns:1.05fr 1fr 1.05fr 1.35fr;align-items:center;box-shadow:0 10px 25px rgba(42,72,82,.07);backdrop-filter:blur(8px)}
-      .mh-bottom-item{min-width:0;padding:0 22px;display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center}
-      .mh-bottom-item+.mh-bottom-item{border-left:1px solid #D9E4E6}
-      .mh-bottom-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:#E5F5F2;color:#0B8F7C}
-      .mh-bottom-item b{display:block;font-size:clamp(.66rem,.82vw,.92rem);line-height:1.2;color:#0B665C}
-      .mh-bottom-item span{display:block;margin-top:4px;font-size:clamp(.53rem,.65vw,.72rem);line-height:1.4;color:#486275}
-
-      @media(max-width:1180px){
-        .mh-head{grid-template-columns:1fr;gap:12px}.mh-head p{max-width:760px}
-        .mh-score{min-width:170px}.mh-feature{padding:12px}.mh-bottom-item{padding:0 14px;grid-template-columns:38px 1fr}.mh-bottom-icon{width:38px;height:38px}
-      }
-      @media(max-width:900px){
-        .journey-nav{grid-template-columns:repeat(3,1fr)}
-        .mh-section{padding:56px 14px 72px}.mh-canvas{aspect-ratio:auto;overflow:visible;border-radius:24px;padding:24px;background:linear-gradient(180deg,#F5FBFB,#EAF6F6)}
-        .mh-canvas:before{display:none}.mh-photo-fallback{display:none}
-        .mh-main-photo{position:relative;width:100%;height:360px;border-radius:20px;object-position:center 35%;transform:none}
-        .mh-left,.mh-score,.mh-steps,.mh-consult,.mh-community-card,.mh-bottom{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:auto;height:auto;min-width:0}
-        .mh-left{margin-top:22px}.mh-title{font-size:2.7rem}.mh-subcopy{font-size:1rem}.mh-feature-grid{gap:12px}
-        .mh-score{margin:18px 0}.mh-steps{grid-template-columns:repeat(4,1fr);gap:10px}.mh-step{grid-template-columns:1fr;text-align:center}.mh-step:not(:last-child):after{display:none}.mh-step-icon{margin:0 auto}.mh-step b{font-size:.78rem}
-        .mh-consult{margin-top:18px;min-height:250px}.mh-community-card{margin-top:14px;min-height:280px}.mh-consult-copy,.mh-community-copy{padding:24px 20px 62px}.mh-community-copy{width:48%}.mh-community-photo{object-position:center center;transform:scale(.92);transform-origin:right center}
-        .mh-consult>.mh-action{left:calc(58% + 20px);bottom:20px}.mh-community-card>.mh-action{left:20px;bottom:20px}
-        .mh-bottom{margin-top:14px;grid-template-columns:1fr 1fr;gap:0}.mh-bottom-item{padding:18px}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E4E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E4E6}
-      }
-      @media(max-width:650px){
-        .journey-nav-wrap{padding:24px 14px 0}.journey-nav{grid-template-columns:1fr 1fr}.journey-pill{min-height:84px}
-        .mh-section{padding:46px 10px 62px}.mh-head{padding:0 4px}.mh-head h2{font-size:2.55rem}.mh-head p{font-size:16px}
-        .mh-canvas{padding:14px}.mh-main-photo{height:290px}.mh-title{font-size:2.25rem}.mh-feature-grid{grid-template-columns:1fr 1fr}.mh-feature h3{font-size:.88rem}.mh-feature p{font-size:.73rem}
-        .mh-steps{grid-template-columns:1fr 1fr}.mh-consult{grid-template-columns:1fr;min-height:0}.mh-consult-photo{height:220px}.mh-community-card{min-height:300px}.mh-community-copy{width:64%;padding:22px 18px 62px}.mh-consult-copy{padding:22px 18px 62px}.mh-community-shade{background:linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 45%,rgba(255,255,255,.66) 67%,rgba(255,255,255,.08) 100%)}.mh-community-photo{object-position:58% center;transform:scale(.94)}
-        .mh-consult>.mh-action,.mh-community-card>.mh-action{left:18px;bottom:18px}
-        .mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E4E6}
-      }
-      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-steps{grid-template-columns:1fr}.mh-main-photo{height:240px}.mh-title{font-size:2rem}.mh-community-copy{width:72%}.mh-community-photo{object-position:62% center;transform:scale(.95)}}
+      @media(max-height:820px) and (min-width:1101px){.mh-section{padding-top:32px;padding-bottom:42px}.mh-head{margin-bottom:13px}.mh-head h2{font-size:clamp(2rem,2.6vw,2.75rem)}.mh-head p{font-size:14.5px}.mh-primary,.mh-visual{min-height:345px}.mh-left{padding-top:23px;padding-bottom:20px}.mh-feature{padding:8px}.mh-care-card{min-height:100px}.mh-care-photo{height:100px}.mh-bottom{min-height:66px}}
+      @media(max-width:1100px){.journey-nav{grid-template-columns:repeat(3,1fr)}.mh-head{grid-template-columns:1fr;gap:8px}.mh-head p{max-width:760px}.mh-primary{grid-template-columns:1fr}.mh-visual{min-height:410px}.mh-care-grid{grid-template-columns:1fr}.mh-care-card+.mh-care-card{border-left:0;border-top:1px solid #D6E7E8}.mh-bottom{grid-template-columns:1fr 1fr}.mh-bottom-item:nth-child(3){border-left:0;border-top:1px solid #D9E6E6}.mh-bottom-item:nth-child(4){border-top:1px solid #D9E6E6}}
+      @media(max-width:700px){.journey-nav-wrap{width:min(calc(100% - 24px),1380px);padding-top:16px}.journey-nav{grid-template-columns:1fr 1fr}.mh-section{padding:32px 10px 42px}.mh-head h2{font-size:2.2rem}.mh-head p{font-size:14.5px}.mh-left{padding:22px 16px}.mh-title{font-size:1.95rem}.mh-feature-grid{grid-template-columns:1fr 1fr}.mh-visual{min-height:360px}.mh-score{width:145px}.mh-steps{grid-template-columns:1fr 1fr}.mh-care-card{grid-template-columns:96px 1fr}.mh-care-photo{width:96px}.mh-action{grid-column:1/-1;margin:0 12px 12px;justify-self:start}.mh-bottom{grid-template-columns:1fr}.mh-bottom-item+.mh-bottom-item{border-left:0;border-top:1px solid #D9E6E6}}
+      @media(max-width:460px){.journey-nav{grid-template-columns:1fr}.mh-feature-grid{grid-template-columns:1fr}.mh-visual{min-height:430px}.mh-steps{grid-template-columns:1fr 1fr}.mh-care-card{grid-template-columns:84px 1fr}.mh-care-photo{width:84px}}
     `}</style>
 
     <div className="journey-nav-wrap">
       <div className="journey-nav-title">Explore HealthConnect</div>
       <div className="journey-nav">
-        {NAV_ITEMS.map(item=><button key={item.label} type="button" className="journey-pill" style={{background:item.wash}} onClick={()=>goto(item.target)}><span className="journey-icon" style={{color:item.accent}}><Icon kind={item.icon} size={20}/></span><span><b>{item.label}</b><span>{item.sub}</span></span></button>)}
+        {NAV_ITEMS.map(item=><button key={item.label} type="button" className="journey-pill" style={{background:item.wash}} onClick={()=>goto(item.target)}><span className="journey-icon" style={{color:item.accent}}><Icon kind={item.icon} size={19}/></span><span><b>{item.label}</b><span>{item.sub}</span></span></button>)}
       </div>
     </div>
 
@@ -176,53 +104,39 @@ export default function AudienceJourneys(){
         </div>
 
         <div className="mh-canvas">
-          <div className="mh-photo-fallback" aria-hidden="true"/>
-          <img className="mh-main-photo" src={PHOTOS.patient} alt="Indian patient using HealthConnect on a smartphone" loading="lazy" decoding="async" onError={hideBrokenImage}/>
+          <div className="mh-primary">
+            <div className="mh-left">
+              <h3 className="mh-title">Your health.<span>All in one place.</span></h3>
+              <p className="mh-subcopy">Track, understand and take charge of your health with connected care, smart tools and a community that supports you.</p>
+              <div className="mh-rule"/>
+              <div className="mh-feature-grid">
+                {FEATURES.map(feature=><article className="mh-feature" key={feature.title}><div className="mh-feature-icon" style={{background:feature.wash,color:feature.accent}}><Icon kind={feature.icon} size={19}/></div><h3>{feature.title}</h3><p>{feature.copy}</p></article>)}
+              </div>
+            </div>
 
-          <div className="mh-left">
-            <h3 className="mh-title">Your health.<span>All in one place.</span></h3>
-            <p className="mh-subcopy">Track, understand and take charge of your health with connected care, smart tools and a community that supports you.</p>
-            <div className="mh-rule"/>
-            <div className="mh-feature-grid">
-              {FEATURES.map(feature=><article className="mh-feature" key={feature.title}><div className="mh-feature-icon" style={{background:feature.wash,color:feature.accent}}><Icon kind={feature.icon} size={22}/></div><h3>{feature.title}</h3><p>{feature.copy}</p></article>)}
+            <div className="mh-visual">
+              <img className="mh-main-photo" src={PHOTOS.patient} alt="Indian patient using HealthConnect on a smartphone" loading="lazy" decoding="async" onError={hideBrokenImage}/>
+              <div className="mh-visual-shade" aria-hidden="true"/>
+              <aside className="mh-score" aria-label="Illustrative Health Score preview">
+                <div className="mh-score-head"><span>Your Health Score</span><InfoPopover ariaLabel="About Health Score" title="How Health Score works" width={230}>The 84 shown here is an illustrative landing-page example. In My Health, your score uses health information available in your profile across measurable areas such as physical health, wellbeing and lifestyle. It is not a diagnosis, and assessment completion is shown separately from the score.</InfoPopover></div>
+                <div className="mh-gauge"><svg viewBox="0 0 120 70" aria-hidden="true"><path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#D7E3E5" strokeWidth="10" strokeLinecap="round"/><path d="M12 60 A48 48 0 0 1 96 28" fill="none" stroke="#14B8A6" strokeWidth="10" strokeLinecap="round"/></svg><div className="mh-score-num">84<small>Good</small></div></div>
+                <div className="mh-score-row"><span>Physical Health</span><b>Good</b></div><div className="mh-score-row"><span>Mental Wellbeing</span><b>Good</b></div><div className="mh-score-row attn"><span>Lifestyle</span><b>Needs Attention</b></div><div className="mh-score-foot"><span>Illustrative preview</span><Icon kind="clock" size={12}/></div>
+              </aside>
+              <div className="mh-steps" aria-label="Connected My Health journey">{CARE_STEPS.map(step=><div className="mh-step" key={step.title}><div className="mh-step-icon"><Icon kind={step.icon} size={16}/></div><b>{step.title}</b></div>)}</div>
             </div>
           </div>
 
-          <aside className="mh-score" aria-label="Illustrative Health Score preview">
-            <div className="mh-score-head"><span>Your Health Score</span><InfoPopover ariaLabel="About Health Score" title="How Health Score works" width={230}>The 84 shown here is an illustrative landing-page example. In My Health, your score uses health information available in your profile across measurable areas such as physical health, wellbeing and lifestyle. It is not a diagnosis, and assessment completion is shown separately from the score.</InfoPopover></div>
-            <div className="mh-gauge">
-              <svg viewBox="0 0 120 70" aria-hidden="true"><path d="M12 60 A48 48 0 0 1 108 60" fill="none" stroke="#D7E3E5" strokeWidth="10" strokeLinecap="round"/><path d="M12 60 A48 48 0 0 1 96 28" fill="none" stroke="#14B8A6" strokeWidth="10" strokeLinecap="round"/></svg>
-              <div className="mh-score-num">84<small>Good</small></div>
-            </div>
-            <div className="mh-score-row"><span>Physical Health</span><b>Good</b></div>
-            <div className="mh-score-row"><span>Mental Wellbeing</span><b>Good</b></div>
-            <div className="mh-score-row attn"><span>Lifestyle</span><b>Needs Attention</b></div>
-            <div className="mh-score-foot"><span>Illustrative preview</span><Icon kind="clock" size={15}/></div>
-          </aside>
-
-          <div className="mh-steps" aria-label="Connected My Health journey">
-            {CARE_STEPS.map(step=><div className="mh-step" key={step.title}><div className="mh-step-icon"><Icon kind={step.icon} size={23}/></div><b>{step.title}</b></div>)}
+          <div className="mh-care-grid">
+            <article className="mh-care-card"><img className="mh-care-photo" src={PHOTOS.consultation} alt="Doctor consulting with a patient" loading="lazy" decoding="async" onError={hideBrokenImage}/><div className="mh-care-copy"><h3>Connected Care</h3><p>Move from organised health context into doctor discovery, consultation and follow-up.</p></div><button type="button" className="mh-action" onClick={()=>router.push('/doctors')}>Consult Now</button></article>
+            <article className="mh-care-card"><img className="mh-care-photo" src={PHOTOS.community} alt="HealthConnect community members supporting one another online" loading="lazy" decoding="async" onError={hideBrokenImage}/><div className="mh-care-copy"><h3>Health Community</h3><p>Real conversations. Shared experiences. Support between visits.</p><span className="mh-community-note">Find condition-focused spaces to learn, share and feel less alone.</span></div><button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button></article>
           </div>
+        </div>
 
-          <article className="mh-consult">
-            <img className="mh-consult-photo" src={PHOTOS.consultation} alt="Doctor consulting with a patient" loading="lazy" decoding="async" onError={hideBrokenImage}/>
-            <div className="mh-consult-copy"><h3>Connected Care</h3><p>Move from organised health context into doctor discovery, consultation and follow-up.</p></div>
-            <button type="button" className="mh-action" onClick={()=>router.push('/doctors')}>Consult Now</button>
-          </article>
-
-          <article className="mh-community-card">
-            <img className="mh-community-photo" src={PHOTOS.community} alt="HealthConnect community members supporting one another online" loading="lazy" decoding="async" onError={hideBrokenImage}/>
-            <div className="mh-community-shade" aria-hidden="true"/>
-            <div className="mh-community-copy"><h3>Health Community</h3><p>Real conversations.<br/>Shared experiences.<br/>Support between visits.</p><span className="mh-community-note">Find condition-focused spaces where people can learn, share and feel less alone.</span></div>
-            <button type="button" className="mh-action" onClick={()=>router.push('/communities')}>Join Now</button>
-          </article>
-
-          <div className="mh-bottom">
-            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="lock" size={23}/></div><div><b>Private & Secure Workspace</b><span>Personal health information stays behind authenticated access.</span></div></div>
-            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="clock" size={23}/></div><div><b>All in One Place</b><span>Reports, medicines, appointments and health history together.</span></div></div>
-            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="community" size={23}/></div><div><b>Connected Care Journey</b><span>Health information, professional care and peer support stay connected.</span></div></div>
-            <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="heart" size={23}/></div><div><b>Built around your care journey</b><span>Organise what matters and move more confidently between each care step.</span></div></div>
-          </div>
+        <div className="mh-bottom">
+          <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="lock" size={18}/></div><div><b>Private & Secure Workspace</b><span>Personal health information stays behind authenticated access.</span></div></div>
+          <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="clock" size={18}/></div><div><b>All in One Place</b><span>Reports, medicines, appointments and health history together.</span></div></div>
+          <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="community" size={18}/></div><div><b>Connected Care Journey</b><span>Health information, professional care and peer support stay connected.</span></div></div>
+          <div className="mh-bottom-item"><div className="mh-bottom-icon"><Icon kind="heart" size={18}/></div><div><b>Built around your care journey</b><span>Organise what matters and move more confidently between each care step.</span></div></div>
         </div>
       </div>
     </section>
