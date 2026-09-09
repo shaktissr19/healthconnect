@@ -1,5 +1,6 @@
 'use client';
 
+import type { SyntheticEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useUIStore } from '@/store/uiStore';
@@ -12,6 +13,9 @@ const DOCTOR_FEATURES=[
   {title:'Professional Presence',copy:'Keep doctor profile, consultation modes and practice information connected to discovery.',icon:'profile',wash:'#EAF4FF',accent:'#1D4ED8'},
   {title:'Better Patient Journey',copy:'Patients move from discovery to consultation and follow-up with less disconnected context.',icon:'heart',wash:'#EAF8EE',accent:'#15803D'},
 ] as const;
+
+const DOCTOR_IMAGE='/images/doctor-platform-main.png?v=20260909-2';
+const DOCTOR_IMAGE_FALLBACK='/images/doctors-intro.png?v=20260909-2';
 
 function DoctorIcon({kind,size=22}:{kind:string;size?:number}){
   const common={width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.9,strokeLinecap:'round' as const,strokeLinejoin:'round' as const,'aria-hidden':true};
@@ -39,61 +43,66 @@ export default function CommunityBenefits(){
     openAuthModal('register');
   };
 
+  const useFallback=(event:SyntheticEvent<HTMLImageElement>)=>{
+    const image=event.currentTarget;
+    if(image.dataset.fallback==='1') return;
+    image.dataset.fallback='1';
+    image.src=DOCTOR_IMAGE_FALLBACK;
+  };
+
   return <section className="doctor-platform-section" id="doctor-platform-story" aria-labelledby="doctor-platform-title">
     <style>{`
-      .doctor-platform-section{font-family:'DM Sans',Arial,sans-serif;color:#10243C;background:#fff;padding:0 28px 88px;scroll-margin-top:92px}
-      .doctor-platform-shell{max-width:1664px;margin:0 auto}
-      .doctor-platform-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(390px,.72fr);gap:58px;align-items:end;margin-bottom:28px}
-      .doctor-platform-label{font-size:13px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#2563EB;margin-bottom:10px}
-      .doctor-platform-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.35rem,3.2vw,3.7rem);line-height:1.02;letter-spacing:-.052em;color:#0B2B45;margin:0}
-      .doctor-platform-head p{font-size:18px;line-height:1.58;color:#35566A;margin:0 0 4px}
+      .doctor-platform-section{font-family:'DM Sans',Arial,sans-serif;color:#10243C;background:#fff;padding:42px 22px 56px;scroll-margin-top:76px}
+      .doctor-platform-shell{width:min(100%,1380px);margin:0 auto}
+      .doctor-platform-head{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(330px,.65fr);gap:44px;align-items:end;margin-bottom:18px}
+      .doctor-platform-label{font-size:12px;font-weight:900;letter-spacing:.17em;text-transform:uppercase;color:#2563EB;margin-bottom:7px}
+      .doctor-platform-head h2{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.15rem,2.8vw,3.05rem);line-height:1.03;letter-spacing:-.05em;color:#0B2B45;margin:0}
+      .doctor-platform-head p{font-size:15.5px;line-height:1.5;color:#35566A;margin:0 0 2px;max-width:500px}
 
-      .doctor-platform-canvas{position:relative;min-height:650px;overflow:hidden;border-radius:30px;border:1px solid #C9DDEC;background:linear-gradient(120deg,#EEF6FF 0%,#F7FBFF 42%,#E7F2FA 100%);box-shadow:0 20px 48px rgba(31,75,112,.09)}
-      .doctor-platform-photo{position:absolute;right:0;top:0;width:55%;height:100%;object-fit:cover;object-position:center center;display:block}
-      .doctor-platform-photo-shade{position:absolute;z-index:1;inset:0;background:linear-gradient(90deg,#EEF6FF 0%,#EEF6FF 40%,rgba(238,246,255,.91) 47%,rgba(238,246,255,.34) 58%,rgba(238,246,255,.05) 70%,rgba(238,246,255,0) 83%);pointer-events:none}
-      .doctor-platform-copy{position:relative;z-index:3;width:48%;padding:48px 0 42px 52px;box-sizing:border-box}
-      .doctor-platform-eyebrow{font-size:13px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#2563EB;margin-bottom:10px}
-      .doctor-platform-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,2.65vw,3.15rem);line-height:1.05;letter-spacing:-.045em;color:#0B2B45;margin:0;max-width:660px}
-      .doctor-platform-intro{font-size:15.5px;line-height:1.58;color:#35566A;margin:14px 0 19px;max-width:650px}
-      .doctor-platform-rule{width:48px;height:4px;border-radius:999px;background:#2563EB;margin-bottom:18px}
+      .doctor-platform-canvas{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(420px,.92fr);min-height:0;border-radius:24px;border:1px solid #C9DDEC;overflow:hidden;background:linear-gradient(120deg,#EEF6FF 0%,#F8FBFF 100%);box-shadow:0 16px 38px rgba(31,75,112,.08)}
+      .doctor-platform-copy{padding:28px 30px 26px 34px;min-width:0;display:flex;flex-direction:column;justify-content:center}
+      .doctor-platform-eyebrow{font-size:11.5px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#2563EB;margin-bottom:6px}
+      .doctor-platform-copy h3{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(1.7rem,2.15vw,2.35rem);line-height:1.05;letter-spacing:-.043em;color:#0B2B45;margin:0;max-width:620px}
+      .doctor-platform-intro{font-size:13.2px;line-height:1.47;color:#35566A;margin:9px 0 11px;max-width:650px}
+      .doctor-platform-rule{width:42px;height:3px;border-radius:999px;background:#2563EB;margin-bottom:11px}
 
-      .doctor-feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:690px}
-      .doctor-feature{min-height:130px;padding:15px 15px 14px;border-radius:17px;border:1px solid rgba(192,213,229,.88);box-shadow:0 8px 21px rgba(40,77,112,.055);background:#fff;transition:transform .18s ease,box-shadow .18s ease}.doctor-feature:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(40,77,112,.09)}
-      .doctor-feature-top{display:flex;align-items:center;gap:10px}
-      .doctor-feature-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
-      .doctor-feature b{font-family:'Sora','DM Sans',sans-serif;font-size:13.3px;line-height:1.25;color:#16354A}
-      .doctor-feature p{font-size:11.8px;line-height:1.45;color:#526B7B;margin:8px 0 0}
+      .doctor-feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;gap:8px}
+      .doctor-feature{min-width:0;min-height:92px;padding:10px 10px 9px;border-radius:13px;border:1px solid rgba(192,213,229,.88);box-shadow:0 5px 14px rgba(40,77,112,.045);transition:transform .18s ease,box-shadow .18s ease}
+      .doctor-feature:hover{transform:translateY(-2px);box-shadow:0 9px 18px rgba(40,77,112,.08)}
+      .doctor-feature-top{display:flex;align-items:center;gap:7px}
+      .doctor-feature-icon{width:31px;height:31px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto}
+      .doctor-feature b{font-family:'Sora','DM Sans',sans-serif;font-size:11.2px;line-height:1.22;color:#16354A}
+      .doctor-feature p{font-size:9.7px;line-height:1.34;color:#526B7B;margin:6px 0 0}
 
-      .doctor-value-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;max-width:690px}
-      .doctor-value{border-radius:15px;padding:12px 14px;background:rgba(255,255,255,.92);border:1px solid #CDDEEA}
-      .doctor-value strong{display:block;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#2563EB;margin-bottom:4px}
-      .doctor-value span{display:block;font-size:11.5px;line-height:1.42;color:#486275}
-      .doctor-platform-cta{margin-top:15px;border:0;border-radius:10px;background:#2563EB;color:#fff;padding:12px 18px;font:900 13.5px 'DM Sans',Arial,sans-serif;cursor:pointer;box-shadow:0 8px 18px rgba(37,99,235,.18)}
+      .doctor-value-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+      .doctor-value{border-radius:12px;padding:8px 10px;background:#fff;border:1px solid #CDDEEA}
+      .doctor-value strong{display:block;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#2563EB;margin-bottom:2px}
+      .doctor-value span{display:block;font-size:9.8px;line-height:1.34;color:#486275}
+      .doctor-platform-cta{align-self:flex-start;margin-top:10px;border:0;border-radius:9px;background:#2563EB;color:#fff;padding:9px 14px;font:900 12px 'DM Sans',Arial,sans-serif;cursor:pointer;box-shadow:0 7px 16px rgba(37,99,235,.16)}
       .doctor-platform-cta:hover{background:#1D4ED8;transform:translateY(-1px)}.doctor-platform-cta:focus-visible{outline:3px solid rgba(37,99,235,.25);outline-offset:3px}
 
-      .doctor-flow-card{position:absolute;z-index:4;right:2.8%;bottom:4.8%;width:43%;border-radius:19px;padding:15px 16px;background:rgba(255,255,255,.94);border:1px solid rgba(205,222,234,.9);box-shadow:0 13px 30px rgba(25,61,80,.12);backdrop-filter:blur(7px)}
-      .doctor-flow-card>strong{display:block;font-family:'Sora','DM Sans',sans-serif;font-size:13px;color:#15364D;margin-bottom:10px}
-      .doctor-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:8px}
-      .doctor-flow-step{min-width:0}
-      .doctor-flow-step b{display:block;font-size:11.5px;color:#2563EB}
-      .doctor-flow-step span{display:block;margin-top:3px;font-size:10.3px;line-height:1.35;color:#5A7180}
-      .doctor-flow-arrow{color:#7A9AB0;font-weight:900;font-size:17px}
+      .doctor-visual{position:relative;min-height:510px;overflow:hidden;background:#DDEAF2}
+      .doctor-platform-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block}
+      .doctor-platform-photo-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,38,58,.02) 45%,rgba(8,38,58,.12) 100%);pointer-events:none}
+      .doctor-visual-badge{position:absolute;top:18px;right:18px;padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid rgba(208,224,233,.92);font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#25527A;box-shadow:0 7px 18px rgba(22,52,65,.08);backdrop-filter:blur(8px)}
+      .doctor-flow-card{position:absolute;left:18px;right:18px;bottom:18px;border-radius:15px;padding:11px 12px;background:rgba(255,255,255,.95);border:1px solid rgba(205,222,234,.94);box-shadow:0 11px 25px rgba(25,61,80,.12);backdrop-filter:blur(8px)}
+      .doctor-flow-card>strong{display:block;font-family:'Sora','DM Sans',sans-serif;font-size:11.5px;color:#15364D;margin-bottom:7px}
+      .doctor-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:start;gap:7px}
+      .doctor-flow-step{min-width:0}.doctor-flow-step b{display:block;font-size:9.8px;color:#2563EB}.doctor-flow-step span{display:block;margin-top:2px;font-size:8.8px;line-height:1.32;color:#5A7180}.doctor-flow-arrow{align-self:center;color:#7A9AB0;font-weight:900;font-size:14px}
 
-      @media(max-width:1180px){
-        .doctor-platform-head{grid-template-columns:1fr;gap:12px}.doctor-platform-head p{max-width:820px}
-        .doctor-platform-canvas{min-height:780px}.doctor-platform-photo{width:100%;height:48%;top:auto;bottom:0;object-position:center 42%}
-        .doctor-platform-photo-shade{background:linear-gradient(180deg,#EEF6FF 0%,#EEF6FF 49%,rgba(238,246,255,.6) 58%,rgba(238,246,255,.08) 72%,transparent 100%)}
-        .doctor-platform-copy{width:100%;padding:42px 48px 0}.doctor-feature-grid,.doctor-value-row{max-width:780px}
-        .doctor-flow-card{right:4%;bottom:3.5%;width:55%}
+      @media(max-height:820px) and (min-width:1101px){
+        .doctor-platform-section{padding-top:34px;padding-bottom:44px}.doctor-platform-head{margin-bottom:14px}.doctor-platform-head h2{font-size:clamp(2rem,2.55vw,2.75rem)}.doctor-platform-head p{font-size:14.5px}
+        .doctor-platform-copy{padding:23px 25px 22px 29px}.doctor-platform-copy h3{font-size:clamp(1.55rem,1.95vw,2.05rem)}.doctor-platform-intro{font-size:12.5px;margin:7px 0 9px}.doctor-feature{min-height:84px;padding:8px 9px}.doctor-feature p{font-size:9.2px}.doctor-visual{min-height:480px}
+      }
+      @media(max-width:1100px){
+        .doctor-platform-section{padding:38px 18px 52px}.doctor-platform-head{grid-template-columns:1fr;gap:8px}.doctor-platform-head p{max-width:760px}
+        .doctor-platform-canvas{grid-template-columns:1fr}.doctor-platform-copy{padding:28px}.doctor-visual{min-height:460px}.doctor-feature-grid{grid-template-columns:repeat(3,1fr)}
       }
       @media(max-width:760px){
-        .doctor-platform-section{padding:0 14px 70px}.doctor-platform-head h2{font-size:2.45rem}.doctor-platform-head p{font-size:16px}
-        .doctor-platform-canvas{min-height:1080px;border-radius:24px}.doctor-platform-copy{padding:30px 22px 0}.doctor-platform-copy h3{font-size:2.2rem}.doctor-platform-intro{font-size:14px}
-        .doctor-feature-grid,.doctor-value-row{grid-template-columns:1fr}.doctor-feature{min-height:0}.doctor-platform-photo{height:34%;object-position:center}
-        .doctor-platform-photo-shade{background:linear-gradient(180deg,#EEF6FF 0%,#EEF6FF 62%,rgba(238,246,255,.52) 72%,transparent 100%)}
-        .doctor-flow-card{left:18px;right:18px;width:auto;bottom:18px}.doctor-flow{grid-template-columns:1fr}.doctor-flow-arrow{display:none}.doctor-flow-step{padding:5px 0;border-top:1px solid #E2EAF0}.doctor-flow-step:first-of-type{border-top:0}
+        .doctor-platform-section{padding:32px 12px 44px}.doctor-platform-head h2{font-size:2.15rem}.doctor-platform-head p{font-size:15px}.doctor-platform-copy{padding:24px 18px}.doctor-platform-copy h3{font-size:1.9rem}.doctor-platform-intro{font-size:13px}
+        .doctor-feature-grid{grid-template-columns:1fr 1fr}.doctor-feature{min-height:0}.doctor-value-row{grid-template-columns:1fr}.doctor-visual{min-height:390px}.doctor-flow{grid-template-columns:1fr}.doctor-flow-arrow{display:none}.doctor-flow-step+.doctor-flow-step{border-top:1px solid #E2EAF0;padding-top:5px;margin-top:3px}
       }
-      @media(max-width:460px){.doctor-platform-head h2{font-size:2.1rem}.doctor-platform-canvas{min-height:1190px}.doctor-platform-copy h3{font-size:1.95rem}.doctor-platform-photo{height:31%}}
+      @media(max-width:480px){.doctor-feature-grid{grid-template-columns:1fr}.doctor-visual{min-height:360px}.doctor-flow-card{left:12px;right:12px;bottom:12px}.doctor-visual-badge{top:12px;right:12px}}
     `}</style>
 
     <div className="doctor-platform-shell">
@@ -103,9 +112,6 @@ export default function CommunityBenefits(){
       </div>
 
       <div className="doctor-platform-canvas">
-        <img className="doctor-platform-photo" src="/images/doctors-intro.png" alt="Indian doctor in a modern clinic with a patient consultation in progress" loading="lazy" decoding="async"/>
-        <div className="doctor-platform-photo-shade" aria-hidden="true"/>
-
         <div className="doctor-platform-copy">
           <div className="doctor-platform-eyebrow">Practice & Patients</div>
           <h3>One connected workspace from appointment to follow-up.</h3>
@@ -124,14 +130,19 @@ export default function CommunityBenefits(){
           <button type="button" className="doctor-platform-cta" onClick={openDoctor}>Explore Doctor Platform →</button>
         </div>
 
-        <aside className="doctor-flow-card" aria-label="Doctor Platform care flow">
-          <strong>Built around the real care flow</strong>
-          <div className="doctor-flow">
-            <div className="doctor-flow-step"><b>Before consultation</b><span>Schedule, patient relationship and shared context.</span></div><span className="doctor-flow-arrow">→</span>
-            <div className="doctor-flow-step"><b>During care</b><span>Keep the consultation focused with context nearby.</span></div><span className="doctor-flow-arrow">→</span>
-            <div className="doctor-flow-step"><b>After consultation</b><span>Follow-up and the next care step stay visible.</span></div>
-          </div>
-        </aside>
+        <div className="doctor-visual">
+          <img className="doctor-platform-photo" src={DOCTOR_IMAGE} alt="Indian doctor in a modern clinic with patient care in progress" loading="lazy" decoding="async" onError={useFallback}/>
+          <div className="doctor-platform-photo-shade" aria-hidden="true"/>
+          <div className="doctor-visual-badge">Practice · Patients · Follow-up</div>
+          <aside className="doctor-flow-card" aria-label="Doctor Platform care flow">
+            <strong>Built around the real care flow</strong>
+            <div className="doctor-flow">
+              <div className="doctor-flow-step"><b>Before consultation</b><span>Schedule, patient relationship and shared context.</span></div><span className="doctor-flow-arrow">→</span>
+              <div className="doctor-flow-step"><b>During care</b><span>Keep the consultation focused with context nearby.</span></div><span className="doctor-flow-arrow">→</span>
+              <div className="doctor-flow-step"><b>After consultation</b><span>Follow-up and the next care step stay visible.</span></div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   </section>;
