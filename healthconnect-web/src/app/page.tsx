@@ -14,6 +14,7 @@ import MembershipPlans from '@/components/landing/MembershipPlans';
 import TrustSection from '@/components/landing/TrustSection';
 import FinalCTA from '@/components/landing/FinalCTA';
 import Footer from '@/components/landing/Footer';
+import LandingViewportSystem from '@/components/landing/LandingViewportSystem';
 import LandingAuthModal, { type LandingAuthMode } from '@/components/landing/LandingAuthModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -112,6 +113,7 @@ export default function LandingPage(){
       <FinalCTA/>
     </main>
     <Footer/>
+    <LandingViewportSystem/>
     {(authModal==='login'||authModal==='register'||authModal==='forgot')&&<LandingAuthModal mode={authModal} onClose={closeAuthModal} onModeChange={(mode)=>openAuthModal(mode)}/>} 
   </>;
 }
