@@ -24,7 +24,7 @@ jobs:
       - name: Refresh web dependency locks
         working-directory: healthconnect-web
         run: |
-          npm install --package-lock-only --ignore-scripts next@16.3.4 eslint-config-next@16.3.4
+          npm install --save-exact --package-lock-only --ignore-scripts next@16.3.4 eslint-config-next@16.3.4
           npm update --package-lock-only --ignore-scripts sharp
           node - <<'NODE'
           const pkg = require('./package.json');
@@ -39,7 +39,7 @@ jobs:
       - name: Refresh API dependency locks
         working-directory: healthconnect-api
         run: |
-          npm install --package-lock-only --ignore-scripts morgan@1.12.0 multer@2.3.0
+          npm install --save-exact --package-lock-only --ignore-scripts morgan@1.12.0 multer@2.3.0
           node - <<'NODE'
           const pkg = require('./package.json');
           if (pkg.dependencies?.morgan !== '1.12.0') throw new Error(`morgan=${pkg.dependencies?.morgan}`);
