@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 86" role="img" aria-labelledby="title desc">
+  <title id="title">HealthConnect India logo</title>
+  <desc id="desc">HealthConnect monogram with a pulse line and wordmark.</desc>
+  <defs>
+    <linearGradient id="hcBg" x1="8" y1="6" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12364B"/>
+      <stop offset="0.58" stop-color="#24506A"/>
+      <stop offset="1" stop-color="#0E8F82"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="70" height="70" rx="18" fill="url(#hcBg)"/>
+  <text x="43" y="48" text-anchor="middle" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="900" letter-spacing="-1.5">HC</text>
+  <path d="M22 58h9l3-7 5 12 5-9h18" fill="none" stroke="#A8EFE5" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="96" y="39" fill="#12364B" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="800" letter-spacing="-1.2">HealthConnect</text>
+  <text x="98" y="59" fill="#0F766E" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="700" letter-spacing="0.2">INDIA'S UNIFIED HEALTHCARE PLATFORM</text>
+</svg>
