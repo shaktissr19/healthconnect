@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
 import LandingHero from '@/components/landing/LandingHero';
 import PlatformNumbersLegacy, { type PlatformStats } from '@/components/landing/PlatformNumbersLegacy';
-import AudienceJourneys from '@/components/landing/AudienceJourneys';
+import PlatformTourNav from '@/components/landing/PlatformTourNav';
+import MyHealthShowcase from '@/components/landing/MyHealthShowcase';
 import HealthCommunitiesShowcase from '@/components/landing/HealthCommunitiesShowcase';
 import CommunityBenefits from '@/components/landing/CommunityBenefits';
 import CareDiscoveryStrip from '@/components/landing/CareDiscoveryStrip';
@@ -99,7 +100,8 @@ export default function LandingPage(){
     <PublicNavbar/>
     <main>
       <LandingHero/>
-      <AudienceJourneys/>
+      <PlatformTourNav/>
+      <MyHealthShowcase/>
       <HealthCommunitiesShowcase/>
       <CommunityBenefits/>
       <CareDiscoveryStrip/>
