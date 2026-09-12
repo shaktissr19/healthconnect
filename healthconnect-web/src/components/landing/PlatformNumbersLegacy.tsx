@@ -3,66 +3,24 @@
 import { useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 
-export type PlatformStats = {
-  patients: number | null;
-  doctors: number | null;
-  communities: number | null;
-  hospitals: number | null;
-};
+export type PlatformStats={patients:number|null;doctors:number|null;communities:number|null;hospitals:number|null};
+type CountKey=keyof PlatformStats;
+type Card={label:string;sub:string;desc:string;cta:string;href:string;color:string;photo:string;countKey:CountKey};
 
-type CountKey = keyof PlatformStats;
-
-type Card = {
-  label: string;
-  sub: string;
-  desc: string;
-  cta: string;
-  href: string;
-  color: string;
-  photo: string;
-  countKey: CountKey;
-};
-
-const CARDS: Card[] = [
-  {label:'Patient Profiles',sub:'My Health · appointments · records',desc:'Keep medical history, reports, medicines, symptoms, vitals and appointments connected across the patient journey.',cta:'Open My Health',href:'/?auth=login&home=1',color:'#1A6BB5',photo:'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=900&q=82',countKey:'patients'},
-  {label:'Doctor Profiles',sub:'Discovery · availability · booking',desc:'Browse doctors by specialty and location, review consultation options and move into the live appointment journey.',cta:'Find Doctors',href:'/doctors',color:'#6D45C6',photo:'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=900&q=82',countKey:'doctors'},
-  {label:'Health Communities',sub:'Peer support between visits',desc:'Condition-focused communities create space to ask, share and learn beyond a consultation, with moderation and participation controls.',cta:'Explore Communities',href:'/communities',color:'#087D5A',photo:'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=900&q=82',countKey:'communities'},
-  {label:'Hospital Profiles',sub:'Departments · facilities · hospital OPD',desc:'Compare departments, facilities, schemes, affiliated doctors and hospital-specific OPD before deciding where to visit.',cta:'Find Hospitals',href:'/hospitals',color:'#B45309',photo:'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=900&q=82',countKey:'hospitals'},
+const CARDS:Card[]=[
+  {label:'Patient Profiles',sub:'My Health · appointments · records',desc:'Keep medical history, reports, medicines, symptoms, vitals and appointments connected across the patient journey.',cta:'Open My Health',href:'/?auth=login&home=1',color:'#2F5BEA',photo:'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=900&q=82',countKey:'patients'},
+  {label:'Doctor Profiles',sub:'Discovery · availability · booking',desc:'Browse doctors by specialty and location, review consultation options and move into the live appointment journey.',cta:'Find Doctors',href:'/doctors',color:'#7357D8',photo:'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=900&q=82',countKey:'doctors'},
+  {label:'Health Communities',sub:'Peer support between visits',desc:'Condition-focused communities create space to ask, share and learn beyond a consultation, with moderation and participation controls.',cta:'Explore Communities',href:'/communities',color:'#C23A63',photo:'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=900&q=82',countKey:'communities'},
+  {label:'Hospital Profiles',sub:'Departments · facilities · hospital OPD',desc:'Compare departments, facilities, schemes, affiliated doctors and hospital-specific OPD before deciding where to visit.',cta:'Find Hospitals',href:'/hospitals',color:'#B7791F',photo:'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=900&q=82',countKey:'hospitals'},
 ];
+const formatCount=(value:number|null)=>value===null||!Number.isFinite(value)?'—':new Intl.NumberFormat('en-IN').format(value);
 
-const formatCount = (value:number|null) => value === null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat('en-IN').format(value);
+export default function PlatformNumbersLegacy({stats}:{stats:PlatformStats}){
+  const [active,setActive]=useState(2);
+  const selectWithKeyboard=(event:KeyboardEvent<HTMLElement>,index:number)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setActive(index)}if(event.key==='ArrowRight'||event.key==='ArrowDown'){event.preventDefault();setActive((index+1)%CARDS.length)}if(event.key==='ArrowLeft'||event.key==='ArrowUp'){event.preventDefault();setActive((index-1+CARDS.length)%CARDS.length)}};
 
-export default function PlatformNumbersLegacy({ stats }: { stats: PlatformStats }) {
-  const [active,setActive] = useState(2);
-  const selectWithKeyboard=(event:KeyboardEvent<HTMLElement>,index:number)=>{
-    if(event.key==='Enter'||event.key===' '){event.preventDefault();setActive(index)}
-    if(event.key==='ArrowRight'||event.key==='ArrowDown'){event.preventDefault();setActive((index+1)%CARDS.length)}
-    if(event.key==='ArrowLeft'||event.key==='ArrowUp'){event.preventDefault();setActive((index-1+CARDS.length)%CARDS.length)}
-  };
-
-  return <section className="pn-section" aria-labelledby="pn-heading">
-    <style>{`
-      .pn-section{background:linear-gradient(135deg,#083E46 0%,#0A5557 55%,#123E58 100%);padding:52px 0 54px;font-family:'DM Sans',Arial,sans-serif;color:#fff}.pn-head{max-width:1340px;margin:0 auto;padding:0 36px 22px;display:flex;align-items:end;justify-content:space-between;gap:34px}.pn-kicker{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#9FE8DC;font-size:12.5px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}.pn-kicker:before{content:'';width:25px;height:2px;background:#7EDCCE}.pn-heading{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2.1rem,2.8vw,3rem);font-weight:900;color:#fff;letter-spacing:-.04em;line-height:1.04;margin:0}.pn-head p{font-size:14.5px;line-height:1.52;color:#C7E0E2;max-width:390px;margin:0}.pn-stage{padding:0 36px}.pn-cards{display:flex;height:350px;max-width:1440px;margin:0 auto;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.15);box-shadow:0 16px 40px rgba(4,28,36,.25)}.pn-card{position:relative;overflow:hidden;cursor:pointer;transition:flex .48s cubic-bezier(.4,0,.2,1);border-right:1px solid rgba(255,255,255,.11);outline:none}.pn-card:last-child{border-right:0}.pn-card.col{flex:1}.pn-card.exp{flex:2.35}.pn-card:focus-visible{box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 7px rgba(94,234,212,.7);z-index:4}.pn-photo{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .4s ease;background-color:#17324D}.pn-overlay{position:absolute;inset:0;transition:background .4s ease}.pn-col-txt,.pn-exp-txt{position:absolute;left:0;right:0;bottom:0;color:#fff}.pn-col-txt{padding:20px 18px}.pn-exp-txt{padding:27px 30px;animation:pnIn .35s ease both}@keyframes pnIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}.pn-stat{font-family:'Sora',sans-serif;font-size:36px;font-weight:900;line-height:1;letter-spacing:-.04em;margin-bottom:5px}.pn-exp-stat{font-family:'Sora',sans-serif;font-size:48px;font-weight:900;line-height:1;letter-spacing:-.045em;margin-bottom:4px}.pn-label{font-size:14px;font-weight:850}.pn-sub{font-size:11.5px;color:rgba(255,255,255,.78);margin-top:4px;line-height:1.35}.pn-exp-sub{font-size:11.5px;font-weight:850;letter-spacing:.10em;text-transform:uppercase;color:rgba(255,255,255,.82);margin-bottom:6px}.pn-exp-title{font-family:'Sora',sans-serif;font-size:19px;font-weight:800;margin-bottom:8px}.pn-exp-desc{font-size:13.5px;line-height:1.52;color:rgba(255,255,255,.9);max-width:410px;margin:0 0 14px}.pn-cta{display:inline-flex;align-items:center;background:#F7FAF9;padding:9px 14px;border-radius:8px;font-family:'Sora',sans-serif;font-size:11.5px;font-weight:800;text-decoration:none;text-transform:uppercase;letter-spacing:.03em}.pn-cta:focus-visible{outline:3px solid #fff;outline-offset:3px}.pn-hint{position:absolute;top:14px;right:14px;background:rgba(7,22,42,.62);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;backdrop-filter:blur(8px)}
-      @media(max-width:820px){.pn-head{padding:0 20px 20px;align-items:start;flex-direction:column;gap:10px}.pn-stage{padding:0 20px}.pn-cards{height:auto;flex-direction:column}.pn-card,.pn-card.col,.pn-card.exp{flex:none;min-height:260px;border-right:0;border-bottom:1px solid rgba(255,255,255,.1)}}
-      @media(max-width:520px){.pn-section{padding:42px 0 44px}.pn-stage{padding:0 12px}.pn-head{padding:0 16px 18px}.pn-heading{font-size:2.15rem}.pn-exp-txt{padding:22px}.pn-exp-stat{font-size:42px}}
-    `}</style>
-    <div className="pn-head">
-      <div><div className="pn-kicker">Platform at a glance</div><h2 className="pn-heading" id="pn-heading">HealthConnect<br/>by the Numbers</h2></div>
-      <p>Live platform counts show the connected parts of HealthConnect already in use.</p>
-    </div>
-    <div className="pn-stage">
-      <div className="pn-cards" aria-label="HealthConnect platform counts">
-        {CARDS.map((card,index)=>{
-          const expanded=active===index;
-          const count=formatCount(stats[card.countKey]);
-          return <article key={card.label} className={`pn-card ${expanded?'exp':'col'}`} tabIndex={0} role="button" aria-expanded={expanded} aria-label={`${card.label}: ${count}. ${expanded?'Expanded':'Press Enter to expand'}`} onClick={()=>setActive(index)} onMouseEnter={()=>setActive(index)} onKeyDown={event=>selectWithKeyboard(event,index)}>
-            <div className="pn-photo" style={{backgroundImage:`url(${card.photo})`,opacity:expanded?1:.5}} role="img" aria-label={`${card.label} visual`}/>
-            <div className="pn-overlay" style={{background:expanded?`linear-gradient(to top,${card.color}F2 0%,${card.color}A8 45%,rgba(10,22,40,.10) 78%)`:'linear-gradient(to top,#071B27F5 0%,#071B2792 65%,rgba(10,22,40,.10) 100%)'}}/>
-            {card.countKey==='communities'&&<div className="pn-hint">HealthConnect USP</div>}
-            {!expanded?<div className="pn-col-txt"><div className="pn-stat">{count}</div><div className="pn-label">{card.label}</div><div className="pn-sub">{card.sub}</div></div>:<div className="pn-exp-txt"><div className="pn-exp-sub">{card.sub}</div><div className="pn-exp-stat">{count}</div><div className="pn-exp-title">{card.label}</div><p className="pn-exp-desc">{card.desc}</p><Link href={card.href} className="pn-cta" style={{color:card.color}} onClick={e=>e.stopPropagation()}>{card.cta} →</Link></div>}
-          </article>;
-        })}
-      </div>
-    </div>
-  </section>;
+  return <section className="pn-section" aria-labelledby="pn-heading"><style>{`
+    .pn-section{background:#F6F8FB;padding:44px 0 48px;font-family:'DM Sans',Arial,sans-serif;color:#10243C;border-top:1px solid #DCE4EC;border-bottom:1px solid #DCE4EC}.pn-head{max-width:1340px;margin:0 auto;padding:0 36px 20px;display:flex;align-items:end;justify-content:space-between;gap:36px}.pn-kicker{display:flex;align-items:center;gap:8px;margin-bottom:7px;color:#2F5BEA;font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase}.pn-kicker:before{content:'';width:25px;height:2px;background:#7357D8}.pn-heading{font-family:'Sora','DM Sans',sans-serif;font-size:clamp(2rem,2.7vw,2.9rem);font-weight:900;color:#102E45;letter-spacing:-.045em;line-height:1.04;margin:0}.pn-head p{font-size:14.5px;line-height:1.5;color:#536B7A;max-width:410px;margin:0}.pn-stage{padding:0 36px}.pn-cards{display:flex;height:320px;max-width:1440px;margin:0 auto;border-radius:21px;overflow:hidden;border:1px solid #C6D3DF;box-shadow:0 15px 36px rgba(22,48,64,.11);background:#DCE3E8}.pn-card{position:relative;overflow:hidden;cursor:pointer;transition:flex .48s cubic-bezier(.4,0,.2,1);border-right:1px solid rgba(255,255,255,.22);outline:none}.pn-card:last-child{border-right:0}.pn-card.col{flex:1}.pn-card.exp{flex:2.35}.pn-card:focus-visible{box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 7px rgba(47,91,234,.65);z-index:4}.pn-photo{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .4s ease;background-color:#D9E1E7}.pn-overlay{position:absolute;inset:0;transition:background .4s ease}.pn-col-txt,.pn-exp-txt{position:absolute;left:0;right:0;bottom:0;color:#fff}.pn-col-txt{padding:19px 17px}.pn-exp-txt{padding:25px 28px;animation:pnIn .35s ease both}@keyframes pnIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}.pn-stat{font-family:'Sora',sans-serif;font-size:34px;font-weight:900;line-height:1;letter-spacing:-.04em;margin-bottom:5px}.pn-exp-stat{font-family:'Sora',sans-serif;font-size:46px;font-weight:900;line-height:1;letter-spacing:-.045em;margin-bottom:4px}.pn-label{font-size:14px;font-weight:850}.pn-sub{font-size:11.5px;color:rgba(255,255,255,.84);margin-top:4px;line-height:1.35}.pn-exp-sub{font-size:11px;font-weight:850;letter-spacing:.10em;text-transform:uppercase;color:rgba(255,255,255,.86);margin-bottom:6px}.pn-exp-title{font-family:'Sora',sans-serif;font-size:18px;font-weight:800;margin-bottom:7px}.pn-exp-desc{font-size:13px;line-height:1.48;color:rgba(255,255,255,.94);max-width:410px;margin:0 0 13px}.pn-cta{display:inline-flex;align-items:center;background:#fff;padding:9px 13px;border-radius:8px;font-family:'Sora',sans-serif;font-size:11px;font-weight:800;text-decoration:none;text-transform:uppercase;letter-spacing:.03em;box-shadow:0 6px 15px rgba(15,35,45,.12)}.pn-hint{position:absolute;top:14px;right:14px;background:#F4C868;border:1px solid #F4C868;color:#17354A;border-radius:999px;padding:6px 9px;font-size:9.5px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 5px 15px rgba(18,44,60,.10)}
+    @media(max-width:820px){.pn-head{padding:0 20px 18px;align-items:start;flex-direction:column;gap:8px}.pn-stage{padding:0 20px}.pn-cards{height:auto;flex-direction:column}.pn-card,.pn-card.col,.pn-card.exp{flex:none;min-height:250px;border-right:0;border-bottom:1px solid rgba(255,255,255,.18)}}@media(max-width:520px){.pn-section{padding:36px 0 40px}.pn-stage{padding:0 12px}.pn-head{padding:0 16px 16px}.pn-heading{font-size:2.1rem}.pn-exp-txt{padding:21px}.pn-exp-stat{font-size:40px}}
+  `}</style><div className="pn-head"><div><div className="pn-kicker">Platform at a glance</div><h2 className="pn-heading" id="pn-heading">HealthConnect<br/>by the Numbers</h2></div><p>Live counts show the connected parts of HealthConnect already in use.</p></div><div className="pn-stage"><div className="pn-cards" aria-label="HealthConnect platform counts">{CARDS.map((card,index)=>{const expanded=active===index;const count=formatCount(stats[card.countKey]);return <article key={card.label} className={`pn-card ${expanded?'exp':'col'}`} tabIndex={0} role="button" aria-expanded={expanded} aria-label={`${card.label}: ${count}. ${expanded?'Expanded':'Press Enter to expand'}`} onClick={()=>setActive(index)} onMouseEnter={()=>setActive(index)} onKeyDown={event=>selectWithKeyboard(event,index)}><div className="pn-photo" style={{backgroundImage:`url(${card.photo})`,opacity:expanded?1:.86}} role="img" aria-label={`${card.label} visual`}/><div className="pn-overlay" style={{background:expanded?`linear-gradient(to top,${card.color}E8 0%,${card.color}A8 45%,rgba(10,22,40,.06) 82%)`:'linear-gradient(to top,rgba(11,34,48,.92) 0%,rgba(11,34,48,.55) 62%,rgba(10,22,40,.08) 100%)'}}/>{card.countKey==='communities'&&<div className="pn-hint">Peer support</div>}{!expanded?<div className="pn-col-txt"><div className="pn-stat">{count}</div><div className="pn-label">{card.label}</div><div className="pn-sub">{card.sub}</div></div>:<div className="pn-exp-txt"><div className="pn-exp-sub">{card.sub}</div><div className="pn-exp-stat">{count}</div><div className="pn-exp-title">{card.label}</div><p className="pn-exp-desc">{card.desc}</p><Link href={card.href} className="pn-cta" style={{color:card.color}} onClick={e=>e.stopPropagation()}>{card.cta}</Link></div>}</article>})}</div></div></section>;
 }

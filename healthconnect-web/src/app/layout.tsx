@@ -14,7 +14,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: '#075B57',
+  themeColor: '#12364B',
 };
 
 export const metadata: Metadata = {
@@ -25,6 +25,10 @@ export const metadata: Metadata = {
   },
   description: "India's connected healthcare platform for patients, doctors, hospitals, health communities and everyday health information.",
   applicationName: 'HealthConnect India',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+  },
   keywords: [
     'healthcare India',
     'find doctors',

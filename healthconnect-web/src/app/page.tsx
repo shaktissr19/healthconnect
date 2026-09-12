@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import PublicNavbar from '@/components/PublicNavbar';
 import LandingHero from '@/components/landing/LandingHero';
 import PlatformNumbersLegacy, { type PlatformStats } from '@/components/landing/PlatformNumbersLegacy';
-import AudienceJourneys from '@/components/landing/AudienceJourneys';
+import PlatformTourNav from '@/components/landing/PlatformTourNav';
+import MyHealthShowcase from '@/components/landing/MyHealthShowcase';
 import HealthCommunitiesShowcase from '@/components/landing/HealthCommunitiesShowcase';
 import CommunityBenefits from '@/components/landing/CommunityBenefits';
 import CareDiscoveryStrip from '@/components/landing/CareDiscoveryStrip';
@@ -15,6 +16,7 @@ import TrustSection from '@/components/landing/TrustSection';
 import FinalCTA from '@/components/landing/FinalCTA';
 import Footer from '@/components/landing/Footer';
 import LandingViewportSystem from '@/components/landing/LandingViewportSystem';
+import LandingColorSystem from '@/components/landing/LandingColorSystem';
 import LandingAuthModal, { type LandingAuthMode } from '@/components/landing/LandingAuthModal';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -91,14 +93,15 @@ export default function LandingPage(){
   },[authChecked,openAuthModal]);
 
   if(!authChecked){
-    return <div style={{minHeight:'100vh',background:'#F8FAFC',display:'grid',placeItems:'center'}}><div style={{width:38,height:38,border:'3px solid #CCFBF1',borderTopColor:'#0D9488',borderRadius:'50%',animation:'landingSpin .8s linear infinite'}}/><style>{`@keyframes landingSpin{to{transform:rotate(360deg)}}`}</style></div>;
+    return <div style={{minHeight:'100vh',background:'#D6E0E8',display:'grid',placeItems:'center'}}><div style={{width:38,height:38,border:'3px solid #D7E6F2',borderTopColor:'#2F5BEA',borderRadius:'50%',animation:'landingSpin .8s linear infinite'}}/><style>{`@keyframes landingSpin{to{transform:rotate(360deg)}}`}</style></div>;
   }
 
   return <>
     <PublicNavbar/>
     <main>
       <LandingHero/>
-      <AudienceJourneys/>
+      <PlatformTourNav/>
+      <MyHealthShowcase/>
       <HealthCommunitiesShowcase/>
       <CommunityBenefits/>
       <CareDiscoveryStrip/>
@@ -107,6 +110,7 @@ export default function LandingPage(){
       <div className="landing-membership"><MembershipPlans/></div>
       <TrustSection/>
       <FinalCTA/>
+      <LandingColorSystem/>
     </main>
     <Footer/>
     <LandingViewportSystem/>
