@@ -16,8 +16,8 @@ export default function LandingColorSystem(){
 
     /* Brand + navbar actions */
     .hc-brand-logo{font-size:0!important;background:#F7FAFC url('/brand/healthconnect-mark.svg') center/35px 35px no-repeat!important;color:transparent!important;border:1px solid rgba(255,255,255,.82)!important;box-shadow:0 7px 18px rgba(5,24,38,.18)!important}
-    .hc-signin{background:#2F5BEA!important;border-color:#6F8FF2!important;color:#fff!important;box-shadow:0 7px 18px rgba(47,91,234,.22)!important}
-    .hc-signin:hover{background:#244CCB!important;border-color:#8BA4F5!important}
+    .hc-signin{background:#274D64!important;border-color:#6E8CA0!important;color:#fff!important;box-shadow:0 7px 18px rgba(39,77,100,.18)!important}
+    .hc-signin:hover{background:#315A73!important;border-color:#8AA5B7!important}
     .hc-signup{background:#E7C36F!important;border-color:#E7C36F!important;color:#17354A!important}
 
     /* Platform tour */
@@ -26,19 +26,8 @@ export default function LandingColorSystem(){
     main .journey-nav{background:#17384A;border:1px solid #294C60;box-shadow:0 14px 30px rgba(17,48,64,.16)}
     main .journey-pill{box-shadow:inset 0 0 0 1px rgba(16,46,69,.08)}
 
-    /* My Health and Communities own their component palettes.
-       Do not override their card colors here. */
-
-    /* Doctor Platform */
-    main .doctor-platform-section{background:#D9DEE5;border-top:1px solid #C3CBD4;border-bottom:1px solid #C3CBD4}
-    main .doctor-platform-stage{background:linear-gradient(110deg,#F7F8FA 0%,#F7F8FA 47%,#E7EBF0 63%,#D7E0E8 100%);border-color:#BEC8D1;box-shadow:0 17px 38px rgba(41,51,66,.10)}
-    main .doctor-story{box-shadow:inset 0 0 0 1px rgba(30,55,80,.03),0 8px 18px rgba(42,45,80,.06)}
-    main .doctor-story-tab{background:#ECEFF2;border-color:#C1CBD4}
-
-    /* Care Discovery */
-    main .care-discovery{background:#E7DDD0;border-top:1px solid #D5C8B8;border-bottom:1px solid #D5C8B8}
-    main .care-card.doctor{background:#CBD9E6;border-color:#A5BBCF}
-    main .care-card.hospital{background:#DCCFBD;border-color:#BEA98C}
+    /* My Health, Communities, Doctor Platform and Care Discovery
+       own their component palettes. Do not override those surfaces here. */
 
     /* Knowledge Hub */
     main .knowledge-section{background:#D2DEE8;border-top:1px solid #BBCBD8;border-bottom:1px solid #BBCBD8}
