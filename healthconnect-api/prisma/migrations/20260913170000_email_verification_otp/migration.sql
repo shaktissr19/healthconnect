@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS public.email_verification_otps (
-  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id TEXT PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   otp_hash VARCHAR(64) NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0,
