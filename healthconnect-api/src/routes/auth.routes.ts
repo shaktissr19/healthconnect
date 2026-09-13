@@ -22,9 +22,22 @@ import {
   sendPhoneOtp,
   verifyPhoneOtp,
 } from '../services/phoneVerification.service';
+import {
+  requestEmailVerificationOtp,
+  verifyEmailVerificationOtp,
+} from '../services/emailVerificationOtp.service';
 import { ApiResponse } from '../utils/apiResponse';
 
 const router = Router();
+
+const emailOtpRequestSchema = z.object({
+  email: z.string().trim().email().max(254),
+}).strict();
+
+const emailOtpVerifySchema = z.object({
+  email: z.string().trim().email().max(254),
+  otp: z.string().trim().regex(/^\d{6}$/, 'OTP must be a 6-digit code'),
+}).strict();
 
 router.post('/register', authRateLimiter, validate(registerSchema), authController.register);
 router.post('/login', authRateLimiter, validate(loginSchema), authController.login);
@@ -68,6 +81,42 @@ router.post(
     try {
       await AuthService.resendVerification(req.user!.userId);
       return ApiResponse.success(res, null, 'Verification email sent');
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// Public email-OTP verification deliberately returns the same request response
+// for unknown, inactive, and already-verified accounts to avoid account enumeration.
+// The shared auth limiter protects the endpoint per client, while the service also
+// enforces a per-account resend cooldown and a maximum incorrect-attempt count.
+router.post(
+  '/email/request-otp',
+  authRateLimiter,
+  validate(emailOtpRequestSchema),
+  async (req, res, next) => {
+    try {
+      const result = await requestEmailVerificationOtp(req.body.email);
+      return ApiResponse.success(
+        res,
+        result,
+        'If the account can be verified, a verification code has been sent',
+      );
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+router.post(
+  '/email/verify-otp',
+  authRateLimiter,
+  validate(emailOtpVerifySchema),
+  async (req, res, next) => {
+    try {
+      const result = await verifyEmailVerificationOtp(req.body.email, req.body.otp);
+      return ApiResponse.success(res, result, 'Email verified successfully');
     } catch (e) {
       next(e);
     }
