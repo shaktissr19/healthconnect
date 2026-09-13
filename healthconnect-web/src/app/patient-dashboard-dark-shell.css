@@ -1,0 +1,56 @@
+/* Patient dashboard navigation shell. Main dashboard content remains light. */
+:root{
+  --hc-shell-top:#0e2a3b;
+  --hc-shell-side:#14364a;
+  --hc-shell-panel:#1b4358;
+  --hc-shell-panel-2:#173b50;
+  --hc-shell-border:rgba(190,220,232,.16);
+  --hc-shell-text:#f5fbff;
+  --hc-shell-muted:#afc4d2;
+  --hc-shell-accent:#5ad7c7;
+  --hc-shell-active:rgba(90,215,199,.14);
+}
+
+.hc-tb{background:var(--hc-shell-top)!important;border-bottom:1px solid var(--hc-shell-border)!important;box-shadow:0 7px 22px rgba(7,25,36,.16)!important}
+.hc-tb-hamburger{color:var(--hc-shell-muted)!important}
+.hc-tb-hamburger:hover{background:rgba(90,215,199,.12)!important;color:var(--hc-shell-accent)!important}
+.hc-tb-breadcrumb-home{color:var(--hc-shell-muted)!important}
+.hc-tb-breadcrumb-home:hover{color:var(--hc-shell-accent)!important}
+.hc-tb-breadcrumb-sep{color:#6f8fa2!important}
+.hc-tb-breadcrumb-cur{color:var(--hc-shell-text)!important}
+.hc-tb>a{background:var(--hc-shell-panel-2)!important;border-color:rgba(169,207,222,.23)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important}
+.hc-tb>a:hover{background:#1d485f!important;border-color:rgba(90,215,199,.55)!important}
+.hc-tb>a span{color:var(--hc-shell-text)!important}
+.hc-tb>a svg{stroke:var(--hc-shell-muted)!important}
+.hc-tb-icon-btn{color:#d4e4ec!important;background:var(--hc-shell-panel-2)!important;border-color:rgba(169,207,222,.22)!important}
+.hc-tb-icon-btn:hover{color:#fff!important;background:#214c62!important;border-color:rgba(90,215,199,.45)!important}
+.hc-tb-icon-btn>span:not(.hc-tb-badge){color:#d8e5ec!important}
+.hc-tb-chip-score{background:#fff3da!important;border-color:rgba(245,188,73,.48)!important;box-shadow:0 4px 12px rgba(4,18,28,.12)!important}
+.hc-tb-chip-score:hover{background:#ffedc4!important}
+.hc-tb-user-btn{background:var(--hc-shell-panel-2)!important;border-color:rgba(169,207,222,.22)!important}
+.hc-tb-user-btn:hover{background:#214c62!important;border-color:rgba(90,215,199,.45)!important}
+.hc-tb-user-btn>span{color:var(--hc-shell-text)!important}
+.hc-tb-user-btn>svg{stroke:var(--hc-shell-muted)!important}
+.hc-tb-avatar{background:linear-gradient(135deg,#2777c8,#315fea)!important;box-shadow:0 0 0 2px rgba(255,255,255,.08)!important}
+
+.hc-sb{background:var(--hc-shell-side)!important;border-right:1px solid var(--hc-shell-border)!important;box-shadow:7px 0 24px rgba(7,25,36,.10)!important}
+.hc-sb::-webkit-scrollbar-thumb{background:#315569!important}
+.hc-sb::-webkit-scrollbar-thumb:hover{background:#416b80!important}
+.hc-sb-logo-name,.hc-sb-id-name{color:var(--hc-shell-text)!important}
+.hc-sb-logo-sub,.hc-sb-id-lbl,.hc-sb-id-reg{color:var(--hc-shell-muted)!important}
+.hc-sb-id{background:linear-gradient(145deg,#1d465b 0%,#183c51 100%)!important;border-color:rgba(177,210,224,.18)!important;box-shadow:0 12px 28px rgba(4,22,32,.16)!important}
+.hc-sb-avatar{box-shadow:0 0 0 3px rgba(90,215,199,.18)!important}
+.hc-sb-chip{color:#d7e5ec!important;background:rgba(255,255,255,.055)!important;border-color:rgba(190,220,232,.16)!important}
+.hc-sb-chip.gold{color:#ffe3a3!important;background:rgba(245,188,73,.13)!important;border-color:rgba(245,188,73,.28)!important}
+.hc-sb-sec-lbl{color:#86a8ba!important}
+.hc-sb-divider{background:rgba(190,220,232,.12)!important}
+.hc-sb-btn{color:#d4e2e9!important}
+.hc-sb-btn svg{stroke:#9db6c4!important}
+.hc-sb-btn:hover{background:rgba(255,255,255,.055)!important;color:#fff!important}
+.hc-sb-btn:hover svg{stroke:#dff7f2!important}
+.hc-sb-btn.active{background:var(--hc-shell-active)!important;color:#fff!important;border-left-color:var(--hc-shell-accent)!important;box-shadow:inset 0 0 0 1px rgba(90,215,199,.07)!important}
+.hc-sb-btn.active svg{stroke:var(--hc-shell-accent)!important}
+.hc-sb-bottom{border-top-color:rgba(190,220,232,.13)!important}
+.hc-logout-btn{color:#c8d9e2!important;border-color:rgba(190,220,232,.18)!important;background:rgba(255,255,255,.025)!important}
+.hc-logout-btn:hover{color:#fff!important;border-color:rgba(255,255,255,.30)!important;background:rgba(255,255,255,.07)!important}
+.hc-tb button:focus-visible,.hc-tb a:focus-visible,.hc-sb button:focus-visible{outline:2px solid var(--hc-shell-accent)!important;outline-offset:2px!important}
