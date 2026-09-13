@@ -85,7 +85,7 @@ export const requestEmailVerificationOtp = async (email: string) => {
   const existing = await prisma.$queryRaw<Array<{ lastSentAt: Date }>>`
     SELECT last_sent_at AS "lastSentAt"
     FROM public.email_verification_otps
-    WHERE user_id = ${user.id}::uuid
+    WHERE user_id = ${user.id}
     LIMIT 1
   `;
 
@@ -106,7 +106,7 @@ export const requestEmailVerificationOtp = async (email: string) => {
     INSERT INTO public.email_verification_otps (
       user_id, otp_hash, expires_at, attempts, last_sent_at, created_at, updated_at
     ) VALUES (
-      ${user.id}::uuid, ${otpHash(user.id, otp)}, ${expiresAt}, 0,
+      ${user.id}, ${otpHash(user.id, otp)}, ${expiresAt}, 0,
       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (user_id) DO UPDATE SET
@@ -122,7 +122,7 @@ export const requestEmailVerificationOtp = async (email: string) => {
   } catch (error) {
     // Never leave a valid OTP in the database if email delivery failed.
     await prisma.$executeRaw`
-      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}::uuid
+      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}
     `;
     throw error;
   }
@@ -147,21 +147,21 @@ export const verifyEmailVerificationOtp = async (email: string, otp: string) => 
   }>>`
     SELECT otp_hash AS "otpHash", expires_at AS "expiresAt", attempts
     FROM public.email_verification_otps
-    WHERE user_id = ${user.id}::uuid
+    WHERE user_id = ${user.id}
     LIMIT 1
   `;
   const record = rows[0];
 
   if (!record || new Date(record.expiresAt).getTime() <= Date.now()) {
     await prisma.$executeRaw`
-      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}::uuid
+      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}
     `;
     throw ApiError.badRequest('INVALID_OTP', 'Invalid or expired verification code');
   }
 
   if (Number(record.attempts || 0) >= OTP_MAX_ATTEMPTS) {
     await prisma.$executeRaw`
-      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}::uuid
+      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}
     `;
     throw ApiError.tooManyRequests('Too many incorrect verification attempts. Request a new code.');
   }
@@ -171,7 +171,7 @@ export const verifyEmailVerificationOtp = async (email: string, otp: string) => 
     await prisma.$executeRaw`
       UPDATE public.email_verification_otps
       SET attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
-      WHERE user_id = ${user.id}::uuid
+      WHERE user_id = ${user.id}
     `;
     throw ApiError.badRequest('INVALID_OTP', 'Invalid or expired verification code');
   }
@@ -186,7 +186,7 @@ export const verifyEmailVerificationOtp = async (email: string, otp: string) => 
       },
     });
     await tx.$executeRaw`
-      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}::uuid
+      DELETE FROM public.email_verification_otps WHERE user_id = ${user.id}
     `;
   });
 
