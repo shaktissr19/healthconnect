@@ -2,6 +2,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './patient-platform-polish.css';
+import './patient-dashboard-dark-shell.css';
 import { Toaster } from 'react-hot-toast';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import AuthTransportBootstrap from '@/components/AuthTransportBootstrap';
