@@ -68,7 +68,7 @@ export const discover = async (req: Request, res: Response, next: NextFunction) 
 export const importCandidate = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const candidate = await knowledge.createManualCandidate(req.body || {});
-    return ApiResponse.success(res, candidate, 'Content added to Knowledge Hub inbox', 201);
+    return ApiResponse.created(res, candidate, 'Content added to Knowledge Hub inbox');
   } catch (error) { return fail(next, error); }
 };
 
@@ -89,7 +89,7 @@ export const reject = async (req: Request, res: Response, next: NextFunction) =>
 export const publish = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const article = await knowledge.publishCandidate(req.params.id, req.user!.userId, req.body || {});
-    return ApiResponse.success(res, article, req.body?.publishNow === false ? 'Knowledge draft created' : 'Knowledge item published', 201);
+    return ApiResponse.created(res, article, req.body?.publishNow === false ? 'Knowledge draft created' : 'Knowledge item published');
   } catch (error) { return fail(next, error); }
 };
 
@@ -101,7 +101,7 @@ export const getSources = async (_req: Request, res: Response, next: NextFunctio
 export const addSource = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!String(req.body?.name || '').trim()) return ApiResponse.validationError(res, 'Source name is required');
-    return ApiResponse.success(res, await knowledge.createSource(req.body || {}), 'Knowledge source created', 201);
+    return ApiResponse.created(res, await knowledge.createSource(req.body || {}), 'Knowledge source created');
   } catch (error) { return fail(next, error); }
 };
 
