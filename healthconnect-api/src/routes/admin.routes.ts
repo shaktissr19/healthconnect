@@ -3,6 +3,7 @@ import { Router } from 'express';
 import * as Admin from '../controllers/admin.controller';
 import * as BillingAdmin from '../controllers/billingAdmin.controller';
 import * as CommunityAdmin from '../controllers/communityAdmin.controller';
+import * as KnowledgeAdmin from '../controllers/knowledge.controller';
 import * as HospitalAdmin from '../modules/hospital/adminHospital.controller';
 import { authenticate } from '../middleware/auth';
 import { requireRole }  from '../middleware/roleGuard';
@@ -36,6 +37,19 @@ router.post('/billing/refunds', ...admin, BillingAdmin.refundPayment);
 // Backward-compatible aliases used by the existing Admin navigation.
 router.get('/subscriptions', ...admin, BillingAdmin.getSummary);
 router.get('/revenue', ...admin, BillingAdmin.getSummary);
+
+// Knowledge Hub — trusted-source discovery, editorial inbox and publishing.
+router.get('/knowledge/summary',                    ...admin, KnowledgeAdmin.getAdminSummary);
+router.get('/knowledge/inbox',                      ...admin, KnowledgeAdmin.getInbox);
+router.post('/knowledge/discover',                  ...admin, KnowledgeAdmin.discover);
+router.post('/knowledge/import',                    ...admin, KnowledgeAdmin.importCandidate);
+router.post('/knowledge/inbox/:id/triage',          ...admin, KnowledgeAdmin.triage);
+router.post('/knowledge/inbox/:id/reject',          ...admin, KnowledgeAdmin.reject);
+router.post('/knowledge/inbox/:id/publish',         ...admin, KnowledgeAdmin.publish);
+router.get('/knowledge/articles',                   ...admin, KnowledgeAdmin.getAdminArticles);
+router.get('/knowledge/sources',                    ...admin, KnowledgeAdmin.getSources);
+router.post('/knowledge/sources',                   ...admin, KnowledgeAdmin.addSource);
+router.put('/knowledge/sources/:id',                ...admin, KnowledgeAdmin.editSource);
 
 // Community requests — real CommunityRequest-backed workflow
 router.get('/communities/requests',              ...admin, CommunityAdmin.getCommunityRequests);
