@@ -1,382 +1,92 @@
 'use client';
-import PublicNavbar from '@/components/PublicNavbar';
-// src/app/learn/page.tsx — Light theme rewrite
-// White background, navy blue text, teal accents. Full WCAG AA contrast.
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import PublicNavbar from '@/components/PublicNavbar';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.healthconnect.sbs/api/v1';
 
-// ── Design tokens — light theme ───────────────────────────────────────────
-const C = {
-  pageBg:   '#F0F4FF',
-  white:    '#FFFFFF',
-  navy:     '#0A1628',   // primary headings — 15:1 on white
-  navyMid:  '#1E3A6E',   // subheadings — 9:1 on white
-  muted:    '#4A5E7A',   // body text — 5.5:1 on white
-  light:    '#7A8FA8',   // captions — 3.5:1 on white (used only on large text)
-  teal:     '#0D9488',
-  tealDark: '#0F766E',
-  border:   '#C7D7F5',
-  borderMid:'#A8C0E8',
-  shadow:   '0 2px 12px rgba(12,26,58,0.07)',
-  shadowHov:'0 6px 28px rgba(12,26,58,0.13)',
-};
+type KnowledgeMeta={sourceName?:string|null;sourceUrl?:string|null;youtubeVideoId?:string|null;evidenceLevel?:string|null;countryRelevance?:string|null;reviewedAt?:string|null;keyTakeaways?:string[]};
+type Item={id:string;slug:string;title:string;excerpt?:string|null;coverImage?:string|null;type:string;category?:string|null;authorName?:string|null;readTimeMin?:number;isFeatured?:boolean;isTrending?:boolean;publishedAt?:string|null;viewCount?:number;tags?:string[];knowledge?:KnowledgeMeta};
+type Category={name:string;count:number};
 
-const CAT_COLORS: Record<string, { text: string; bg: string; border: string }> = {
-  'Diabetes':      { text: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
-  'Cardiology':    { text: '#9F1239', bg: '#FFF1F2', border: '#FECDD3' },
-  'Women Health':  { text: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
-  'Mental Health': { text: '#065F46', bg: '#ECFDF5', border: '#A7F3D0' },
-  'Thyroid':       { text: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  'Hypertension':  { text: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  'Gut Health':    { text: '#78350F', bg: '#FFF7ED', border: '#FED7AA' },
-  'Skin & Hair':   { text: '#831843', bg: '#FDF2F8', border: '#FBCFE8' },
-  'Cancer':        { text: '#581C87', bg: '#FAF5FF', border: '#E9D5FF' },
-  'Nutrition':     { text: '#14532D', bg: '#F0FDF4', border: '#BBF7D0' },
-  'Pediatrics':    { text: '#1E40AF', bg: '#EFF6FF', border: '#BFDBFE' },
-  'Orthopedics':   { text: '#374151', bg: '#F9FAFB', border: '#E5E7EB' },
-  'Eye Health':    { text: '#134E4A', bg: '#F0FDFA', border: '#99F6E4' },
-  'Dental':        { text: '#1E3A8A', bg: '#EFF6FF', border: '#BFDBFE' },
-};
-
-const TOPICS = [
-  'All','Diabetes','Cardiology','Mental Health','Nutrition',
-  'Women Health','Pediatrics','Orthopedics','Cancer','Thyroid',
-  'Hypertension','Skin & Hair','Eye Health','Dental','Gut Health',
+const C={navy:'#102F49',navy2:'#214E63',text:'#385469',muted:'#657B89',teal:'#2F7D75',blue:'#315FEA',sand:'#EDE3D4',sage:'#DCE8E1',mist:'#D7E3EA',lav:'#E6E1ED',white:'#FFFFFF',border:'#B8C9D2'};
+const FALLBACK:Item[]=[
+  {id:'fallback-1',slug:'hba1c-what-your-diabetes-numbers-really-mean',title:'HbA1c — What Your Diabetes Numbers Really Mean for Indians',excerpt:'Understand what this long-term glucose number represents and prepare better questions for your next consultation.',type:'ARTICLE',category:'Diabetes',authorName:'HealthConnect Editorial',readTimeMin:7,isFeatured:true,isTrending:true},
+  {id:'fallback-2',slug:'heart-attacks-young-indians',title:'Why Heart Attacks in Young Indians Are Rising',excerpt:'Understand common risk factors, warning signs and the care conversations worth having early.',type:'ARTICLE',category:'Heart Health',authorName:'HealthConnect Editorial',readTimeMin:8,isFeatured:true,isTrending:true},
+  {id:'fallback-3',slug:'pcos-complete-guide-indian-women',title:'PCOS: A Practical Guide for Indian Women',excerpt:'A plain-language guide to symptoms, diagnosis, metabolic health and when professional care matters.',type:'ARTICLE',category:'Women Health',authorName:'HealthConnect Editorial',readTimeMin:10,isFeatured:true},
 ];
 
-interface Article {
-  id?: string; slug?: string; title?: string; excerpt?: string;
-  category?: string; authorName?: string; author?: string;
-  readTimeMin?: number; viewCount?: number;
-  isFeatured?: boolean; isTrending?: boolean; tags?: string[];
+const unwrap=(r:any)=>r?.data??r;
+const fmtDate=(v?:string|null)=>v?new Date(v).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'';
+
+export default function KnowledgeHubPage(){
+  const [items,setItems]=useState<Item[]>([]);
+  const [categories,setCategories]=useState<Category[]>([]);
+  const [active,setActive]=useState('All');
+  const [query,setQuery]=useState('');
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    let alive=true;
+    Promise.all([
+      fetch(`${API}/knowledge/items?limit=60`).then(r=>r.ok?r.json():Promise.reject()),
+      fetch(`${API}/knowledge/categories`).then(r=>r.ok?r.json():Promise.reject()),
+    ]).then(([itemPayload,categoryPayload])=>{
+      if(!alive)return;
+      const list=unwrap(itemPayload);
+      const cats=unwrap(categoryPayload);
+      setItems(Array.isArray(list)&&list.length?list:FALLBACK);
+      setCategories(Array.isArray(cats)?cats:[]);
+    }).catch(()=>{if(alive)setItems(FALLBACK);}).finally(()=>{if(alive)setLoading(false);});
+    return()=>{alive=false};
+  },[]);
+
+  const filtered=useMemo(()=>items.filter(item=>{
+    if(active!=='All'&&item.category!==active)return false;
+    const q=query.trim().toLowerCase();
+    return !q||`${item.title} ${item.excerpt||''} ${item.category||''} ${(item.tags||[]).join(' ')}`.toLowerCase().includes(q);
+  }),[items,active,query]);
+  const matters=useMemo(()=>filtered.filter(x=>x.isTrending||x.isFeatured).slice(0,3),[filtered]);
+  const videos=useMemo(()=>filtered.filter(x=>x.type==='VIDEO').slice(0,4),[filtered]);
+  const research=useMemo(()=>filtered.filter(x=>x.type==='RESEARCH').slice(0,4),[filtered]);
+  const explainers=useMemo(()=>filtered.filter(x=>x.type!=='VIDEO'&&x.type!=='RESEARCH').slice(0,9),[filtered]);
+  const catNames=['All',...Array.from(new Set([...categories.map(c=>c.name),...items.map(i=>i.category).filter(Boolean) as string[]]))].slice(0,14);
+
+  return <div style={{minHeight:'100vh',background:'#D6E2E7',color:C.navy,fontFamily:"'DM Sans',Arial,sans-serif"}}>
+    <PublicNavbar/>
+    <section style={{background:'linear-gradient(135deg,#D9E7EC 0%,#E7E4DD 100%)',borderBottom:`1px solid ${C.border}`,padding:'46px 5% 36px'}}>
+      <div style={{maxWidth:1320,margin:'0 auto',display:'grid',gridTemplateColumns:'1.2fr .8fr',gap:40,alignItems:'end'}} className="kh-hero-grid">
+        <div><div style={{fontSize:12,fontWeight:900,letterSpacing:'2px',color:C.blue}}>KNOWLEDGE HUB</div><h1 style={{fontFamily:"'Sora','DM Sans',sans-serif",fontSize:'clamp(2.2rem,4vw,4rem)',letterSpacing:'-.055em',lineHeight:1.02,margin:'8px 0 14px',maxWidth:760}}>Understand your health. <span style={{color:C.teal}}>Know what matters now.</span></h1><p style={{fontSize:16,lineHeight:1.65,color:C.text,maxWidth:760,margin:0}}>HealthConnect combines medically reviewed explainers with selected research, public-health updates and original videos embedded from trusted publishers. External material is curated — never auto-published.</p></div>
+        <div style={{background:'rgba(255,255,255,.72)',border:`1px solid ${C.border}`,borderRadius:18,padding:18}}><b style={{fontSize:13}}>How content is handled</b><div style={{display:'grid',gap:8,marginTop:10,fontSize:12,color:C.text}}><span>✓ Trusted-source discovery</span><span>✓ HealthConnect-written context</span><span>✓ Editorial / medical review before publication</span><span>✓ Original YouTube video stays with its publisher</span></div></div>
+      </div>
+    </section>
+
+    <main style={{maxWidth:1320,margin:'0 auto',padding:'28px 22px 60px'}}>
+      <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:22}}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search diabetes, heart health, pregnancy, mental health…" style={{flex:'1 1 330px',border:`1px solid ${C.border}`,borderRadius:12,padding:'12px 14px',fontSize:13,background:'#F8FBFC',color:C.navy,outline:'none'}}/><div style={{display:'flex',gap:7,overflowX:'auto',maxWidth:'100%',paddingBottom:2}}>{catNames.map(cat=><button key={cat} onClick={()=>setActive(cat)} style={{border:`1px solid ${active===cat?C.teal:C.border}`,background:active===cat?C.teal:'#EDF3F3',color:active===cat?'#fff':C.navy,borderRadius:999,padding:'8px 11px',fontSize:11,fontWeight:850,whiteSpace:'nowrap',cursor:'pointer'}}>{cat}</button>)}</div></div>
+
+      {loading?<div style={{padding:60,textAlign:'center',color:C.muted}}>Loading curated health knowledge…</div>:<>
+        <SectionTitle eyebrow="CURRENT" title="What matters now" copy="Recent or editor-selected health topics with relevance beyond simple popularity."/>
+        <div className="kh-grid-3" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:15,marginBottom:34}}>{(matters.length?matters:filtered.slice(0,3)).map((item,index)=><FeatureCard item={item} key={item.id} tone={[C.mist,C.sand,C.lav][index%3]}/>)}</div>
+
+        {videos.length>0&&<><SectionTitle eyebrow="WATCH & LEARN" title="Trusted videos, with HealthConnect context" copy="Original videos remain on the publisher's YouTube channel and are embedded without re-hosting."/><div className="kh-grid-4" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:13,marginBottom:34}}>{videos.map(item=><VideoCard item={item} key={item.id}/>)}</div></>}
+
+        {research.length>0&&<><SectionTitle eyebrow="LATEST EVIDENCE" title="Research worth understanding" copy="Research discovery is separated from patient advice. HealthConnect explains context, limitations and why a finding may matter."/><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:34}} className="kh-grid-2">{research.map(item=><ResearchCard item={item} key={item.id}/>)}</div></>}
+
+        <SectionTitle eyebrow="EXPLAINERS" title="Understand everyday health decisions" copy="Clear, India-aware education designed to support better conversations with healthcare professionals."/>
+        <div className="kh-grid-3" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:13}}>{explainers.length?explainers.map((item,index)=><CompactCard item={item} key={item.id} tone={[C.sage,C.mist,C.sand][index%3]}/>):<div style={{gridColumn:'1/-1',padding:28,textAlign:'center',border:`1px dashed ${C.border}`,borderRadius:14,color:C.muted}}>No items match this search yet.</div>}</div>
+      </>}
+
+      <div style={{marginTop:32,padding:'15px 17px',borderRadius:13,background:'#C6D7DF',border:'1px solid #AFC3CE',fontSize:12.5,lineHeight:1.55,color:C.text}}><strong style={{color:C.navy}}>Knowledge Hub is educational.</strong> It does not diagnose conditions or replace personal medical advice, emergency services or professional clinical judgement.</div>
+    </main>
+    <style>{`@media(max-width:900px){.kh-hero-grid,.kh-grid-3,.kh-grid-4,.kh-grid-2{grid-template-columns:1fr 1fr!important}}@media(max-width:640px){.kh-hero-grid,.kh-grid-3,.kh-grid-4,.kh-grid-2{grid-template-columns:1fr!important}}`}</style>
+  </div>;
 }
 
-const MOCK: Article[] = [
-  { slug:'hba1c-what-your-diabetes-numbers-really-mean', title:'HbA1c — What Your Diabetes Numbers Really Mean for Indians', excerpt:'Beyond just the number — how to interpret glycemic trends and why HbA1c alone doesn\'t tell the full story of your diabetes control.', category:'Diabetes', authorName:'Dr. Priya Menon', readTimeMin:7, viewCount:24500, isFeatured:true, isTrending:true },
-  { slug:'heart-attacks-young-indians', title:'Heart Attacks in Young Indians: Why 35-Year-Olds Are at Risk', excerpt:'India has the highest rate of early-onset heart disease globally. Lifestyle, genetic, and dietary factors unique to Indian populations.', category:'Cardiology', authorName:'Dr. Rajesh Kumar', readTimeMin:9, viewCount:41200, isFeatured:true, isTrending:true },
-  { slug:'pcos-complete-guide-indian-women', title:'PCOS: The Complete Guide for Indian Women', excerpt:'Polycystic ovary syndrome affects 1 in 5 Indian women. Diagnosis, insulin resistance, fertility, and lifestyle interventions.', category:'Women Health', authorName:'Dr. Sunita Verma', readTimeMin:12, viewCount:67800, isFeatured:true, isTrending:true },
-  { slug:'mental-health-india-breaking-stigma', title:'Mental Health in India: Breaking the Stigma, Finding Help', excerpt:'India has 150 million people with mental health conditions and an 83% treatment gap. Recognising symptoms and finding a psychiatrist.', category:'Mental Health', authorName:'Dr. Meena Nair', readTimeMin:10, viewCount:55400, isFeatured:true, isTrending:true },
-  { slug:'metformin-indias-most-prescribed-drug', title:'Metformin: India\'s Most Prescribed Drug — What You Need to Know', excerpt:'Mechanism, side effects, kidney function and safe dosing, and new evidence on longevity beyond diabetes.', category:'Diabetes', authorName:'Dr. Arun Joshi', readTimeMin:6, viewCount:18300 },
-  { slug:'thyroid-reports-tsh-t3-t4-guide', title:'Understanding Thyroid Reports: TSH, T3, T4 — A Plain-Language Guide', excerpt:'Your thyroid report has numbers. Exactly what each means, when to worry, and why a "normal" TSH doesn\'t always mean you feel normal.', category:'Thyroid', authorName:'Dr. Kavita Reddy', readTimeMin:8, viewCount:32100, isTrending:true },
-  { slug:'blood-pressure-silent-killer-india', title:'Blood Pressure: The Silent Killer That 70% of Indians Don\'t Know They Have', excerpt:'A practical guide on accurate home measurement, lifestyle changes that work, and when to start medication.', category:'Hypertension', authorName:'Dr. Vikram Singh', readTimeMin:7, viewCount:43900, isTrending:true },
-  { slug:'indian-gut-probiotics-microbiome', title:'The Indian Gut: Probiotics, Fiber, and Why Your Microbiome Matters', excerpt:'Our gut bacteria influence everything from immunity to mood. How modern changes are disrupting traditional Indian diets.', category:'Gut Health', authorName:'Dr. Dinesh Rao', readTimeMin:8, viewCount:28700 },
-  { slug:'hair-loss-india-causes-treatment', title:'Hair Loss in Indians: Causes, Myths, and Evidence-Based Treatment', excerpt:'Separating the facts from the overwhelming misinformation around hair loss. What actually works.', category:'Skin & Hair', authorName:'Dr. Sunita Rao', readTimeMin:8, viewCount:48900, isTrending:true },
-  { slug:'type-2-diabetes-reversal-indian-diet', title:'Type 2 Diabetes Reversal: What Indian Research Shows', excerpt:'Growing evidence shows Type 2 diabetes can be reversed through aggressive lifestyle intervention. What the Indian studies say.', category:'Diabetes', authorName:'Dr. Kavita Krishnan', readTimeMin:8, viewCount:31200, isTrending:true },
-  { slug:'cancer-screening-india-guide', title:'Cancer Screening in India: Who Should Get Tested and When', excerpt:'India diagnoses 1.4 million new cancer cases annually. Early detection saves lives — a practical guide for Indian adults.', category:'Cancer', authorName:'Dr. Shobha Ahuja', readTimeMin:9, viewCount:26400 },
-  { slug:'indian-diet-for-diabetes-heart-disease', title:'The Best Indian Diet for Diabetes and Heart Disease', excerpt:'Practical evidence-based dietary guidance using Indian foods for managing both diabetes and cardiovascular disease.', category:'Nutrition', authorName:'Dr. Suma Krishnamurthy', readTimeMin:10, viewCount:36700, isTrending:true },
-  { slug:'anxiety-at-work-gad-india', title:'Workplace Anxiety and GAD: What Indian Professionals Need to Know', excerpt:'GAD affects 5% of Indian professionals. Understanding the difference between stress and clinical anxiety — and what to do.', category:'Mental Health', authorName:'Dr. Arjun Pillai', readTimeMin:8, viewCount:19800 },
-  { slug:'knee-pain-osteoarthritis-india-guide', title:'Knee Pain and Osteoarthritis: A Complete Patient Guide', excerpt:'Osteoarthritis affects 15% of Indians above 60. From diagnosis to surgery, a complete guide.', category:'Orthopedics', authorName:'Dr. Vikram Bhat', readTimeMin:10, viewCount:17800 },
-  { slug:'childhood-obesity-india-prevention', title:'Childhood Obesity in India: Why It Is Rising and What Parents Can Do', excerpt:'India has 14.4 million obese children — the second highest globally. Evidence-based prevention starting from home.', category:'Pediatrics', authorName:'Dr. Rohit Mehra', readTimeMin:9, viewCount:21300 },
-  { slug:'diabetic-retinopathy-eye-disease-india', title:'Diabetic Eye Disease: What Every Diabetic Must Know About Retinopathy', excerpt:'The leading cause of preventable blindness in India. It causes no symptoms until late — annual screening is essential.', category:'Eye Health', authorName:'Dr. Ramesh Patel', readTimeMin:8, viewCount:15600 },
-  { slug:'oral-health-india-neglected-priority', title:'Oral Health in India: Why 95% of Indians Have Gum Disease', excerpt:'The mouth-body connection: how oral health affects your heart, diabetes, and pregnancy.', category:'Dental', authorName:'Dr. Anjali Shetty', readTimeMin:7, viewCount:12900 },
-  { slug:'hypertension-india-management-guide', title:'Managing High Blood Pressure in India: A Complete Guide', excerpt:'From reading your numbers correctly to choosing the right medication for Indian patients.', category:'Hypertension', authorName:'Dr. Preethi Chandrasekhar', readTimeMin:9, viewCount:22400 },
-];
+function SectionTitle({eyebrow,title,copy}:{eyebrow:string;title:string;copy:string}){return <div style={{display:'grid',gridTemplateColumns:'1fr minmax(280px,.7fr)',gap:24,alignItems:'end',margin:'8px 3px 14px'}} className="kh-hero-grid"><div><div style={{fontSize:10.5,fontWeight:900,letterSpacing:'1.6px',color:C.teal}}>{eyebrow}</div><h2 style={{fontFamily:"'Sora','DM Sans',sans-serif",fontSize:'clamp(1.45rem,2.4vw,2.15rem)',letterSpacing:'-.04em',margin:'5px 0 0'}}>{title}</h2></div><p style={{margin:0,fontSize:12.5,lineHeight:1.55,color:C.text}}>{copy}</p></div>}
 
-function getSlug(a: Article) { return a.slug || a.id || ''; }
-
-function CategoryBadge({ cat }: { cat: string }) {
-  const col = CAT_COLORS[cat] || { text: C.teal, bg: '#F0FDFA', border: '#99F6E4' };
-  return (
-    <span style={{ fontSize: 10, fontWeight: 800, color: col.text, background: col.bg, border: `1px solid ${col.border}`, borderRadius: 20, padding: '3px 9px', letterSpacing: '0.04em' }}>
-      {cat.toUpperCase()}
-    </span>
-  );
-}
-
-function ArticleCard({ a, featured }: { a: Article; featured?: boolean }) {
-  const [hov, setHov] = useState(false);
-  const slug   = getSlug(a);
-  const views  = (a.viewCount || 0).toLocaleString('en-IN');
-  const author = a.authorName || a.author || 'HealthConnect';
-
-  return (
-    <Link href={`/learn/${slug}`} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
-      <div
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-        style={{
-          background: C.white,
-          border: `1.5px solid ${hov ? C.teal : C.border}`,
-          borderRadius: featured ? 16 : 12,
-          padding: featured ? '24px' : '18px 20px',
-          transition: 'all 0.2s',
-          cursor: 'pointer',
-          boxShadow: hov ? C.shadowHov : C.shadow,
-          transform: hov ? 'translateY(-2px)' : 'none',
-          display: 'flex', flexDirection: 'column' as const, gap: 10, height: '100%',
-          boxSizing: 'border-box' as const,
-        }}
-      >
-        {/* Category + featured badge */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          {a.category && <CategoryBadge cat={a.category} />}
-          {a.isFeatured && (
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#B45309', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 20, padding: '3px 9px' }}>★ FEATURED</span>
-          )}
-        </div>
-
-        {/* Title */}
-        <h3 style={{
-          fontSize: featured ? 17 : 14, fontWeight: 800, color: C.navy,
-          margin: 0, lineHeight: 1.4, fontFamily: 'Poppins, sans-serif',
-          flex: featured ? 0 : 'none',
-        }}>
-          {a.title}
-        </h3>
-
-        {/* Excerpt */}
-        <p style={{
-          fontSize: 13, color: C.muted, lineHeight: 1.7, margin: 0, flex: 1,
-          ...(featured ? {} : {
-            display: '-webkit-box', WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical' as const, overflow: 'hidden',
-          }),
-        }}>
-          {a.excerpt}
-        </p>
-
-        {/* Meta row */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          paddingTop: 10, borderTop: `1px solid ${C.border}`, marginTop: 'auto',
-        }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.teal }}>
-            {author.startsWith('Dr.') ? author : `Dr. ${author}`}
-          </span>
-          <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.light }}>
-            {a.readTimeMin && <span>⏱ {a.readTimeMin} min</span>}
-            <span>👁 {views}</span>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-export default function LearnPage() {
-  const router = useRouter();
-  const [search, setSearch]   = useState('');
-  const [topic, setTopic]     = useState('All');
-  const [articles, setArticles] = useState<Article[]>(MOCK);
-  const [loading, setLoading] = useState(true);
-
-  const fetchArticles = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ limit: '30', ...(search && { search }), ...(topic !== 'All' && { category: topic }) });
-      const r    = await fetch(`${API}/public/articles?${params}`);
-      const data = await r.json();
-      const list = data?.data ?? (Array.isArray(data) ? data : []);
-      setArticles(Array.isArray(list) && list.length > 0 ? list : MOCK);
-    } catch {
-      setArticles(MOCK);
-    } finally { setLoading(false); }
-  }, [search, topic]);
-
-  useEffect(() => {
-    const t = setTimeout(fetchArticles, 300);
-    return () => clearTimeout(t);
-  }, [fetchArticles]);
-
-  const filtered  = articles.filter(a => {
-    if (topic !== 'All' && a.category !== topic) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (a.title||'').toLowerCase().includes(q) || (a.excerpt||'').toLowerCase().includes(q) || (a.category||'').toLowerCase().includes(q) || (a.authorName||'').toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  const featured  = filtered.filter(a => a.isFeatured).slice(0, 3);
-  const trending  = filtered.filter(a => a.isTrending && !a.isFeatured).slice(0, 4);
-  const rest      = filtered.filter(a => !a.isFeatured && !a.isTrending);
-
-  return (
-    <div style={{ minHeight: '100vh', background: C.pageBg, fontFamily: 'Nunito, sans-serif', paddingTop: 64 }}>
-      <PublicNavbar />
-
-      {/* ── Hero — dark navy card with rounded corners + whitespace, matches doctors/communities ── */}
-      <div style={{ padding: '24px 5% 0', background: C.pageBg }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{
-            background: 'linear-gradient(135deg,#0C1829 0%,#0F2645 55%,#0A1E3D 100%)',
-            borderRadius: 22, overflow: 'hidden', position: 'relative',
-            boxShadow: '0 8px 44px rgba(12,24,41,0.2)',
-            padding: '40px 5% 36px',
-          }}>
-            {/* Dot grid texture */}
-            <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0.04, pointerEvents:'none' }}>
-              <defs><pattern id="learnDots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="#fff"/></pattern></defs>
-              <rect width="100%" height="100%" fill="url(#learnDots)"/>
-            </svg>
-            {/* Glow orb */}
-            <div style={{ position:'absolute', right:'-4%', top:'-30%', width:480, height:480, borderRadius:'50%', background:'radial-gradient(circle,rgba(20,184,166,0.1) 0%,transparent 65%)', pointerEvents:'none' }}/>
-
-            <div style={{ position:'relative', zIndex:1, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:32 }}>
-
-              {/* Left — label + headline + search */}
-              <div style={{ flex: 1, minWidth: 280, maxWidth: 560 }}>
-                <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(20,184,166,0.15)', border:'1px solid rgba(20,184,166,0.3)', borderRadius:30, padding:'4px 14px', marginBottom:16 }}>
-                  <span style={{ fontSize:10, fontWeight:800, color:'#A7F3D0', letterSpacing:'0.1em' }}>📚 KNOWLEDGE HUB</span>
-                </div>
-
-                <h1 style={{ fontSize:'clamp(26px,3.2vw,40px)', fontWeight:900, color:'#FFFFFF', margin:'0 0 6px', fontFamily:'Poppins, sans-serif', lineHeight:1.15, letterSpacing:'-0.02em' }}>
-                  Health Knowledge,
-                </h1>
-                <h1 style={{ fontSize:'clamp(26px,3.2vw,40px)', fontWeight:900, margin:'0 0 16px', fontFamily:'Poppins, sans-serif', lineHeight:1.15, letterSpacing:'-0.02em', background:'linear-gradient(90deg,#5EEAD4,#A7F3D0)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-                  Verified by Doctors
-                </h1>
-
-                <p style={{ fontSize:14.5, color:'rgba(255,255,255,0.65)', margin:'0 0 24px', lineHeight:1.75, maxWidth:480 }}>
-                  Articles, condition guides, and Q&As written or reviewed by verified HealthConnect doctors. Accurate. India-specific. Free.
-                </p>
-
-                {/* Search bar */}
-                <div style={{ display:'flex', gap:0, background:'rgba(255,255,255,0.97)', border:'none', borderRadius:13, overflow:'hidden', maxWidth:520, boxShadow:'0 4px 20px rgba(0,0,0,0.2)' }}>
-                  <div style={{ padding:'11px 14px', color:'#94A3B8', fontSize:16 }}>🔍</div>
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Search conditions, medications, doctors..."
-                    style={{ flex:1, padding:'12px 4px', border:'none', outline:'none', fontSize:14, color:'#0A1628', background:'transparent', fontFamily:'DM Sans, sans-serif' }}
-                  />
-                  {search && (
-                    <button onClick={() => setSearch('')} style={{ padding:'10px 14px', background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:16 }}>✕</button>
-                  )}
-                </div>
-              </div>
-
-              {/* Right — stats */}
-              <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'center' }}>
-                {[
-                  { n:'18+',   l:'Expert Articles',    icon:'📄' },
-                  { n:'14',    l:'Health Categories',  icon:'🏥' },
-                  { n:'100%',  l:'Doctor Verified',    icon:'✓' },
-                ].map(s => (
-                  <div key={s.l} style={{ background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:16, padding:'18px 22px', textAlign:'center', minWidth:100, backdropFilter:'blur(8px)' }}>
-                    <div style={{ fontSize:11, marginBottom:6 }}>{s.icon}</div>
-                    <div style={{ fontSize:24, fontWeight:900, color:'#5EEAD4', fontFamily:'DM Sans, sans-serif', lineHeight:1 }}>{s.n}</div>
-                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginTop:4, lineHeight:1.3 }}>{s.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Topic Chips ── */}
-      <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '12px 5%', position:'sticky', top:64, zIndex:90, boxShadow:'0 2px 8px rgba(12,26,58,0.04)' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-          {TOPICS.map(t => {
-            const active = topic === t;
-            return (
-              <button
-                key={t}
-                onClick={() => setTopic(t)}
-                style={{
-                  fontSize: 12, fontWeight: active ? 800 : 600, whiteSpace: 'nowrap' as const,
-                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer', transition: 'all 0.15s',
-                  background: active ? C.teal : '#F0F4FF',
-                  color:      active ? '#fff' : C.navyMid,
-                  border:     active ? `1px solid ${C.teal}` : `1px solid ${C.border}`,
-                }}
-              >
-                {t}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Main Content ── */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 5% 80px' }}>
-
-        {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 16 }}>
-            {Array(9).fill(0).map((_,i) => (
-              <div key={i} style={{ background: C.white, borderRadius: 12, height: 200, border: `1px solid ${C.border}`, animation: 'pulse 1.5s infinite' }} />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 20px', background: C.white, borderRadius: 16, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, color: C.navy, margin: '0 0 8px', fontFamily: 'Poppins, sans-serif' }}>No articles found</h3>
-            <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>Try a different search term or topic category.</p>
-            <button onClick={() => { setSearch(''); setTopic('All'); }} style={{ background: `linear-gradient(135deg,${C.teal},#14B8A6)`, color: '#fff', border: 'none', borderRadius: 10, padding: '11px 28px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              Show All Articles
-            </button>
-          </div>
-        ) : (
-          <>
-            {/* Featured */}
-            {featured.length > 0 && !search && (
-              <div style={{ marginBottom: 44 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#B45309', letterSpacing: '0.1em' }}>★ FEATURED ARTICLES</span>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: 18 }}>
-                  {featured.map((a, i) => <ArticleCard key={getSlug(a)||i} a={a} featured />)}
-                </div>
-              </div>
-            )}
-
-            {/* Trending */}
-            {trending.length > 0 && !search && (
-              <div style={{ marginBottom: 44 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: C.teal, letterSpacing: '0.1em' }}>🔥 TRENDING THIS WEEK</span>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 14 }}>
-                  {trending.map((a, i) => <ArticleCard key={getSlug(a)||i} a={a} />)}
-                </div>
-              </div>
-            )}
-
-            {/* All / Search results */}
-            {rest.length > 0 && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: C.muted, letterSpacing: '0.1em' }}>
-                    {search ? `RESULTS FOR "${search.toUpperCase()}"` : `ALL ARTICLES (${rest.length})`}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 14 }}>
-                  {rest.map((a, i) => <ArticleCard key={getSlug(a)||i} a={a} />)}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* ── Health score CTA banner ── */}
-      <div style={{ background: 'linear-gradient(135deg,#0A1628 0%,#0D9488 100%)', padding: '48px 5%' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{ fontSize: 'clamp(20px,3vw,30px)', fontWeight: 900, color: '#fff', margin: '0 0 10px', fontFamily: 'Poppins, sans-serif' }}>
-            Want to track your own health?
-          </h2>
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', margin: '0 0 24px' }}>
-            Check your personalised health score based on Indian benchmarks — free, in 2 minutes.
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/health-score')} style={{ background: '#fff', color: C.teal, border: 'none', borderRadius: 10, padding: '13px 28px', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-              Check My Health Score →
-            </button>
-            <button onClick={() => router.push('/doctors')} style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10, padding: '13px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-              Find a Doctor
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <style>{`@keyframes pulse{0%,100%{opacity:0.6}50%{opacity:1}}`}</style>
-    </div>
-  );
-}
+function FeatureCard({item,tone}:{item:Item;tone:string}){return <Link href={`/learn/${item.slug}`} style={{textDecoration:'none',color:'inherit'}}><article style={{height:'100%',border:`1px solid ${C.border}`,borderRadius:18,overflow:'hidden',background:tone,boxShadow:'0 9px 24px rgba(26,55,72,.08)'}}>{item.coverImage?<div style={{height:170,background:`#D4E0E5 url(${item.coverImage}) center/cover no-repeat`}}/>:<div style={{height:9,background:item.type==='RESEARCH'?'#7A62AA':item.type==='VIDEO'?C.teal:C.blue}}/>}<div style={{padding:17}}><Meta item={item}/><h3 style={{fontFamily:"'Sora',sans-serif",fontSize:17,lineHeight:1.35,margin:'9px 0 7px'}}>{item.title}</h3><p style={{fontSize:12.5,lineHeight:1.55,color:C.text,margin:'0 0 13px'}}>{item.excerpt}</p><b style={{fontSize:11.5,color:C.navy2}}>{item.type==='VIDEO'?'Watch video':'Read more'}</b></div></article></Link>}
+function VideoCard({item}:{item:Item}){const vid=item.knowledge?.youtubeVideoId;return <Link href={`/learn/${item.slug}`} style={{textDecoration:'none',color:'inherit'}}><article style={{border:`1px solid ${C.border}`,borderRadius:16,overflow:'hidden',background:'#F7FAFA',height:'100%'}}><div style={{height:145,position:'relative',background:item.coverImage?`#CCD9DF url(${item.coverImage}) center/cover no-repeat`:vid?`#CCD9DF url(https://i.ytimg.com/vi/${vid}/hqdefault.jpg) center/cover no-repeat`:'#CCD9DF'}}><span style={{position:'absolute',left:12,bottom:12,width:39,height:39,borderRadius:'50%',display:'grid',placeItems:'center',background:'rgba(16,47,73,.88)',color:'#fff',fontSize:17}}>▶</span></div><div style={{padding:14}}><Meta item={item}/><h3 style={{fontSize:14,lineHeight:1.35,margin:'8px 0 7px'}}>{item.title}</h3><p style={{fontSize:11.5,lineHeight:1.5,color:C.text,margin:0}}>{item.excerpt}</p></div></article></Link>}
+function ResearchCard({item}:{item:Item}){return <Link href={`/learn/${item.slug}`} style={{textDecoration:'none',color:'inherit'}}><article style={{padding:17,border:`1px solid ${C.border}`,borderRadius:15,background:'#ECE8F2',display:'grid',gridTemplateColumns:'1fr auto',gap:16}}><div><Meta item={item}/><h3 style={{fontSize:15,lineHeight:1.4,margin:'8px 0 6px'}}>{item.title}</h3><p style={{fontSize:11.8,lineHeight:1.5,color:C.text,margin:0}}>{item.excerpt}</p></div><span style={{alignSelf:'center',fontSize:20,color:'#70589D'}}>↗</span></article></Link>}
+function CompactCard({item,tone}:{item:Item;tone:string}){return <Link href={`/learn/${item.slug}`} style={{textDecoration:'none',color:'inherit'}}><article style={{border:`1px solid ${C.border}`,borderRadius:15,padding:16,background:tone,height:'100%',boxSizing:'border-box'}}><Meta item={item}/><h3 style={{fontSize:14.5,lineHeight:1.4,margin:'8px 0 7px'}}>{item.title}</h3><p style={{fontSize:11.8,lineHeight:1.52,color:C.text,margin:'0 0 12px'}}>{item.excerpt}</p><span style={{fontSize:10.8,fontWeight:850,color:C.navy2}}>Open explainer</span></article></Link>}
+function Meta({item}:{item:Item}){return <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}><span style={{fontSize:9.5,fontWeight:900,letterSpacing:'.6px',textTransform:'uppercase',padding:'4px 7px',borderRadius:999,background:'rgba(255,255,255,.68)',color:C.navy}}>{item.category||'Health'}</span><span style={{fontSize:9.5,color:C.muted}}>{item.knowledge?.sourceName||item.authorName||'HealthConnect'}</span>{item.publishedAt&&<span style={{fontSize:9.5,color:C.muted}}>· {fmtDate(item.publishedAt)}</span>}</div>}

@@ -12,6 +12,7 @@ const NAV = [
   { href: '/admin-dashboard/verification',  icon: '✅', label: 'Verification'  },
   { href: '/admin-dashboard/appointments',  icon: '📅', label: 'Appointments'  },
   { href: '/admin-dashboard/communities',   icon: '🏘️', label: 'Communities'   },
+  { href: '/admin-dashboard/knowledge',     icon: '📚', label: 'Knowledge Hub' },
   { href: '/admin-dashboard/subscriptions', icon: '💳', label: 'Subscriptions' },
   { href: '/admin-dashboard/revenue',       icon: '📊', label: 'Revenue'       },
 ];
