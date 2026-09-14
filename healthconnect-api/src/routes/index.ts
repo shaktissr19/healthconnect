@@ -7,6 +7,7 @@ import appointmentRoutes  from './appointment.routes';
 import paymentRoutes      from './payment.routes';
 import communityRoutes    from './community.routes';
 import articleRoutes      from './article.routes';
+import knowledgeRoutes    from './knowledge.routes';
 import subscriptionRoutes from './subscription.routes';
 import publicRoutes       from './public.routes';
 import platformRoutes     from './platform.routes';
@@ -39,6 +40,7 @@ router.use('/communities',  communityRoutes);
 router.get('/api/communities', optionalAuth, validate(communitySearchSchema, 'query'), communityController.getCommunities);
 
 router.use('/articles',     articleRoutes);
+router.use('/knowledge',    knowledgeRoutes);
 router.use('/subscription', subscriptionRoutes);
 router.use('/public',       publicDoctorAvailabilityRoutes);
 router.use('/public',       publicRoutes);
